@@ -16,6 +16,8 @@ class User(Base):
     username: Mapped[Optional[str]] = mapped_column(String(100), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String(255))
+    # Localization
+    locale: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
     
     # Telegram
     telegram_id: Mapped[Optional[int]] = mapped_column(Integer, unique=True, index=True)

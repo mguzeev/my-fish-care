@@ -20,9 +20,11 @@ from app.auth.schemas import (
     UserResponse,
     UserUpdate,
     PasswordChange,
+    LocaleUpdate,
 )
 from app.auth.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
+from app.core.config import settings
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -241,12 +243,35 @@ async def update_profile(
     # Update fields
     if user_update.full_name is not None:
         current_user.full_name = user_update.full_name
+    if user_update.locale is not None:
+        if user_update.locale not in settings.supported_locales:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported locale",
+            )
+        current_user.locale = user_update.locale
     
     current_user.updated_at = datetime.utcnow()
     
     await db.commit()
     await db.refresh(current_user)
     
+    return current_user
+
+
+@router.put("/locale", response_model=UserResponse)
+async def change_locale(
+    payload: LocaleUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Change current user's locale."""
+    if payload.locale not in settings.supported_locales:
+        raise HTTPException(status_code=400, detail="Unsupported locale")
+    current_user.locale = payload.locale
+    current_user.updated_at = datetime.utcnow()
+    await db.commit()
+    await db.refresh(current_user)
     return current_user
 
 

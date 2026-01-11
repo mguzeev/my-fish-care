@@ -16,6 +16,15 @@ from app.channels.base import BaseChannel
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
+from app.channels.texts import (
+    help_text,
+    start_text_existing,
+    start_text_new,
+    profile_text,
+    profile_not_linked_text,
+    echo_text,
+    error_text,
+)
 from app.models.session import Session
 import uuid
 from datetime import datetime, timedelta
@@ -173,14 +182,9 @@ class TelegramChannel(BaseChannel):
             user = result.scalar_one_or_none()
             
             if user:
-                welcome_message = f"Welcome back, {user.full_name or username}! 👋"
+                welcome_message = start_text_existing(user.full_name or username, user.locale)
             else:
-                welcome_message = (
-                    f"Hello! 👋\n\n"
-                    f"I'm your AI assistant bot. To get started, you need to register:\n\n"
-                    f"Visit the web app and create an account, then link your Telegram.\n\n"
-                    f"Your Telegram ID: `{user_id}`"
-                )
+                welcome_message = start_text_new(user_id, None)
         
         await update.message.reply_text(
             welcome_message,
@@ -195,17 +199,9 @@ class TelegramChannel(BaseChannel):
             update: Telegram update
             context: Bot context
         """
-        help_text = (
-            "📚 *Available Commands:*\n\n"
-            "/start - Start the bot\n"
-            "/help - Show this help message\n"
-            "/profile - Show your profile\n\n"
-            "💬 *How to use:*\n"
-            "Just send me any message and I'll respond using AI!"
-        )
         
         await update.message.reply_text(
-            help_text,
+            help_text(None),
             parse_mode="Markdown"
         )
     
@@ -229,24 +225,20 @@ class TelegramChannel(BaseChannel):
             user = result.scalar_one_or_none()
             
             if user:
-                profile_text = (
-                    f"👤 *Your Profile*\n\n"
-                    f"Name: {user.full_name or 'Not set'}\n"
-                    f"Username: @{user.username}\n"
-                    f"Email: {user.email}\n"
-                    f"Role: {user.role}\n"
-                    f"Status: {'✅ Active' if user.is_active else '❌ Inactive'}\n"
-                    f"Verified: {'✅ Yes' if user.is_verified else '❌ No'}"
+                text = profile_text(
+                    name=user.full_name,
+                    username=user.username,
+                    email=user.email,
+                    role=user.role,
+                    is_active=user.is_active,
+                    is_verified=user.is_verified,
+                    locale=user.locale,
                 )
             else:
-                profile_text = (
-                    "You haven't linked your account yet.\n\n"
-                    f"Your Telegram ID: `{user_id}`\n\n"
-                    "Please register on our web app and link your Telegram."
-                )
+                text = profile_not_linked_text(user_id, None)
         
         await update.message.reply_text(
-            profile_text,
+            text,
             parse_mode="Markdown"
         )
     
@@ -272,15 +264,11 @@ class TelegramChannel(BaseChannel):
             user = result.scalar_one_or_none()
             
             if not user:
-                await update.message.reply_text(
-                    "Please use /start to register first."
-                )
+                await update.message.reply_text(error_text("please_start", None))
                 return
             
             if not user.is_active:
-                await update.message.reply_text(
-                    "Your account is inactive. Please contact support."
-                )
+                await update.message.reply_text(error_text("inactive", user.locale))
                 return
             
             # Create or update session
@@ -297,9 +285,7 @@ class TelegramChannel(BaseChannel):
         
         # TODO: Process message with AI agent
         # For now, just echo back
-        response = f"You said: {message_text}\n\n(AI processing will be implemented in the next step)"
-        
-        await update.message.reply_text(response)
+        await update.message.reply_text(echo_text(message_text, user.locale))
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """

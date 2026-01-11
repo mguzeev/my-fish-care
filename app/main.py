@@ -10,6 +10,7 @@ from app.core.database import init_db, close_db
 from app.auth.router import router as auth_router
 from app.agents.router import router as agents_router
 from app.channels.telegram import telegram_channel
+from app.channels.web import router as web_router
 
 
 # Configure logging
@@ -60,6 +61,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router)
 app.include_router(agents_router)
+app.include_router(web_router)
 @app.post(settings.telegram_webhook_path)
 async def telegram_webhook(
     request: Request,

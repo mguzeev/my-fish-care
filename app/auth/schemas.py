@@ -1,6 +1,7 @@
 """Pydantic schemas for authentication."""
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, validator
+from app.core.config import settings
 
 
 class UserRegister(BaseModel):
@@ -53,6 +54,7 @@ class UserResponse(BaseModel):
     email: str
     username: str
     full_name: Optional[str]
+    locale: str
     is_active: bool
     is_verified: bool
     role: str
@@ -65,12 +67,30 @@ class UserUpdate(BaseModel):
     """User update schema."""
     full_name: Optional[str] = None
     username: Optional[str] = None
+    locale: Optional[str] = None
     
     @validator("username")
     def username_alphanumeric(cls, v):
         """Validate username is alphanumeric with underscores."""
         if v and not v.replace("_", "").isalnum():
             raise ValueError("Username must be alphanumeric (underscores allowed)")
+        return v
+
+    @validator("locale")
+    def valid_locale(cls, v):
+        if v is not None and v not in settings.supported_locales:
+            raise ValueError(f"Unsupported locale: {v}")
+        return v
+
+
+class LocaleUpdate(BaseModel):
+    """Locale change request schema."""
+    locale: str
+    
+    @validator("locale")
+    def valid_locale(cls, v):
+        if v not in settings.supported_locales:
+            raise ValueError(f"Unsupported locale: {v}")
         return v
 
 

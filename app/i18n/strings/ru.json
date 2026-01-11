@@ -1,0 +1,29 @@
+{
+  "help": {
+    "text": "\ud83d\udcda *Доступные команды:*\n\n/start - Запустить бота\n/help - Показать помощь\n/profile - Показать профиль\n\n\ud83d\udcac *Как пользоваться:*\nПросто отправьте любое сообщение, и я отвечу с помощью ИИ!"
+  },
+  "start": {
+    "welcome_existing": "С возвращением, {name}! \ud83d\udc4b",
+    "welcome_new": "Привет! \ud83d\udc4b\n\nЯ ваш AI-ассистент. Чтобы начать, зарегистрируйтесь и привяжите Telegram.\n\nВаш Telegram ID: {telegram_id}"
+  },
+  "profile": {
+    "header": "\ud83d\udc64 *Ваш профиль*",
+    "name": "Имя: {name}",
+    "username": "Имя пользователя: @{username}",
+    "email": "Email: {email}",
+    "role": "Роль: {role}",
+    "status_active": "Статус: \u2705 Активен",
+    "status_inactive": "Статус: \u274c Неактивен",
+    "verified_yes": "Верификация: \u2705 Да",
+    "verified_no": "Верификация: \u274c Нет",
+    "not_linked": "Вы ещё не привязали аккаунт.\n\nВаш Telegram ID: {telegram_id}\n\nПожалуйста, зарегистрируйтесь в веб-приложении и привяжите Telegram."
+  },
+  "echo": {
+    "response": "Вы написали: {text}\n\n(Обработка ИИ будет реализована на следующем шаге)"
+  },
+  "errors": {
+    "please_start": "Пожалуйста, используйте /start для регистрации.",
+    "inactive": "Ваш аккаунт неактивен. Свяжитесь с поддержкой.",
+    "unsupported_locale": "Неподдерживаемая локаль"
+  }
+}

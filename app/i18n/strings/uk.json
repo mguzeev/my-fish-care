@@ -1,0 +1,29 @@
+{
+  "help": {
+    "text": "\ud83d\udcda *Доступні команди:*\n\n/start - Запустити бота\n/help - Показати підказку\n/profile - Показати профіль\n\n\ud83d\udcac *Як користуватись:*\nПросто надішліть будь-яке повідомлення, і я відповім за допомогою ШІ!"
+  },
+  "start": {
+    "welcome_existing": "Вітаю знову, {name}! \ud83d\udc4b",
+    "welcome_new": "Привіт! \ud83d\udc4b\n\nЯ ваш асистент з ШІ. Щоб почати, зареєструйтесь і прив'яжіть Telegram.\n\nВаш Telegram ID: {telegram_id}"
+  },
+  "profile": {
+    "header": "\ud83d\udc64 *Ваш профіль*",
+    "name": "Ім'я: {name}",
+    "username": "Нікнейм: @{username}",
+    "email": "Email: {email}",
+    "role": "Роль: {role}",
+    "status_active": "Статус: \u2705 Активний",
+    "status_inactive": "Статус: \u274c Неактивний",
+    "verified_yes": "Верифікація: \u2705 Так",
+    "verified_no": "Верифікація: \u274c Ні",
+    "not_linked": "Ви ще не прив'язали свій обліковий запис.\n\nВаш Telegram ID: {telegram_id}\n\nБудь ласка, зареєструйтесь у веб-додатку та прив'яжіть Telegram."
+  },
+  "echo": {
+    "response": "Ви написали: {text}\n\n(Обробка ШІ буде реалізована на наступному кроці)"
+  },
+  "errors": {
+    "please_start": "Будь ласка, скористайтеся /start для реєстрації.",
+    "inactive": "Ваш обліковий запис неактивний. Зверніться до підтримки.",
+    "unsupported_locale": "Непідтримувана локаль"
+  }
+}

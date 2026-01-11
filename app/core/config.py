@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     
     # Redis (for caching and rate limiting)
     redis_url: Optional[str] = None
+
+    # I18n
+    supported_locales: list[str] = ["en", "uk", "ru"]
     
     # Paddle
     paddle_api_key: Optional[str] = None
