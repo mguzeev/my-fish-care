@@ -474,7 +474,7 @@ async def telegram_login_callback(
     refresh_token = create_refresh_token(data={"sub": user.id})
     
     # Redirect to dashboard with tokens in query parameters
-    dashboard_url = f"{settings.app_base_url}/dashboard"
+    dashboard_url = f"{settings.telegram_base_url}/dashboard"
     params = {
         "access_token": access_token,
         "refresh_token": refresh_token,

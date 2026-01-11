@@ -11,8 +11,6 @@ class Settings(BaseSettings):
     app_name: str = "Bot Generic"
     app_version: str = "1.0.0"
     debug: bool = False
-    api_base_url: str = "http://localhost:8000"
-    app_base_url: str = "https://localhost:3000"
     
     # Database
     database_url: str
