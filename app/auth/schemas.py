@@ -110,3 +110,40 @@ class PasswordChange(BaseModel):
         if not any(c.isdigit() for c in v):
             raise ValueError("Password must contain at least one digit")
         return v
+
+
+class EmailVerificationRequest(BaseModel):
+    """Email verification request schema."""
+    email: EmailStr
+
+
+class EmailVerificationConfirm(BaseModel):
+    """Email verification confirmation schema."""
+    token: str
+
+
+class PasswordResetRequest(BaseModel):
+    """Password reset request schema."""
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    """Password reset confirmation schema."""
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=100)
+    
+    @validator("new_password")
+    def password_strength(cls, v):
+        """Validate password strength."""
+        if not any(c.isupper() for c in v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            raise ValueError("Password must contain at least one digit")
+        return v
+
+
+class MessageResponse(BaseModel):
+    """Generic message response schema."""
+    message: str

@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - {{ t('site_name') }}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+    <style>
+        .admin-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .admin-header h1 {
+            color: var(--primary-color);
+            margin: 0;
+        }
+        
+        .admin-tabs {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .admin-tab {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .admin-tab.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+        
+        .admin-tab:hover {
+            color: var(--primary-color);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.875rem;
+            margin: 0 0 0.5rem 0;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        
+        .stat-card .trend {
+            font-size: 0.875rem;
+            color: #10b981;
+            margin-top: 0.5rem;
+        }
+        
+        .data-table {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+        
+        .data-table h2 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th {
+            text-align: left;
+            padding: 1rem;
+            border-bottom: 2px solid #f0f0f0;
+            color: #666;
+            font-weight: 600;
+        }
+        
+        td {
+            padding: 1rem;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        tr:hover {
+            background: #f9fafb;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .badge-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge-inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .badge-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .badge-admin {
+            background: #cce5ff;
+            color: #004085;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .btn-small {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        .btn-small:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-edit {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .btn-delete {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .btn-view {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+            font-size: 1.125rem;
+        }
+        
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+        
+        .form-section {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
+            font-weight: 600;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+        
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+        
+        .btn-primary {
+            background: var(--gradient);
+            color: white;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #f5f5f5;
+            color: var(--text-color);
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">{{ t('site_name') }} Admin</a>
+            <div class="nav-right">
+                <a href="/dashboard" class="btn btn-secondary">User Dashboard</a>
+                <button onclick="logout()" class="btn btn-secondary">Logout</button>
+            </div>
+        </nav>
+    </header>
+
+    <div class="admin-container">
+        <div id="alertContainer"></div>
+        
+        <div class="admin-header">
+            <h1>Admin Panel</h1>
+            <div style="color: #666; font-size: 0.875rem;">
+                Logged in as <strong id="adminName">Admin</strong>
+            </div>
+        </div>
+
+        <div class="admin-tabs">
+            <button class="admin-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+            <button class="admin-tab" onclick="switchTab('users')">Users</button>
+            <button class="admin-tab" onclick="switchTab('subscriptions')">Subscriptions</button>
+            <button class="admin-tab" onclick="switchTab('policies')">Policies</button>
+            <button class="admin-tab" onclick="switchTab('organizations')">Organizations</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <div class="stats-grid" id="statsGrid">
+                <div class="loading">Loading statistics</div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="users" class="tab-content">
+            <div class="data-table">
+                <h2>User Management</h2>
+                <div id="usersTable" class="loading">Loading users</div>
+            </div>
+        </div>
+
+        <!-- Subscriptions Tab -->
+        <div id="subscriptions" class="tab-content">
+            <div class="data-table">
+                <h2>Subscription Management</h2>
+                <div id="subscriptionsTable" class="loading">Loading subscriptions</div>
+            </div>
+        </div>
+
+        <!-- Policies Tab -->
+        <div id="policies" class="tab-content">
+            <div class="form-section">
+                <h2>Create New Policy</h2>
+                <div class="form-group">
+                    <label>Policy Name</label>
+                    <input type="text" id="policyName" placeholder="e.g., Free Plan Policy">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="policyDescription" placeholder="Policy description"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Max Requests Per Minute</label>
+                    <input type="number" id="policyMaxRequests" value="60">
+                </div>
+                <div class="form-group">
+                    <label>Max Tokens Per Request</label>
+                    <input type="number" id="policyMaxTokens" value="4000">
+                </div>
+                <button onclick="createPolicy()" class="btn-primary">Create Policy</button>
+            </div>
+            
+            <div class="data-table">
+                <h2>Existing Policies</h2>
+                <div id="policiesTable" class="loading">Loading policies</div>
+            </div>
+        </div>
+
+        <!-- Organizations Tab -->
+        <div id="organizations" class="tab-content">
+            <div class="data-table">
+                <h2>Organizations</h2>
+                <div id="organizationsTable" class="loading">Loading organizations</div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-bottom">
+                <p>&copy; 2024 {{ t('site_name') }}. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const API_BASE = '';
+        let currentTab = 'dashboard';
+
+        // Get auth token
+        function getAuthToken() {
+            return localStorage.getItem('access_token');
+        }
+
+        // API call helper
+        async function apiCall(endpoint, options = {}) {
+            const token = getAuthToken();
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers
+            };
+
+            try {
+                const response = await fetch(API_BASE + endpoint, {
+                    ...options,
+                    headers
+                });
+
+                if (response.status === 401) {
+                    localStorage.removeItem('access_token');
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (response.status === 403) {
+                    showAlert('Access denied. Admin privileges required.', 'error');
+                    return null;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Request failed');
+                }
+
+                return await response.json();
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            }
+        }
+
+        // Show alert
+        function showAlert(message, type = 'success') {
+            const alertContainer = document.getElementById('alertContainer');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            alertContainer.appendChild(alertDiv);
+
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        // Switch tabs
+        function switchTab(tabName) {
+            currentTab = tabName;
+            
+            // Update tab buttons
+            document.querySelectorAll('.admin-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Update tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+            
+            // Load tab data
+            loadTabData(tabName);
+        }
+
+        // Load tab data
+        async function loadTabData(tabName) {
+            switch(tabName) {
+                case 'dashboard':
+                    await loadDashboard();
+                    break;
+                case 'users':
+                    await loadUsers();
+                    break;
+                case 'subscriptions':
+                    await loadSubscriptions();
+                    break;
+                case 'policies':
+                    await loadPolicies();
+                    break;
+                case 'organizations':
+                    await loadOrganizations();
+                    break;
+            }
+        }
+
+        // Load dashboard statistics
+        async function loadDashboard() {
+            try {
+                const stats = await apiCall('/admin/dashboard/stats');
+                
+                if (!stats) return;
+                
+                const statsHtml = `
+                    <div class="stat-card">
+                        <h3>Total Users</h3>
+                        <div class="value">${stats.total_users || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Active Users</h3>
+                        <div class="value">${stats.active_users || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Organizations</h3>
+                        <div class="value">${stats.total_organizations || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Revenue</h3>
+                        <div class="value">$${(stats.total_revenue || 0).toFixed(2)}</div>
+                    </div>
+                `;
+                
+                document.getElementById('statsGrid').innerHTML = statsHtml;
+            } catch (error) {
+                showAlert('Failed to load statistics: ' + error.message, 'error');
+            }
+        }
+
+        // Load users
+        async function loadUsers() {
+            try {
+                const users = await apiCall('/admin/users');
+                
+                if (!users || users.length === 0) {
+                    document.getElementById('usersTable').innerHTML = '<div class="empty-state">No users found</div>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Email</th>
+                                <th>Username</th>
+                                <th>Status</th>
+                                <th>Role</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                users.forEach(user => {
+                    const statusBadge = user.is_active ? 
+                        '<span class="badge badge-active">Active</span>' : 
+                        '<span class="badge badge-inactive">Inactive</span>';
+                    const roleBadge = user.is_superuser ? 
+                        '<span class="badge badge-admin">Admin</span>' : 
+                        '<span class="badge">User</span>';
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${user.id}</td>
+                            <td>${user.email}</td>
+                            <td>${user.username || '-'}</td>
+                            <td>${statusBadge}</td>
+                            <td>${roleBadge}</td>
+                            <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-view" onclick="viewUser(${user.id})">View</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += '</tbody></table>';
+                document.getElementById('usersTable').innerHTML = tableHtml;
+            } catch (error) {
+                showAlert('Failed to load users: ' + error.message, 'error');
+            }
+        }
+
+        // Load subscriptions
+        async function loadSubscriptions() {
+            try {
+                const subs = await apiCall('/admin/subscriptions');
+                
+                if (!subs || subs.length === 0) {
+                    document.getElementById('subscriptionsTable').innerHTML = '<div class="empty-state">No subscriptions found</div>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>User ID</th>
+                                <th>Plan</th>
+                                <th>Status</th>
+                                <th>Price</th>
+                                <th>Next Billing</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                subs.forEach(sub => {
+                    const statusClass = sub.status === 'active' ? 'badge-active' : 
+                                       sub.status === 'cancelled' ? 'badge-inactive' : 'badge-pending';
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${sub.id}</td>
+                            <td>${sub.user_id}</td>
+                            <td>${sub.plan_name || 'N/A'}</td>
+                            <td><span class="badge ${statusClass}">${sub.status}</span></td>
+                            <td>$${(sub.amount || 0).toFixed(2)}</td>
+                            <td>${sub.next_billing_at ? new Date(sub.next_billing_at).toLocaleDateString() : 'N/A'}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-view">View</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += '</tbody></table>';
+                document.getElementById('subscriptionsTable').innerHTML = tableHtml;
+            } catch (error) {
+                showAlert('Failed to load subscriptions: ' + error.message, 'error');
+            }
+        }
+
+        // Load policies
+        async function loadPolicies() {
+            try {
+                const policies = await apiCall('/admin/policies');
+                
+                if (!policies || policies.length === 0) {
+                    document.getElementById('policiesTable').innerHTML = '<div class="empty-state">No policies found</div>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Max Requests</th>
+                                <th>Max Tokens</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                policies.forEach(policy => {
+                    tableHtml += `
+                        <tr>
+                            <td>${policy.id}</td>
+                            <td>${policy.name || 'Unnamed'}</td>
+                            <td>${policy.description || '-'}</td>
+                            <td>${policy.max_requests_per_minute || 'N/A'}</td>
+                            <td>${policy.max_tokens_per_request || 'N/A'}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-edit">Edit</button>
+                                    <button class="btn-small btn-delete" onclick="deletePolicy(${policy.id})">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += '</tbody></table>';
+                document.getElementById('policiesTable').innerHTML = tableHtml;
+            } catch (error) {
+                showAlert('Failed to load policies: ' + error.message, 'error');
+            }
+        }
+
+        // Load organizations
+        async function loadOrganizations() {
+            try {
+                const orgs = await apiCall('/admin/organizations');
+                
+                if (!orgs || orgs.length === 0) {
+                    document.getElementById('organizationsTable').innerHTML = '<div class="empty-state">No organizations found</div>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Owner</th>
+                                <th>Members</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                orgs.forEach(org => {
+                    tableHtml += `
+                        <tr>
+                            <td>${org.id}</td>
+                            <td>${org.name}</td>
+                            <td>${org.owner_id || 'N/A'}</td>
+                            <td>${org.member_count || 0}</td>
+                            <td>${new Date(org.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-view">View</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += '</tbody></table>';
+                document.getElementById('organizationsTable').innerHTML = tableHtml;
+            } catch (error) {
+                showAlert('Failed to load organizations: ' + error.message, 'error');
+            }
+        }
+
+        // Create policy
+        async function createPolicy() {
+            const name = document.getElementById('policyName').value;
+            const description = document.getElementById('policyDescription').value;
+            const maxRequests = parseInt(document.getElementById('policyMaxRequests').value);
+            const maxTokens = parseInt(document.getElementById('policyMaxTokens').value);
+            
+            if (!name) {
+                showAlert('Policy name is required', 'error');
+                return;
+            }
+            
+            try {
+                await apiCall('/admin/policies', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        max_requests_per_minute: maxRequests,
+                        max_tokens_per_request: maxTokens
+                    })
+                });
+                
+                showAlert('Policy created successfully');
+                document.getElementById('policyName').value = '';
+                document.getElementById('policyDescription').value = '';
+                await loadPolicies();
+            } catch (error) {
+                showAlert('Failed to create policy: ' + error.message, 'error');
+            }
+        }
+
+        // Delete policy
+        async function deletePolicy(id) {
+            if (!confirm('Are you sure you want to delete this policy?')) {
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/policies/${id}`, { method: 'DELETE' });
+                showAlert('Policy deleted successfully');
+                await loadPolicies();
+            } catch (error) {
+                showAlert('Failed to delete policy: ' + error.message, 'error');
+            }
+        }
+
+        // View user
+        function viewUser(id) {
+            window.open(`/auth/users/${id}`, '_blank');
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = '/';
+        }
+
+        // Load current user info
+        async function loadCurrentUser() {
+            try {
+                const user = await apiCall('/auth/me');
+                if (user) {
+                    document.getElementById('adminName').textContent = user.email;
+                    if (!user.is_superuser) {
+                        showAlert('Warning: You do not have admin privileges', 'warning');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load user:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCurrentUser();
+            await loadDashboard();
+        });
+    </script>
+</body>
+</html>

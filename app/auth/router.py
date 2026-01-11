@@ -1,5 +1,5 @@
 """Authentication router."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,10 @@ from app.core.security import (
     create_refresh_token,
     decode_token,
     verify_token_type,
+    create_email_verification_token,
+    create_password_reset_token,
+    decode_email_verification_token,
+    decode_password_reset_token,
 )
 from app.auth.schemas import (
     UserRegister,
@@ -26,6 +30,11 @@ from app.auth.schemas import (
     UserUpdate,
     PasswordChange,
     LocaleUpdate,
+    EmailVerificationRequest,
+    EmailVerificationConfirm,
+    PasswordResetRequest,
+    PasswordResetConfirm,
+    MessageResponse,
 )
 from app.auth.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
@@ -551,5 +560,247 @@ async def telegram_link_account(
     logger.info(f"User {current_user.id} linked Telegram ID: {telegram_id}")
     
     return current_user
+
+
+# Email Verification Endpoints
+
+@router.post("/send-verification-email", response_model=MessageResponse)
+async def send_verification_email(
+    request: EmailVerificationRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Send email verification link.
+    
+    Args:
+        request: Email verification request
+        db: Database session
+        
+    Returns:
+        Success message
+        
+    Raises:
+        HTTPException: If email not found
+    """
+    # Check if user exists
+    result = await db.execute(select(User).where(User.email == request.email))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        # Don't reveal if email exists for security
+        return MessageResponse(
+            message="If the email is registered, verification link has been sent"
+        )
+    
+    # Skip if already verified
+    if user.is_verified:
+        return MessageResponse(
+            message="Email is already verified"
+        )
+    
+    # Create verification token
+    verification_token = create_email_verification_token(request.email)
+    
+    # In a real application, you would send this via email
+    # For now, we'll store it and return it for testing
+    logger.info(f"Verification token for {request.email}: {verification_token}")
+    
+    return MessageResponse(
+        message="Verification link has been sent to your email (check logs for token in development)"
+    )
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(
+    request: EmailVerificationConfirm,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Verify email address.
+    
+    Args:
+        request: Email verification confirmation with token
+        db: Database session
+        
+    Returns:
+        Success message
+        
+    Raises:
+        HTTPException: If token is invalid
+    """
+    # Decode token
+    email = decode_email_verification_token(request.token)
+    
+    # Get user by email
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Mark as verified
+    user.is_verified = True
+    user.email_verified_at = datetime.utcnow()
+    user.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    logger.info(f"User {user.id} verified email: {email}")
+    
+    return MessageResponse(
+        message="Email verified successfully"
+    )
+
+
+# Password Reset Endpoints
+
+@router.post("/request-password-reset", response_model=MessageResponse)
+async def request_password_reset(
+    request: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Request password reset link.
+    
+    Args:
+        request: Password reset request with email
+        db: Database session
+        
+    Returns:
+        Success message
+        
+    Raises:
+        HTTPException: If email not found
+    """
+    # Get user by email
+    result = await db.execute(select(User).where(User.email == request.email))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        # Don't reveal if email exists for security
+        return MessageResponse(
+            message="If the email is registered, password reset link has been sent"
+        )
+    
+    # Create reset token
+    reset_token = create_password_reset_token(user.id)
+    
+    # Store token in database
+    user.password_reset_token = reset_token
+    user.password_reset_expires = datetime.utcnow() + timedelta(hours=1)
+    user.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    # In a real application, you would send this via email
+    logger.info(f"Password reset token for user {user.id}: {reset_token}")
+    
+    return MessageResponse(
+        message="Password reset link has been sent to your email (check logs for token in development)"
+    )
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+async def reset_password(
+    request: PasswordResetConfirm,
+    db: AsyncSession = Depends(get_db),
+) -> MessageResponse:
+    """
+    Reset password with token.
+    
+    Args:
+        request: Password reset confirmation with token and new password
+        db: Database session
+        
+    Returns:
+        Success message
+        
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    # Decode token
+    user_id = decode_password_reset_token(request.token)
+    
+    # Get user
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    # Check if token is still valid
+    if not user.password_reset_expires or user.password_reset_expires < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password reset token has expired",
+        )
+    
+    # Update password
+    user.hashed_password = get_password_hash(request.new_password)
+    user.password_reset_token = None
+    user.password_reset_expires = None
+    user.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    logger.info(f"User {user.id} reset password")
+    
+    return MessageResponse(
+        message="Password has been reset successfully"
+    )
+
+
+# User Profile & Usage Endpoints
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """
+    Get current authenticated user profile (alias for /profile).
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        Current user profile
+    """
+    return current_user
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """
+    Get user profile by ID (public endpoint).
+    
+    Args:
+        user_id: User ID
+        db: Database session
+        
+    Returns:
+        User profile
+        
+    Raises:
+        HTTPException: If user not found
+    """
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    
+    return user
 
 

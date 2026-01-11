@@ -28,6 +28,13 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
+    # Email Verification
+    email_verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
+    # Password Reset
+    password_reset_token: Mapped[Optional[str]] = mapped_column(String(255))
+    password_reset_expires: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
     # Organization
     organization_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("organizations.id", ondelete="SET NULL")

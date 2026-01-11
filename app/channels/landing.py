@@ -122,6 +122,38 @@ async def terms_page(request: Request):
     return html
 
 
+@router.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(request: Request):
+    """Serve the user dashboard page."""
+    language = request.query_params.get("lang", "en")
+    
+    if language not in ["en", "ru", "uk"]:
+        language = "en"
+    
+    html = _render_template(
+        "dashboard.html",
+        language=language,
+        bot_username=settings.telegram_bot_username or "bot",
+        telegram_base_url=settings.telegram_base_url or "http://localhost:8000"
+    )
+    return html
+
+
+@router.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Serve the admin panel page."""
+    language = request.query_params.get("lang", "en")
+    
+    if language not in ["en", "ru", "uk"]:
+        language = "en"
+    
+    html = _render_template(
+        "admin.html",
+        language=language
+    )
+    return html
+
+
 @router.get("/status", response_class=HTMLResponse)
 async def status_page():
     """Serve the system status page."""

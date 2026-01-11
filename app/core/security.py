@@ -119,3 +119,111 @@ def verify_token_type(payload: Dict[str, Any], expected_type: str) -> None:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+
+def create_email_verification_token(email: str) -> str:
+    """
+    Create email verification token.
+    
+    Args:
+        email: User email to verify
+        
+    Returns:
+        Encoded verification token
+    """
+    data = {
+        "email": email,
+        "type": "email_verification",
+        "jti": uuid.uuid4().hex,
+    }
+    expire = datetime.utcnow() + timedelta(days=1)  # Valid for 24 hours
+    data.update({"exp": expire})
+    return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
+
+
+def create_password_reset_token(user_id: int) -> str:
+    """
+    Create password reset token.
+    
+    Args:
+        user_id: User ID for password reset
+        
+    Returns:
+        Encoded reset token
+    """
+    data = {
+        "sub": str(user_id),
+        "type": "password_reset",
+        "jti": uuid.uuid4().hex,
+    }
+    expire = datetime.utcnow() + timedelta(hours=1)  # Valid for 1 hour
+    data.update({"exp": expire})
+    return jwt.encode(data, settings.secret_key, algorithm=settings.algorithm)
+
+
+def decode_email_verification_token(token: str) -> str:
+    """
+    Decode email verification token.
+    
+    Args:
+        token: Verification token
+        
+    Returns:
+        Email address
+        
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "email_verification":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token type",
+            )
+        email = payload.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token payload",
+            )
+        return email
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token",
+        )
+
+
+def decode_password_reset_token(token: str) -> int:
+    """
+    Decode password reset token.
+    
+    Args:
+        token: Reset token
+        
+    Returns:
+        User ID
+        
+    Raises:
+        HTTPException: If token is invalid or expired
+    """
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        if payload.get("type") != "password_reset":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token type",
+            )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid token payload",
+            )
+        return int(user_id)
+    except (JWTError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired token",
+        )
+
