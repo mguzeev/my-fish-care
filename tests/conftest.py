@@ -145,8 +145,22 @@ async def agent_factory(db_session):
 
 
 @pytest.fixture()
-async def auth_header(user_factory):
-    """Create a user and return Authorization header and user."""
-    user = await user_factory()
+async def user(user_factory, db_session):
+    """Create a default test user with organization."""
+    from app.models.organization import Organization
+    
+    # Create org first
+    org = Organization(name="Test Org", slug="test-org")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+    
+    # Create user with organization
+    return await user_factory(organization_id=org.id)
+
+
+@pytest.fixture()
+async def auth_header(user):
+    """Create Authorization header for the test user."""
     token = create_access_token({"sub": user.id})
-    return {"Authorization": f"Bearer {token}"}, user
+    return {"Authorization": f"Bearer {token}"}

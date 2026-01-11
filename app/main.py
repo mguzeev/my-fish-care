@@ -12,6 +12,8 @@ from app.auth.router import router as auth_router
 from app.agents.router import router as agents_router
 from app.channels.telegram import telegram_channel
 from app.channels.web import router as web_router
+from app.billing.router import router as billing_router
+from app.usage.tracker import UsageMiddleware
 
 
 # Configure logging
@@ -63,6 +65,13 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(agents_router)
 app.include_router(web_router)
+app.include_router(billing_router)
+
+# Usage tracking middleware (non-blocking, low priority)
+if not settings.debug:
+    # Only add in production to avoid test issues
+    app.add_middleware(UsageMiddleware)
+
 @app.post(settings.telegram_webhook_path)
 async def telegram_webhook(
     request: Request,
