@@ -320,8 +320,8 @@
 
 **Низкий приоритет (Nice to have):**
 1. Панель администратора (advanced features)
-2. Микросервисная архитектура
-3. Advanced аналитика
+2. Advanced аналитика
+3. Paddle Webhooks - Handle payment events
 
 ---
 

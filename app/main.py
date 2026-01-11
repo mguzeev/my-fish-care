@@ -13,6 +13,9 @@ from app.agents.router import router as agents_router
 from app.channels.telegram import telegram_channel
 from app.channels.web import router as web_router
 from app.billing.router import router as billing_router
+from app.admin.router import router as admin_router
+from app.analytics.router import router as analytics_router
+from app.webhooks.router import router as webhooks_router
 from app.usage.tracker import UsageMiddleware
 
 
@@ -66,6 +69,9 @@ app.include_router(auth_router)
 app.include_router(agents_router)
 app.include_router(web_router)
 app.include_router(billing_router)
+app.include_router(admin_router)
+app.include_router(analytics_router)
+app.include_router(webhooks_router)
 
 # Usage tracking middleware (non-blocking, low priority)
 if not settings.debug:
