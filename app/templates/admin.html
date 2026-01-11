@@ -309,6 +309,119 @@
             margin-bottom: 1rem;
             opacity: 0.3;
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background-color: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: var(--primary-color);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            justify-content: flex-end;
+        }
+
+        .btn-cancel {
+            background: #f5f5f5;
+            color: var(--text-color);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        /* Search and Pagination */
+        .table-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 250px;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .pagination button {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+
+        .pagination button.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        .pagination button:hover {
+            background: #f5f5f5;
+        }
+
+        .pagination button.active:hover {
+            background: var(--primary-color);
+        }
     </style>
 </head>
 <body>
@@ -336,6 +449,7 @@
             <button class="admin-tab active" onclick="switchTab('dashboard')">Dashboard</button>
             <button class="admin-tab" onclick="switchTab('users')">Users</button>
             <button class="admin-tab" onclick="switchTab('subscriptions')">Subscriptions</button>
+            <button class="admin-tab" onclick="switchTab('plans')">Plans</button>
             <button class="admin-tab" onclick="switchTab('policies')">Policies</button>
             <button class="admin-tab" onclick="switchTab('organizations')">Organizations</button>
         </div>
@@ -363,7 +477,64 @@
             </div>
         </div>
 
-        <!-- Policies Tab -->
+        <!-- Plans Tab -->
+        <div id="plans" class="tab-content">
+            <div class="form-section">
+                <h2>Create New Plan</h2>
+                <div class="form-group">
+                    <label>Plan Name</label>
+                    <input type="text" id="planName" placeholder="e.g., Professional Plan">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Price</label>
+                        <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label>Interval</label>
+                        <select id="planInterval">
+                            <option value="MONTHLY">Monthly</option>
+                            <option value="YEARLY">Yearly</option>
+                            <option value="WEEKLY">Weekly</option>
+                            <option value="DAILY">Daily</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label>Max Requests Per Interval</label>
+                        <input type="number" id="planMaxRequests" placeholder="10000" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Tokens Per Request</label>
+                        <input type="number" id="planMaxTokens" placeholder="4000" min="1">
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                            <input type="checkbox" id="planApiAccess"> API Access
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                            <input type="checkbox" id="planPrioritySupport"> Priority Support
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                            <input type="checkbox" id="planAdvancedAnalytics"> Advanced Analytics
+                        </label>
+                    </div>
+                </div>
+                <button onclick="createPlan()" class="btn-primary">Create Plan</button>
+            </div>
+            
+            <div class="data-table">
+                <h2>Existing Plans</h2>
+                <div id="plansTable" class="loading">Loading plans</div>
+            </div>
+        </div>
         <div id="policies" class="tab-content">
             <div class="form-section">
                 <h2>Create New Policy</h2>
@@ -409,13 +580,137 @@
         </div>
     </footer>
 
+    <!-- Modals -->
+    <div id="editUserModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit User</h2>
+                <button class="modal-close" onclick="closeModal('editUserModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="editUserEmail" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="editUserActive"> Active
+                </label>
+            </div>
+            <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="editUserAdmin"> Admin
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editUserModal')">Cancel</button>
+                <button class="btn-primary" onclick="saveUserChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editSubscriptionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Subscription</h2>
+                <button class="modal-close" onclick="closeModal('editSubscriptionModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Organization</label>
+                <input type="text" id="editSubsOrg" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="editSubsStatus">
+                    <option value="active">Active</option>
+                    <option value="canceled">Canceled</option>
+                    <option value="pending">Pending</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editSubscriptionModal')">Cancel</button>
+                <button class="btn-primary" onclick="saveSubscriptionChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editPlanModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Plan</h2>
+                <button class="modal-close" onclick="closeModal('editPlanModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Plan Name</label>
+                <input type="text" id="editPlanName">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" id="editPlanPrice" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Interval</label>
+                    <select id="editPlanInterval">
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="YEARLY">Yearly</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="DAILY">Daily</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Requests</label>
+                    <input type="number" id="editPlanMaxRequests" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Max Tokens</label>
+                    <input type="number" id="editPlanMaxTokens" min="1">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editPlanApiAccess"> API Access
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editPlanPrioritySupport"> Priority
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editPlanAdvancedAnalytics"> Advanced
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editPlanModal')">Cancel</button>
+                <button class="btn-primary" onclick="savePlanChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let currentTab = 'dashboard';
+        let editingUserId = null;
+        let editingSubscriptionId = null;
+        let editingPlanId = null;
 
         // Get auth token
         function getAuthToken() {
             return localStorage.getItem('access_token');
+        }
+
+        // Modal functions
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
         }
 
         // API call helper
@@ -506,6 +801,9 @@
                 case 'subscriptions':
                     await loadSubscriptions();
                     break;
+                case 'plans':
+                    await loadPlans();
+                    break;
                 case 'policies':
                     await loadPolicies();
                     break;
@@ -528,16 +826,24 @@
                         <div class="value">${stats.total_users || 0}</div>
                     </div>
                     <div class="stat-card">
-                        <h3>Active Users</h3>
-                        <div class="value">${stats.active_users || 0}</div>
+                        <h3>Active Subscriptions</h3>
+                        <div class="value">${stats.active_subscriptions || 0}</div>
                     </div>
                     <div class="stat-card">
                         <h3>Organizations</h3>
                         <div class="value">${stats.total_organizations || 0}</div>
                     </div>
                     <div class="stat-card">
-                        <h3>Total Revenue</h3>
-                        <div class="value">$${(stats.total_revenue || 0).toFixed(2)}</div>
+                        <h3>Revenue (Month)</h3>
+                        <div class="value">$${parseFloat(stats.revenue_month || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Revenue (Today)</h3>
+                        <div class="value">$${parseFloat(stats.revenue_today || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>API Requests (Month)</h3>
+                        <div class="value">${stats.api_requests_month || 0}</div>
                     </div>
                 `;
                 
@@ -591,7 +897,8 @@
                             <td>${new Date(user.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-view" onclick="viewUser(${user.id})">View</button>
+                                    <button class="btn-small btn-edit" onclick="editUser(${user.id}, '${user.email}', ${user.is_active}, ${user.is_superuser})">Edit</button>
+                                    <button class="btn-small btn-delete" onclick="deleteUser(${user.id})">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -626,6 +933,7 @@
                                 <th>Status</th>
                                 <th>Total Spent</th>
                                 <th>Created</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -644,6 +952,12 @@
                             <td><span class="badge ${statusClass}">${sub.status}</span></td>
                             <td>$${parseFloat(sub.total_spent || 0).toFixed(2)}</td>
                             <td>${new Date(sub.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-edit" onclick="editSubscription(${sub.id}, '${sub.organization_name}', '${sub.status}')">Edit</button>
+                                    <button class="btn-small btn-delete" onclick="deleteSubscription(${sub.id})">Delete</button>
+                                </div>
+                            </td>
                         </tr>
                     `;
                 });
@@ -652,6 +966,65 @@
                 document.getElementById('subscriptionsTable').innerHTML = tableHtml;
             } catch (error) {
                 showAlert('Failed to load subscriptions: ' + error.message, 'error');
+            }
+        }
+
+        // Load plans
+        async function loadPlans() {
+            try {
+                const plans = await apiCall('/admin/plans');
+                
+                if (!plans || plans.length === 0) {
+                    document.getElementById('plansTable').innerHTML = '<div class="empty-state">No plans found</div>';
+                    return;
+                }
+                
+                let tableHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Interval</th>
+                                <th>Max Requests</th>
+                                <th>Max Tokens</th>
+                                <th>Features</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                plans.forEach(plan => {
+                    const features = [];
+                    if (plan.has_api_access) features.push('API');
+                    if (plan.has_priority_support) features.push('Support');
+                    if (plan.has_advanced_analytics) features.push('Analytics');
+                    
+                    tableHtml += `
+                        <tr>
+                            <td>${plan.id}</td>
+                            <td>${plan.name}</td>
+                            <td>$${parseFloat(plan.price).toFixed(2)}</td>
+                            <td>${plan.interval}</td>
+                            <td>${plan.max_requests_per_interval}</td>
+                            <td>${plan.max_tokens_per_request}</td>
+                            <td>${features.length ? features.join(', ') : 'None'}</td>
+                            <td>
+                                <div class="action-buttons">
+                                    <button class="btn-small btn-edit" onclick="editPlan(${plan.id})">Edit</button>
+                                    <button class="btn-small btn-delete" onclick="deletePlan(${plan.id})">Delete</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                tableHtml += '</tbody></table>';
+                document.getElementById('plansTable').innerHTML = tableHtml;
+            } catch (error) {
+                showAlert('Failed to load plans: ' + error.message, 'error');
             }
         }
 
@@ -671,9 +1044,10 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
-                                <th>Description</th>
-                                <th>Max Requests</th>
-                                <th>Max Tokens</th>
+                                <th>Type</th>
+                                <th>Target</th>
+                                <th>Priority</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -681,16 +1055,20 @@
                 `;
                 
                 policies.forEach(policy => {
+                    const statusBadge = policy.is_active ? 
+                        '<span class="badge badge-active">Active</span>' : 
+                        '<span class="badge badge-inactive">Inactive</span>';
+                    
                     tableHtml += `
                         <tr>
                             <td>${policy.id}</td>
-                            <td>${policy.name || 'Unnamed'}</td>
-                            <td>${policy.description || '-'}</td>
-                            <td>${policy.max_requests_per_minute || 'N/A'}</td>
-                            <td>${policy.max_tokens_per_request || 'N/A'}</td>
+                            <td>${policy.name}</td>
+                            <td>${policy.rule_type}</td>
+                            <td>${policy.target_resource}</td>
+                            <td>${policy.priority}</td>
+                            <td>${statusBadge}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-edit">Edit</button>
                                     <button class="btn-small btn-delete" onclick="deletePolicy(${policy.id})">Delete</button>
                                 </div>
                             </td>
@@ -721,9 +1099,8 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
-                                <th>Owner</th>
+                                <th>Slug</th>
                                 <th>Members</th>
-                                <th>Created</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -735,12 +1112,11 @@
                         <tr>
                             <td>${org.id}</td>
                             <td>${org.name}</td>
-                            <td>${org.owner_id || 'N/A'}</td>
+                            <td>${org.slug}</td>
                             <td>${org.member_count || 0}</td>
-                            <td>${new Date(org.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-view">View</button>
+                                    <button class="btn-small btn-view" onclick="viewOrg(${org.id})">View</button>
                                 </div>
                             </td>
                         </tr>
@@ -754,7 +1130,194 @@
             }
         }
 
-        // Create policy
+        // User functions
+        function editUser(userId, email, isActive, isAdmin) {
+            editingUserId = userId;
+            document.getElementById('editUserEmail').value = email;
+            document.getElementById('editUserActive').checked = isActive;
+            document.getElementById('editUserAdmin').checked = isAdmin;
+            openModal('editUserModal');
+        }
+
+        async function saveUserChanges() {
+            try {
+                await apiCall(`/admin/users/${editingUserId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        is_active: document.getElementById('editUserActive').checked,
+                        is_superuser: document.getElementById('editUserAdmin').checked
+                    })
+                });
+                
+                showAlert('User updated successfully');
+                closeModal('editUserModal');
+                await loadUsers();
+            } catch (error) {
+                showAlert('Failed to update user: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user? This action marks the user as inactive.')) {
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/users/${userId}`, { method: 'DELETE' });
+                showAlert('User deleted successfully');
+                await loadUsers();
+            } catch (error) {
+                showAlert('Failed to delete user: ' + error.message, 'error');
+            }
+        }
+
+        // Subscription functions
+        function editSubscription(subId, orgName, status) {
+            editingSubscriptionId = subId;
+            document.getElementById('editSubsOrg').value = orgName;
+            document.getElementById('editSubsStatus').value = status;
+            openModal('editSubscriptionModal');
+        }
+
+        async function saveSubscriptionChanges() {
+            try {
+                await apiCall(`/admin/subscriptions/${editingSubscriptionId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        subscription_status: document.getElementById('editSubsStatus').value
+                    })
+                });
+                
+                showAlert('Subscription updated successfully');
+                closeModal('editSubscriptionModal');
+                await loadSubscriptions();
+            } catch (error) {
+                showAlert('Failed to update subscription: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteSubscription(subId) {
+            if (!confirm('Are you sure you want to delete this subscription? This will cancel it.')) {
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/subscriptions/${subId}`, { method: 'DELETE' });
+                showAlert('Subscription deleted successfully');
+                await loadSubscriptions();
+            } catch (error) {
+                showAlert('Failed to delete subscription: ' + error.message, 'error');
+            }
+        }
+
+        // Plan functions
+        async function createPlan() {
+            const name = document.getElementById('planName').value;
+            const price = parseFloat(document.getElementById('planPrice').value);
+            const interval = document.getElementById('planInterval').value;
+            const maxRequests = parseInt(document.getElementById('planMaxRequests').value);
+            const maxTokens = parseInt(document.getElementById('planMaxTokens').value);
+            
+            if (!name || !price || !maxRequests || !maxTokens) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                await apiCall('/admin/plans', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        price,
+                        interval,
+                        currency: 'USD',
+                        max_requests_per_interval: maxRequests,
+                        max_tokens_per_request: maxTokens,
+                        has_api_access: document.getElementById('planApiAccess').checked,
+                        has_priority_support: document.getElementById('planPrioritySupport').checked,
+                        has_advanced_analytics: document.getElementById('planAdvancedAnalytics').checked
+                    })
+                });
+                
+                showAlert('Plan created successfully');
+                document.getElementById('planName').value = '';
+                document.getElementById('planPrice').value = '';
+                document.getElementById('planMaxRequests').value = '';
+                document.getElementById('planMaxTokens').value = '';
+                document.getElementById('planApiAccess').checked = false;
+                document.getElementById('planPrioritySupport').checked = false;
+                document.getElementById('planAdvancedAnalytics').checked = false;
+                await loadPlans();
+            } catch (error) {
+                showAlert('Failed to create plan: ' + error.message, 'error');
+            }
+        }
+
+        async function editPlan(planId) {
+            try {
+                const plans = await apiCall('/admin/plans');
+                const plan = plans.find(p => p.id === planId);
+                
+                if (!plan) {
+                    showAlert('Plan not found', 'error');
+                    return;
+                }
+                
+                editingPlanId = planId;
+                document.getElementById('editPlanName').value = plan.name;
+                document.getElementById('editPlanPrice').value = plan.price;
+                document.getElementById('editPlanInterval').value = plan.interval;
+                document.getElementById('editPlanMaxRequests').value = plan.max_requests_per_interval;
+                document.getElementById('editPlanMaxTokens').value = plan.max_tokens_per_request;
+                document.getElementById('editPlanApiAccess').checked = plan.has_api_access;
+                document.getElementById('editPlanPrioritySupport').checked = plan.has_priority_support;
+                document.getElementById('editPlanAdvancedAnalytics').checked = plan.has_advanced_analytics;
+                openModal('editPlanModal');
+            } catch (error) {
+                showAlert('Failed to load plan: ' + error.message, 'error');
+            }
+        }
+
+        async function savePlanChanges() {
+            try {
+                await apiCall(`/admin/plans/${editingPlanId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name: document.getElementById('editPlanName').value,
+                        price: parseFloat(document.getElementById('editPlanPrice').value),
+                        interval: document.getElementById('editPlanInterval').value,
+                        currency: 'USD',
+                        max_requests_per_interval: parseInt(document.getElementById('editPlanMaxRequests').value),
+                        max_tokens_per_request: parseInt(document.getElementById('editPlanMaxTokens').value),
+                        has_api_access: document.getElementById('editPlanApiAccess').checked,
+                        has_priority_support: document.getElementById('editPlanPrioritySupport').checked,
+                        has_advanced_analytics: document.getElementById('editPlanAdvancedAnalytics').checked
+                    })
+                });
+                
+                showAlert('Plan updated successfully');
+                closeModal('editPlanModal');
+                await loadPlans();
+            } catch (error) {
+                showAlert('Failed to update plan: ' + error.message, 'error');
+            }
+        }
+
+        async function deletePlan(planId) {
+            if (!confirm('Are you sure you want to delete this plan?')) {
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/plans/${planId}`, { method: 'DELETE' });
+                showAlert('Plan deleted successfully');
+                await loadPlans();
+            } catch (error) {
+                showAlert('Failed to delete plan: ' + error.message, 'error');
+            }
+        }
+
+        // Policy functions
         async function createPolicy() {
             const name = document.getElementById('policyName').value;
             const description = document.getElementById('policyDescription').value;
@@ -771,9 +1334,10 @@
                     method: 'POST',
                     body: JSON.stringify({
                         name,
-                        description,
-                        max_requests_per_minute: maxRequests,
-                        max_tokens_per_request: maxTokens
+                        rule_type: 'rate_limit',
+                        target_resource: '*',
+                        target_role: 'user',
+                        config: { maxRequests, maxTokens }
                     })
                 });
                 
@@ -786,7 +1350,6 @@
             }
         }
 
-        // Delete policy
         async function deletePolicy(id) {
             if (!confirm('Are you sure you want to delete this policy?')) {
                 return;
@@ -801,19 +1364,17 @@
             }
         }
 
-        // View user
-        function viewUser(id) {
-            window.open(`/auth/users/${id}`, '_blank');
+        // Other functions
+        function viewOrg(id) {
+            window.open(`/admin/organizations/${id}`, '_blank');
         }
 
-        // Logout
         function logout() {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = '/';
         }
 
-        // Load current user info
         async function loadCurrentUser() {
             try {
                 const user = await apiCall('/auth/me');
@@ -825,6 +1386,13 @@
                 }
             } catch (error) {
                 console.error('Failed to load user:', error);
+            }
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.classList.remove('active');
             }
         }
 

@@ -636,3 +636,212 @@ async def list_organizations(
         )
     
     return org_list
+
+
+# ============================================================================
+# User Details & Modifications
+# ============================================================================
+
+class UpdateUserRequest(BaseModel):
+    is_active: bool
+    is_superuser: bool
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get user details."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+        telegram_id=user.telegram_id,
+        telegram_username=user.telegram_username,
+    )
+
+
+@router.put("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    request: UpdateUserRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update user status and role."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.is_active = request.is_active
+    user.is_superuser = request.is_superuser
+    
+    await db.commit()
+    await db.refresh(user)
+    
+    return UserResponse(
+        id=user.id,
+        email=user.email,
+        username=user.username,
+        full_name=user.full_name,
+        is_active=user.is_active,
+        is_verified=user.is_verified,
+        is_superuser=user.is_superuser,
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+        telegram_id=user.telegram_id,
+        telegram_username=user.telegram_username,
+    )
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete user (soft delete by marking as inactive)."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Soft delete - just mark as inactive
+    user.is_active = False
+    await db.commit()
+    
+    return {"detail": "User deleted (marked as inactive)"}
+
+
+# ============================================================================
+# Subscription Details & Modifications
+# ============================================================================
+
+class UpdateSubscriptionRequest(BaseModel):
+    subscription_status: str
+
+
+@router.get("/subscriptions/{subscription_id}", response_model=SubscriptionResponse)
+async def get_subscription(
+    subscription_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get subscription details."""
+    result = await db.execute(
+        select(BillingAccount, Organization, SubscriptionPlan)
+        .join(Organization, BillingAccount.organization_id == Organization.id)
+        .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+        .where(BillingAccount.id == subscription_id)
+    )
+    row = result.one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    
+    billing, org, plan = row
+    
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org.id)
+    )
+    user_count = user_count_result.scalar() or 0
+    
+    return SubscriptionResponse(
+        id=billing.id,
+        organization_id=billing.organization_id,
+        organization_name=org.name,
+        user_count=user_count,
+        plan_name=plan.name if plan else None,
+        status=billing.subscription_status.value,
+        paddle_subscription_id=billing.paddle_subscription_id,
+        total_spent=billing.total_spent,
+        created_at=billing.created_at,
+        updated_at=billing.updated_at,
+    )
+
+
+@router.put("/subscriptions/{subscription_id}", response_model=SubscriptionResponse)
+async def update_subscription(
+    subscription_id: int,
+    request: UpdateSubscriptionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update subscription status."""
+    from app.models.billing import SubscriptionStatus
+    
+    result = await db.execute(select(BillingAccount).where(BillingAccount.id == subscription_id))
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    
+    billing.subscription_status = SubscriptionStatus(request.subscription_status)
+    await db.commit()
+    await db.refresh(billing)
+    
+    # Get full response
+    result = await db.execute(
+        select(BillingAccount, Organization, SubscriptionPlan)
+        .join(Organization, BillingAccount.organization_id == Organization.id)
+        .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+        .where(BillingAccount.id == subscription_id)
+    )
+    row = result.one()
+    billing, org, plan = row
+    
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org.id)
+    )
+    user_count = user_count_result.scalar() or 0
+    
+    return SubscriptionResponse(
+        id=billing.id,
+        organization_id=billing.organization_id,
+        organization_name=org.name,
+        user_count=user_count,
+        plan_name=plan.name if plan else None,
+        status=billing.subscription_status.value,
+        paddle_subscription_id=billing.paddle_subscription_id,
+        total_spent=billing.total_spent,
+        created_at=billing.created_at,
+        updated_at=billing.updated_at,
+    )
+
+
+@router.delete("/subscriptions/{subscription_id}")
+async def delete_subscription(
+    subscription_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete subscription (cancel it)."""
+    from app.models.billing import SubscriptionStatus
+    
+    result = await db.execute(select(BillingAccount).where(BillingAccount.id == subscription_id))
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    
+    billing.subscription_status = SubscriptionStatus.CANCELED
+    await db.commit()
+    
+    return {"detail": "Subscription canceled"}
