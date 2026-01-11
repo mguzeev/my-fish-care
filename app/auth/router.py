@@ -366,7 +366,7 @@ def _verify_telegram_auth_data(data: dict) -> bool:
     return computed_hash == check_hash
 
 
-@router.post("/telegram/callback")
+@router.api_route("/telegram/callback", methods=["GET", "POST"])
 async def telegram_login_callback(
     id: int = Query(...),
     first_name: str = Query(...),
