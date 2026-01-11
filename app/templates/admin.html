@@ -446,12 +446,12 @@
         </div>
 
         <div class="admin-tabs">
-            <button class="admin-tab active" onclick="switchTab('dashboard')">Dashboard</button>
-            <button class="admin-tab" onclick="switchTab('users')">Users</button>
-            <button class="admin-tab" onclick="switchTab('subscriptions')">Subscriptions</button>
-            <button class="admin-tab" onclick="switchTab('plans')">Plans</button>
-            <button class="admin-tab" onclick="switchTab('policies')">Policies</button>
-            <button class="admin-tab" onclick="switchTab('organizations')">Organizations</button>
+            <button class="admin-tab active" onclick="switchTab(this,'dashboard')">Dashboard</button>
+            <button class="admin-tab" onclick="switchTab(this,'users')">Users</button>
+            <button class="admin-tab" onclick="switchTab(this,'subscriptions')">Subscriptions</button>
+            <button class="admin-tab" onclick="switchTab(this,'plans')">Plans</button>
+            <button class="admin-tab" onclick="switchTab(this,'policies')">Policies</button>
+            <button class="admin-tab" onclick="switchTab(this,'organizations')">Organizations</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -783,20 +783,21 @@
         }
 
         // Switch tabs
-        function switchTab(tabName) {
+        function switchTab(btn, tabName) {
             currentTab = tabName;
             
             // Update tab buttons
             document.querySelectorAll('.admin-tab').forEach(tab => {
                 tab.classList.remove('active');
             });
-            event.target.classList.add('active');
+            if (btn) btn.classList.add('active');
             
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
-            document.getElementById(tabName).classList.add('active');
+            const tabDiv = document.getElementById(tabName);
+            if (tabDiv) tabDiv.classList.add('active');
             
             // Load tab data
             loadTabData(tabName);
