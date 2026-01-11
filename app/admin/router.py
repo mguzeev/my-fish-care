@@ -845,3 +845,87 @@ async def delete_subscription(
     await db.commit()
     
     return {"detail": "Subscription canceled"}
+
+
+# ============================================================================
+# Organization Details
+# ============================================================================
+
+class OrganizationDetailResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    member_count: int
+    created_at: datetime
+    members: list[UserResponse] = []
+    subscription: Optional[SubscriptionResponse] = None
+
+
+@router.get("/organizations/{org_id}", response_model=OrganizationDetailResponse)
+async def get_organization(
+    org_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get organization details with members and subscription."""
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    # Get members
+    members_result = await db.execute(
+        select(User).where(User.organization_id == org_id)
+    )
+    members = members_result.scalars().all()
+    
+    # Get subscription
+    sub_result = await db.execute(
+        select(BillingAccount, SubscriptionPlan)
+        .join(Organization, BillingAccount.organization_id == Organization.id)
+        .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+        .where(BillingAccount.organization_id == org_id)
+    )
+    sub_row = sub_result.one_or_none()
+    
+    subscription = None
+    if sub_row:
+        billing, plan = sub_row
+        subscription = SubscriptionResponse(
+            id=billing.id,
+            organization_id=billing.organization_id,
+            organization_name=org.name,
+            user_count=len(members),
+            plan_name=plan.name if plan else None,
+            status=billing.subscription_status.value,
+            paddle_subscription_id=billing.paddle_subscription_id,
+            total_spent=billing.total_spent,
+            created_at=billing.created_at,
+            updated_at=billing.updated_at,
+        )
+    
+    return OrganizationDetailResponse(
+        id=org.id,
+        name=org.name,
+        slug=org.slug,
+        member_count=len(members),
+        created_at=org.created_at,
+        members=[
+            UserResponse(
+                id=u.id,
+                email=u.email,
+                username=u.username,
+                full_name=u.full_name,
+                is_active=u.is_active,
+                is_verified=u.is_verified,
+                is_superuser=u.is_superuser,
+                created_at=u.created_at,
+                last_login_at=u.last_login_at,
+                telegram_id=u.telegram_id,
+                telegram_username=u.telegram_username,
+            )
+            for u in members
+        ],
+        subscription=subscription,
+    )
