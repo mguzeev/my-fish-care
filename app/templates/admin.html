@@ -699,6 +699,19 @@
         let editingSubscriptionId = null;
         let editingPlanId = null;
 
+    <div id="viewOrgModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h2>Organization Details</h2>
+                <button class="modal-close" onclick="closeModal('viewOrgModal')">&times;</button>
+            </div>
+            <div id="orgDetailsContent" class="loading">Loading organization details...</div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('viewOrgModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
         // Get auth token
         function getAuthToken() {
             return localStorage.getItem('access_token');
@@ -1368,9 +1381,53 @@
         function viewOrg(id) {
             alert(`Organization Details:\n\nID: ${id}\n\nUse the admin panel to manage this organization.`);
         }
-
-        function logout() {
-            localStorage.removeItem('access_token');
+                async function viewOrg(id) {
+                    try {
+                        const org = await apiCall(`/admin/organizations/${id}`);
+                        if (!org) return;
+                
+                        let membersHtml = '';
+                        if (org.members && org.members.length > 0) {
+                            membersHtml = '<h3 style="margin-top: 1.5rem; color: var(--primary-color);">Members (' + org.members.length + ')</h3>';
+                            membersHtml += '<table style="width: 100%; margin-top: 1rem;"><thead><tr><th>Email</th><th>Username</th><th>Status</th></tr></thead><tbody>';
+                            org.members.forEach(member => {
+                                const status = member.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>';
+                                membersHtml += `<tr><td>${member.email}</td><td>${member.username || '-'}</td><td>${status}</td></tr>`;
+                            });
+                            membersHtml += '</tbody></table>';
+                        }
+                
+                        let subHtml = '';
+                        if (org.subscription) {
+                            const status = org.subscription.status === 'active' ? 
+                                '<span class="badge badge-active">Active</span>' : 
+                                '<span class="badge badge-inactive">' + org.subscription.status + '</span>';
+                            subHtml = `<h3 style="margin-top: 1.5rem; color: var(--primary-color);">Subscription</h3>
+                                <div style="background: #f5f5f5; padding: 1rem; border-radius: 8px;">
+                                    <p><strong>Plan:</strong> ${org.subscription.plan_name || 'Free'}</p>
+                                    <p><strong>Status:</strong> ${status}</p>
+                                    <p><strong>Total Spent:</strong> $${parseFloat(org.subscription.total_spent).toFixed(2)}</p>
+                                </div>`;
+                        }
+                
+                        const content = `
+                            <div style="background: #f5f5f5; padding: 1rem; border-radius: 8px;">
+                                <p><strong>ID:</strong> ${org.id}</p>
+                                <p><strong>Name:</strong> ${org.name}</p>
+                                <p><strong>Slug:</strong> ${org.slug}</p>
+                                <p><strong>Members:</strong> ${org.member_count}</p>
+                                <p><strong>Created:</strong> ${new Date(org.created_at).toLocaleDateString()}</p>
+                            </div>
+                            ${subHtml}
+                            ${membersHtml}
+                        `;
+                
+                        document.getElementById('orgDetailsContent').innerHTML = content;
+                        openModal('viewOrgModal');
+                    } catch (error) {
+                        showAlert('Failed to load organization details: ' + error.message, 'error');
+                    }
+                }
             localStorage.removeItem('refresh_token');
             window.location.href = '/';
         }
