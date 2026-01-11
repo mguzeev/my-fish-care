@@ -1,0 +1,22 @@
+"""Pydantic schemas for agent invocation."""
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
+
+
+class AgentInvokeRequest(BaseModel):
+    """Request payload to invoke an agent."""
+
+    input: str = Field(..., description="User input text")
+    variables: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional variables for the prompt"
+    )
+    stream: bool = Field(False, description="Return streaming response if True")
+
+
+class AgentResponse(BaseModel):
+    """Non-streaming agent response."""
+
+    agent_id: int
+    output: str
+    model: str
+    usage_tokens: Optional[int] = None
