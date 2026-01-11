@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     # Base URL for API endpoints used by templates/frontend
-    api_base_url: str = "https://bulletguru.com"
+    
     
     # Database
     database_url: str
