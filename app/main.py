@@ -5,13 +5,16 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import Optional
+from pathlib import Path
 from app.core.config import settings
 from app.core.database import init_db, close_db
 from app.auth.router import router as auth_router
 from app.agents.router import router as agents_router
 from app.channels.telegram import telegram_channel
 from app.channels.web import router as web_router
+from app.channels.landing import router as landing_router
 from app.billing.router import router as billing_router
 from app.admin.router import router as admin_router
 from app.analytics.router import router as analytics_router
@@ -65,6 +68,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(landing_router)
 app.include_router(auth_router)
 app.include_router(agents_router)
 app.include_router(web_router)
@@ -72,6 +76,11 @@ app.include_router(billing_router)
 app.include_router(admin_router)
 app.include_router(analytics_router)
 app.include_router(webhooks_router)
+
+# Mount static files
+static_dir = Path(__file__).parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Usage tracking middleware (non-blocking, low priority)
 if not settings.debug:
@@ -114,8 +123,18 @@ async def telegram_webhook(
 
 
 @app.get("/")
-async def root():
-    """Root endpoint."""
+async def root(request: Request):
+    """Root endpoint - redirect to landing page."""
+    # If accessing from browser, show landing page
+    user_agent = request.headers.get("user-agent", "").lower()
+    if "mozilla" in user_agent or "chrome" in user_agent or "safari" in user_agent:
+        # Render landing page for browser requests
+        from app.channels.landing import _render_template
+        html = _render_template("landing.html", language="en")
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html)
+    
+    # For API requests, return JSON
     return {
         "name": settings.app_name,
         "version": settings.app_version,

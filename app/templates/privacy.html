@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t('footer_privacy') }} - {{ t('site_name') }}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/" class="logo">{{ t('site_name') }}</a>
+            <div class="nav-right">
+                <select class="lang-selector" id="lang-selector" onchange="changeLanguage(this.value)">
+                    <option value="en" {% if language == 'en' %}selected{% endif %}>English</option>
+                    <option value="ru" {% if language == 'ru' %}selected{% endif %}>Русский</option>
+                    <option value="uk" {% if language == 'uk' %}selected{% endif %}>Українська</option>
+                </select>
+                <a href="/" class="btn btn-secondary">{{ t('nav_home') }}</a>
+            </div>
+        </nav>
+    </header>
+
+    <section style="max-width: 1200px; margin: 0 auto; padding: 3rem 2rem;">
+        <h1>{{ t('footer_privacy') }}</h1>
+        <p style="color: var(--text-light); margin-top: 1rem;">
+            <strong>Last Updated: January 2024</strong>
+        </p>
+        
+        <h2 style="margin-top: 2rem;">Introduction</h2>
+        <p style="color: var(--text-light);">
+            We are committed to protecting your privacy. This Privacy Policy explains how we collect, use, and protect your personal information.
+        </p>
+
+        <h2 style="margin-top: 2rem;">Data Collection</h2>
+        <p style="color: var(--text-light);">
+            We collect information you provide directly to us, such as when you create an account or contact us for support.
+        </p>
+
+        <h2 style="margin-top: 2rem;">Data Protection</h2>
+        <p style="color: var(--text-light);">
+            We implement industry-standard security measures to protect your personal data from unauthorized access.
+        </p>
+
+        <h2 style="margin-top: 2rem;">Your Rights</h2>
+        <p style="color: var(--text-light);">
+            You have the right to access, modify, and delete your personal information at any time.
+        </p>
+
+        <h2 style="margin-top: 2rem;">Contact Us</h2>
+        <p style="color: var(--text-light);">
+            If you have any questions about this Privacy Policy, please contact us at privacy@bot-generic.com
+        </p>
+
+        <a href="/" style="display: inline-block; margin-top: 2rem; color: var(--primary); text-decoration: none;">← {{ t('nav_home') }}</a>
+    </section>
+
+    <footer style="margin-top: 4rem;">
+        <div class="footer-content">
+            <div class="footer-bottom">
+                <p>&copy; 2024 {{ t('site_name') }}. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        function changeLanguage(lang) {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('lang', lang);
+            window.location.href = currentUrl.toString();
+        }
+    </script>
+</body>
+</html>

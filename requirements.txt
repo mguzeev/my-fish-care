@@ -6,6 +6,9 @@ pydantic-settings==2.1.0
 email-validator==2.1.0.post1
 python-multipart==0.0.6
 
+# Templates & i18n
+jinja2==3.1.2
+
 # Database
 sqlalchemy==2.0.25
 alembic==1.13.1
