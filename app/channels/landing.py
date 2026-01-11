@@ -7,6 +7,7 @@ from jinja2 import Environment, FileSystemLoader
 import os
 
 from app.i18n.translations import get_translations, translate
+from app.core.config import settings
 
 router = APIRouter(tags=["landing"])
 
@@ -40,7 +41,12 @@ async def landing_page(request: Request):
     if language not in ["en", "ru", "uk"]:
         language = "en"
     
-    html = _render_template("landing.html", language=language)
+    html = _render_template(
+        "landing.html", 
+        language=language,
+        bot_username=settings.telegram_bot_username or "bot",
+        api_base_url=settings.api_base_url
+    )
     return html
 
 
@@ -52,7 +58,12 @@ async def login_page(request: Request):
     if language not in ["en", "ru", "uk"]:
         language = "en"
     
-    html = _render_template("login.html", language=language)
+    html = _render_template(
+        "login.html", 
+        language=language,
+        bot_username=settings.telegram_bot_username or "bot",
+        api_base_url=settings.api_base_url
+    )
     return html
 
 
@@ -64,7 +75,12 @@ async def register_page(request: Request):
     if language not in ["en", "ru", "uk"]:
         language = "en"
     
-    html = _render_template("register.html", language=language)
+    html = _render_template(
+        "register.html", 
+        language=language,
+        bot_username=settings.telegram_bot_username or "bot",
+        api_base_url=settings.api_base_url
+    )
     return html
 
 

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     app_name: str = "Bot Generic"
     app_version: str = "1.0.0"
     debug: bool = False
+    api_base_url: str = "http://localhost:8000"
     
     # Database
     database_url: str
@@ -30,6 +31,8 @@ class Settings(BaseSettings):
     
     # Telegram
     telegram_bot_token: Optional[str] = None
+    telegram_bot_username: Optional[str] = None
+    telegram_base_url: Optional[str] = None
     telegram_webhook_url: Optional[str] = None
     telegram_webhook_path: str = "/webhook/telegram"
     telegram_use_webhook: bool = False

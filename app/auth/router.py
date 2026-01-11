@@ -1,8 +1,13 @@
 """Authentication router."""
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import hmac
+import hashlib
+import logging
+from urllib.parse import urlencode
 from app.core.database import get_db
 from app.core.security import (
     verify_password,
@@ -26,6 +31,8 @@ from app.auth.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
 from app.core.config import settings
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -306,4 +313,239 @@ async def change_password(
     await db.commit()
     
     return None
+
+
+# Telegram OAuth endpoints
+@router.get("/telegram")
+async def telegram_login_redirect():
+    """
+    Redirect to Telegram login.
+    
+    Returns:
+        Redirect response to Telegram bot
+    """
+    telegram_bot_username = settings.telegram_bot_username or "bot"
+    
+    # Return HTML with Telegram login widget
+    return {
+        "message": "Use Telegram login widget",
+        "bot_username": telegram_bot_username,
+        "callback_url": f"{settings.api_base_url}/auth/telegram/callback",
+    }
+
+
+def _verify_telegram_auth_data(data: dict) -> bool:
+    """
+    Verify Telegram login widget data using SHA256 hash.
+    
+    Args:
+        data: Dictionary with auth data from Telegram
+        
+    Returns:
+        True if data is valid, False otherwise
+    """
+    check_hash = data.pop("hash", None)
+    if not check_hash:
+        return False
+    
+    # Create data check string
+    data_check_list = []
+    for key in sorted(data.keys()):
+        data_check_list.append(f"{key}={data[key]}")
+    
+    data_check_string = "\n".join(data_check_list)
+    
+    # Verify hash
+    secret_key = hashlib.sha256(settings.telegram_bot_token.encode()).digest()
+    computed_hash = hmac.new(
+        secret_key,
+        data_check_string.encode(),
+        hashlib.sha256
+    ).hexdigest()
+    
+    return computed_hash == check_hash
+
+
+@router.post("/telegram/callback")
+async def telegram_login_callback(
+    id: int = Query(...),
+    first_name: str = Query(...),
+    last_name: str = Query(None),
+    username: str = Query(None),
+    photo_url: str = Query(None),
+    auth_date: int = Query(...),
+    hash: str = Query(...),
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    """
+    Telegram login callback.
+    
+    Args:
+        id: Telegram user ID
+        first_name: User's first name
+        last_name: User's last name (optional)
+        username: User's Telegram username (optional)
+        photo_url: User's profile photo URL (optional)
+        auth_date: Authentication date
+        hash: Telegram authentication hash
+        db: Database session
+        
+    Returns:
+        Access and refresh tokens
+        
+    Raises:
+        HTTPException: If authentication fails
+    """
+    # Verify auth data
+    auth_data = {
+        "id": str(id),
+        "first_name": first_name,
+        "auth_date": str(auth_date),
+    }
+    if last_name:
+        auth_data["last_name"] = last_name
+    if username:
+        auth_data["username"] = username
+    if photo_url:
+        auth_data["photo_url"] = photo_url
+    
+    auth_data["hash"] = hash
+    
+    if not _verify_telegram_auth_data(auth_data):
+        logger.warning(f"Invalid Telegram auth hash for user {id}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Telegram authentication",
+        )
+    
+    # Check if user exists
+    result = await db.execute(select(User).where(User.telegram_id == id))
+    user = result.scalar_one_or_none()
+    
+    if user:
+        # Update last login
+        user.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(user)
+    else:
+        # Create new user from Telegram data
+        # Generate username
+        telegram_username = username or f"tg_{id}"
+        
+        # Check if username exists
+        result = await db.execute(
+            select(User).where(User.username == telegram_username)
+        )
+        if result.scalar_one_or_none():
+            telegram_username = f"tg_{id}_{datetime.utcnow().timestamp():.0f}"
+        
+        # Generate email
+        telegram_email = f"tg_{id}@telegram.local"
+        
+        # Check if email exists
+        result = await db.execute(
+            select(User).where(User.email == telegram_email)
+        )
+        if result.scalar_one_or_none():
+            telegram_email = f"tg_{id}_{datetime.utcnow().timestamp():.0f}@telegram.local"
+        
+        # Create new user
+        full_name = first_name
+        if last_name:
+            full_name = f"{first_name} {last_name}"
+        
+        user = User(
+            telegram_id=id,
+            username=telegram_username,
+            email=telegram_email,
+            full_name=full_name,
+            hashed_password=get_password_hash(f"telegram_{id}_{datetime.utcnow().timestamp()}"),
+            is_active=True,
+        )
+        
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        
+        logger.info(f"New user registered via Telegram: {user.id} (Telegram ID: {id})")
+    
+    # Generate tokens
+    access_token = create_access_token(data={"sub": user.id})
+    refresh_token = create_refresh_token(data={"sub": user.id})
+    
+    return Token(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+
+@router.get("/telegram/link")
+async def telegram_link_redirect(current_user: User = Depends(get_current_active_user)):
+    """
+    Get Telegram linking information for authenticated user.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        Telegram linking information
+    """
+    if current_user.telegram_id:
+        return {
+            "status": "already_linked",
+            "telegram_id": current_user.telegram_id,
+        }
+    
+    return {
+        "status": "not_linked",
+        "bot_username": settings.telegram_bot_username or "bot",
+        "user_id": current_user.id,
+    }
+
+
+@router.post("/telegram/link")
+async def telegram_link_account(
+    telegram_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
+    """
+    Link Telegram account to existing user.
+    
+    Args:
+        telegram_id: Telegram user ID to link
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        Updated user
+        
+    Raises:
+        HTTPException: If Telegram ID already linked to another user
+    """
+    # Check if Telegram ID already linked to another user
+    result = await db.execute(
+        select(User).where(
+            User.telegram_id == telegram_id,
+            User.id != current_user.id
+        )
+    )
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This Telegram account is already linked to another user",
+        )
+    
+    # Link Telegram ID
+    current_user.telegram_id = telegram_id
+    current_user.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    await db.refresh(current_user)
+    
+    logger.info(f"User {current_user.id} linked Telegram ID: {telegram_id}")
+    
+    return current_user
+
 

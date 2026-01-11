@@ -54,6 +54,7 @@ class UserResponse(BaseModel):
     email: str
     username: str
     full_name: Optional[str]
+    telegram_id: Optional[int]
     locale: str
     is_active: bool
     is_verified: bool
