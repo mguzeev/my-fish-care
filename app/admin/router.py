@@ -170,6 +170,7 @@ class SubscriptionResponse(BaseModel):
     id: int
     organization_id: int
     organization_name: str
+    user_count: int = 0
     plan_name: Optional[str]
     status: str
     paddle_subscription_id: Optional[str]
@@ -186,7 +187,8 @@ async def list_subscriptions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
 ):
-    """List all subscriptions."""
+    """List all subscriptions (billing accounts)."""
+    # Get all billing accounts with their organizations and plans
     result = await db.execute(
         select(BillingAccount, Organization, SubscriptionPlan)
         .join(Organization, BillingAccount.organization_id == Organization.id)
@@ -197,20 +199,30 @@ async def list_subscriptions(
     )
     rows = result.all()
     
-    return [
-        SubscriptionResponse(
-            id=billing.id,
-            organization_id=billing.organization_id,
-            organization_name=org.name,
-            plan_name=plan.name if plan else None,
-            status=billing.subscription_status.value,
-            paddle_subscription_id=billing.paddle_subscription_id,
-            total_spent=billing.total_spent,
-            created_at=billing.created_at,
-            updated_at=billing.updated_at,
+    # Count users for each organization
+    subscriptions = []
+    for billing, org, plan in rows:
+        user_count_result = await db.execute(
+            select(func.count(User.id)).where(User.organization_id == org.id)
         )
-        for billing, org, plan in rows
-    ]
+        user_count = user_count_result.scalar() or 0
+        
+        subscriptions.append(
+            SubscriptionResponse(
+                id=billing.id,
+                organization_id=billing.organization_id,
+                organization_name=org.name,
+                user_count=user_count,
+                plan_name=plan.name if plan else None,
+                status=billing.subscription_status.value,
+                paddle_subscription_id=billing.paddle_subscription_id,
+                total_spent=billing.total_spent,
+                created_at=billing.created_at,
+                updated_at=billing.updated_at,
+            )
+        )
+    
+    return subscriptions
 
 
 # ============================================================================
