@@ -29,9 +29,10 @@ class AgentRuntime:
 		variables: Dict[str, Any],
 	) -> RenderedPrompt:
 		"""Render prompt for the given agent."""
+		version = agent.version or "1.0.0"
 		template = PromptTemplate(
 			name=agent.name,
-			version=agent.version,
+			version=version,
 			system=agent.system_prompt,
 			user=agent.prompt_template or "{input}",
 			variables=[

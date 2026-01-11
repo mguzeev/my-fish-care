@@ -36,8 +36,8 @@ class UsageRecord(Base):
     # Error tracking
     error_message: Mapped[Optional[str]] = mapped_column(Text)
     
-    # Metadata
-    metadata: Mapped[Optional[str]] = mapped_column(Text)  # JSON string
+    # Metadata (column name preserved as 'metadata')
+    meta: Mapped[Optional[str]] = mapped_column("metadata", Text)  # JSON string
     
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)

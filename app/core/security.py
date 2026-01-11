@@ -1,6 +1,7 @@
 """Security utilities for authentication and authorization."""
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+import uuid
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
@@ -33,6 +34,11 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
         Encoded JWT token
     """
     to_encode = data.copy()
+    # JWT spec expects subject to be a string
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
+    # Unique token id to avoid duplicate tokens in tests and refreshes
+    to_encode.setdefault("jti", uuid.uuid4().hex)
     
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
@@ -55,6 +61,9 @@ def create_refresh_token(data: Dict[str, Any]) -> str:
         Encoded JWT refresh token
     """
     to_encode = data.copy()
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
+    to_encode.setdefault("jti", uuid.uuid4().hex)
     expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
     to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -76,6 +85,12 @@ def decode_token(token: str) -> Dict[str, Any]:
     """
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        # Cast subject back to int when possible
+        if "sub" in payload:
+            try:
+                payload["sub"] = int(payload["sub"])
+            except (TypeError, ValueError):
+                pass
         return payload
     except JWTError:
         raise HTTPException(
