@@ -67,6 +67,15 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
+# Cache control middleware for static files
+@app.middleware("http")
+async def add_cache_control(request: Request, call_next):
+    """Add cache control headers for static files."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
 # Include routers
 app.include_router(landing_router)
 app.include_router(auth_router)

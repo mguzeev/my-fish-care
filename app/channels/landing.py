@@ -47,7 +47,9 @@ async def landing_page(request: Request):
         bot_username=settings.telegram_bot_username or "bot",
         api_base_url=settings.api_base_url
     )
-    return html
+    response = HTMLResponse(html)
+    response.headers["Cache-Control"] = "public, max-age=300"
+    return response
 
 
 @router.get("/login", response_class=HTMLResponse)
