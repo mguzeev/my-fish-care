@@ -13,7 +13,7 @@ import json
 @pytest.mark.asyncio
 async def test_admin_dashboard_requires_admin(client: AsyncClient, auth_header: dict):
     """Test that dashboard requires admin role."""
-    response = await client.get("/admin/dashboard", headers=auth_header)
+    response = await client.get("/admin/dashboard/stats", headers=auth_header)
     # Regular user should get 403
     assert response.status_code == 403
 
@@ -28,7 +28,7 @@ async def test_admin_dashboard_stats(client: AsyncClient, db_session: AsyncSessi
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
         organization_id=None,
     )
     db_session.add(admin)
@@ -38,7 +38,7 @@ async def test_admin_dashboard_stats(client: AsyncClient, db_session: AsyncSessi
     token = create_access_token({"sub": admin.id})
     headers = {"Authorization": f"Bearer {token}"}
     
-    response = await client.get("/admin/dashboard", headers=headers)
+    response = await client.get("/admin/dashboard/stats", headers=headers)
     assert response.status_code == 200
     data = response.json()
     assert "total_users" in data
@@ -58,7 +58,7 @@ async def test_admin_list_plans(client: AsyncClient, db_session: AsyncSession):
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -97,7 +97,7 @@ async def test_admin_create_plan(client: AsyncClient, db_session: AsyncSession):
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -137,7 +137,7 @@ async def test_admin_list_policies(client: AsyncClient, db_session: AsyncSession
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -176,7 +176,7 @@ async def test_admin_create_policy(client: AsyncClient, db_session: AsyncSession
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -214,7 +214,7 @@ async def test_admin_list_user_activity(client: AsyncClient, db_session: AsyncSe
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -241,7 +241,7 @@ async def test_admin_list_organizations(client: AsyncClient, db_session: AsyncSe
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -267,7 +267,7 @@ async def test_admin_update_plan(client: AsyncClient, db_session: AsyncSession):
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()
@@ -318,7 +318,7 @@ async def test_admin_delete_plan(client: AsyncClient, db_session: AsyncSession):
         email="admin@example.com",
         username="admin",
         hashed_password=get_password_hash("admin123"),
-        role="admin",
+        is_superuser=True,
     )
     db_session.add(admin)
     await db_session.commit()

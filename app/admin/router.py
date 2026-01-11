@@ -22,7 +22,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 async def require_admin(user: User = Depends(get_current_active_user)) -> None:
     """Dependency to require admin role."""
-    if user.role != "admin":
+    if not user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
@@ -43,7 +43,7 @@ class DashboardStats(BaseModel):
     api_requests_month: int
 
 
-@router.get("/dashboard", response_model=DashboardStats)
+@router.get("/dashboard/stats", response_model=DashboardStats)
 async def get_dashboard_stats(
     current_user: User = Depends(get_current_active_user),
     _: None = Depends(require_admin),
@@ -107,6 +107,110 @@ async def get_dashboard_stats(
         api_requests_today=api_requests_today,
         api_requests_month=api_requests_month,
     )
+
+
+# ============================================================================
+# Users Management
+# ============================================================================
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    username: Optional[str]
+    full_name: Optional[str]
+    is_active: bool
+    is_verified: bool
+    is_superuser: bool
+    created_at: datetime
+    last_login_at: Optional[datetime]
+    telegram_id: Optional[int]
+    telegram_username: Optional[str]
+
+
+@router.get("/users", response_model=list[UserResponse])
+async def list_users(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """List all users."""
+    result = await db.execute(
+        select(User)
+        .order_by(User.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    users = result.scalars().all()
+    
+    return [
+        UserResponse(
+            id=u.id,
+            email=u.email,
+            username=u.username,
+            full_name=u.full_name,
+            is_active=u.is_active,
+            is_verified=u.is_verified,
+            is_superuser=u.is_superuser,
+            created_at=u.created_at,
+            last_login_at=u.last_login_at,
+            telegram_id=u.telegram_id,
+            telegram_username=u.telegram_username,
+        )
+        for u in users
+    ]
+
+
+# ============================================================================
+# Subscriptions Management
+# ============================================================================
+
+class SubscriptionResponse(BaseModel):
+    id: int
+    user_id: int
+    user_email: str
+    plan_name: Optional[str]
+    status: str
+    paddle_subscription_id: Optional[str]
+    total_spent: Decimal
+    created_at: datetime
+    updated_at: datetime
+
+
+@router.get("/subscriptions", response_model=list[SubscriptionResponse])
+async def list_subscriptions(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """List all subscriptions."""
+    result = await db.execute(
+        select(BillingAccount, User, SubscriptionPlan)
+        .join(User, BillingAccount.user_id == User.id)
+        .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+        .order_by(BillingAccount.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    rows = result.all()
+    
+    return [
+        SubscriptionResponse(
+            id=billing.id,
+            user_id=billing.user_id,
+            user_email=user.email,
+            plan_name=plan.name if plan else None,
+            status=billing.subscription_status.value,
+            paddle_subscription_id=billing.paddle_subscription_id,
+            total_spent=billing.total_spent,
+            created_at=billing.created_at,
+            updated_at=billing.updated_at,
+        )
+        for billing, user, plan in rows
+    ]
 
 
 # ============================================================================

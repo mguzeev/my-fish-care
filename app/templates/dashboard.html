@@ -200,6 +200,7 @@
         <nav>
             <a href="/" class="logo">{{ t('site_name') }}</a>
             <div class="nav-right">
+                <a href="/admin" id="adminLink" class="btn btn-primary" style="display: none; margin-right: 1rem;">Admin Panel</a>
                 <select class="lang-selector" id="lang-selector" onchange="changeLanguage(this.value)">
                     <option value="en" {% if language == 'en' %}selected{% endif %}>English</option>
                     <option value="ru" {% if language == 'ru' %}selected{% endif %}>Русский</option>
@@ -406,6 +407,11 @@
                 document.getElementById('userEmail').textContent = user.email;
                 document.getElementById('userAvatar').textContent = (user.full_name || user.username).charAt(0).toUpperCase();
 
+                // Show admin link if user is superuser
+                if (user.is_superuser) {
+                    document.getElementById('adminLink').style.display = 'inline-block';
+                }
+
                 // Update profile view
                 document.getElementById('profileEmail').textContent = user.email;
                 document.getElementById('profileUsername').textContent = user.username;
@@ -414,6 +420,7 @@
                 const statusBadges = [];
                 if (user.is_active) statusBadges.push('<span class="badge badge-active">Active</span>');
                 if (user.is_verified) statusBadges.push('<span class="badge badge-verified">Verified</span>');
+                if (user.is_superuser) statusBadges.push('<span class="badge badge-verified">Admin</span>');
                 document.getElementById('profileStatus').innerHTML = statusBadges.join(' ') || '-';
                 
                 document.getElementById('profileTelegram').textContent = user.telegram_id ? 'Linked' : 'Not linked';

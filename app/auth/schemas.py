@@ -55,9 +55,11 @@ class UserResponse(BaseModel):
     username: str
     full_name: Optional[str]
     telegram_id: Optional[int]
+    telegram_username: Optional[str] = None
     locale: str
     is_active: bool
     is_verified: bool
+    is_superuser: bool
     role: str
     
     class Config:
