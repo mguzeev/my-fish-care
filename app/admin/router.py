@@ -168,8 +168,8 @@ async def list_users(
 
 class SubscriptionResponse(BaseModel):
     id: int
-    user_id: int
-    user_email: str
+    organization_id: int
+    organization_name: str
     plan_name: Optional[str]
     status: str
     paddle_subscription_id: Optional[str]
@@ -188,8 +188,8 @@ async def list_subscriptions(
 ):
     """List all subscriptions."""
     result = await db.execute(
-        select(BillingAccount, User, SubscriptionPlan)
-        .join(User, BillingAccount.user_id == User.id)
+        select(BillingAccount, Organization, SubscriptionPlan)
+        .join(Organization, BillingAccount.organization_id == Organization.id)
         .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
         .order_by(BillingAccount.created_at.desc())
         .offset(skip)
@@ -200,8 +200,8 @@ async def list_subscriptions(
     return [
         SubscriptionResponse(
             id=billing.id,
-            user_id=billing.user_id,
-            user_email=user.email,
+            organization_id=billing.organization_id,
+            organization_name=org.name,
             plan_name=plan.name if plan else None,
             status=billing.subscription_status.value,
             paddle_subscription_id=billing.paddle_subscription_id,
@@ -209,7 +209,7 @@ async def list_subscriptions(
             created_at=billing.created_at,
             updated_at=billing.updated_at,
         )
-        for billing, user, plan in rows
+        for billing, org, plan in rows
     ]
 
 

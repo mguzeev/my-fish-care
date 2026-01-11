@@ -620,12 +620,12 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
-                                <th>User ID</th>
+                                <th>Organization</th>
                                 <th>Plan</th>
                                 <th>Status</th>
-                                <th>Price</th>
-                                <th>Next Billing</th>
-                                <th>Actions</th>
+                                <th>Total Spent</th>
+                                <th>Paddle ID</th>
+                                <th>Created</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -633,21 +633,17 @@
                 
                 subs.forEach(sub => {
                     const statusClass = sub.status === 'active' ? 'badge-active' : 
-                                       sub.status === 'cancelled' ? 'badge-inactive' : 'badge-pending';
+                                       sub.status === 'canceled' ? 'badge-inactive' : 'badge-pending';
                     
                     tableHtml += `
                         <tr>
                             <td>${sub.id}</td>
-                            <td>${sub.user_id}</td>
+                            <td>${sub.organization_name} (#${sub.organization_id})</td>
                             <td>${sub.plan_name || 'N/A'}</td>
                             <td><span class="badge ${statusClass}">${sub.status}</span></td>
-                            <td>$${(sub.amount || 0).toFixed(2)}</td>
-                            <td>${sub.next_billing_at ? new Date(sub.next_billing_at).toLocaleDateString() : 'N/A'}</td>
-                            <td>
-                                <div class="action-buttons">
-                                    <button class="btn-small btn-view">View</button>
-                                </div>
-                            </td>
+                            <td>$${parseFloat(sub.total_spent || 0).toFixed(2)}</td>
+                            <td>${sub.paddle_subscription_id || 'N/A'}</td>
+                            <td>${new Date(sub.created_at).toLocaleDateString()}</td>
                         </tr>
                     `;
                 });
