@@ -45,7 +45,7 @@ async def landing_page(request: Request):
         "landing.html", 
         language=language,
         bot_username=settings.telegram_bot_username or "bot",
-        api_base_url=settings.api_base_url
+        telegram_base_url=settings.telegram_base_url
     )
     response = HTMLResponse(html)
     response.headers["Cache-Control"] = "public, max-age=300"
@@ -64,7 +64,7 @@ async def login_page(request: Request):
         "login.html", 
         language=language,
         bot_username=settings.telegram_bot_username or "bot",
-        api_base_url=settings.api_base_url
+        telegram_base_url=settings.telegram_base_url
     )
     return html
 
@@ -81,7 +81,7 @@ async def register_page(request: Request):
         "register.html", 
         language=language,
         bot_username=settings.telegram_bot_username or "bot",
-        api_base_url=settings.api_base_url
+        telegram_base_url=settings.telegram_base_url
     )
     return html
 

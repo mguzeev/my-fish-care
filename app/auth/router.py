@@ -330,7 +330,7 @@ async def telegram_login_redirect():
     return {
         "message": "Use Telegram login widget",
         "bot_username": telegram_bot_username,
-        "callback_url": f"{settings.api_base_url}/auth/telegram/callback",
+        "callback_url": f"{settings.telegram_base_url}/auth/telegram/callback",
     }
 
 
