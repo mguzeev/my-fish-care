@@ -79,11 +79,13 @@ class TelegramChannel(BaseChannel):
         # Start polling or webhook
         if settings.telegram_use_webhook:
             # Webhook mode
-            if not settings.telegram_webhook_url:
-                logger.error("Webhook URL not configured")
+            # Prefer explicit webhook URL; fall back to base URL
+            base_url = settings.telegram_base_url
+            if not base_url:
+                logger.error("Webhook base URL not configured")
                 return
-            
-            webhook_url = f"{settings.telegram_webhook_url}{settings.telegram_webhook_path}"
+
+            webhook_url = f"{base_url}{settings.telegram_webhook_path}"
             logger.info(f"Setting webhook to: {webhook_url}")
             
             await self.bot.set_webhook(
