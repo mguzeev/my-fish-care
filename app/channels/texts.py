@@ -1,5 +1,6 @@
 from typing import Optional
 from app.i18n.loader import i18n
+from app.core.config import settings
 
 
 def help_text(locale: Optional[str]) -> str:
@@ -12,6 +13,26 @@ def start_text_existing(name: str, locale: Optional[str]) -> str:
 
 def start_text_new(telegram_id: int, locale: Optional[str]) -> str:
     return i18n.t("start.welcome_new", locale, telegram_id=telegram_id)
+
+
+def start_text_auto_registered(username: str, locale: Optional[str]) -> str:
+    return i18n.t("start.auto_registered", locale, username=username)
+
+
+def register_already_linked(email: str, username: str, locale: Optional[str]) -> str:
+    return i18n.t("register.already_linked", locale, email=email, username=username)
+
+
+def register_prompt_email(locale: Optional[str]) -> str:
+    return i18n.t("register.prompt_email", locale)
+
+
+def register_invalid_email(locale: Optional[str]) -> str:
+    return i18n.t("register.invalid_email", locale)
+
+
+def register_success(email: str, locale: Optional[str]) -> str:
+    return i18n.t("register.success", locale, email=email)
 
 
 def profile_text(
@@ -46,3 +67,16 @@ def echo_text(message_text: str, locale: Optional[str]) -> str:
 
 def error_text(key: str, locale: Optional[str]) -> str:
     return i18n.t(f"errors.{key}", locale)
+
+
+def locale_usage(locale: Optional[str], locales: str) -> str:
+    return i18n.t("locale.usage", locale, locales=locales)
+
+
+def locale_success(code: str, locale: Optional[str]) -> str:
+    return i18n.t("locale.success", locale, code=code)
+
+
+def locale_invalid(locale: Optional[str], locales: str) -> str:
+    return i18n.t("locale.invalid", locale, locales=locales)
+

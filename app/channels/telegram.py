@@ -1,7 +1,7 @@
 """Telegram channel implementation."""
 import logging
 from typing import Any, Dict, Optional
-from telegram import Update, Bot
+from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -20,10 +20,18 @@ from app.channels.texts import (
     help_text,
     start_text_existing,
     start_text_new,
+    start_text_auto_registered,
+    register_already_linked,
+    register_prompt_email,
+    register_invalid_email,
+    register_success,
     profile_text,
     profile_not_linked_text,
     echo_text,
     error_text,
+    locale_usage,
+    locale_success,
+    locale_invalid,
 )
 from app.models.session import Session
 import uuid
@@ -58,7 +66,9 @@ class TelegramChannel(BaseChannel):
         # Register handlers
         self.application.add_handler(CommandHandler("start", self.handle_start))
         self.application.add_handler(CommandHandler("help", self.handle_help))
+        self.application.add_handler(CommandHandler("register", self.handle_register))
         self.application.add_handler(CommandHandler("profile", self.handle_profile))
+        self.application.add_handler(CommandHandler("locale", self.handle_locale))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
         
@@ -171,7 +181,7 @@ class TelegramChannel(BaseChannel):
             return
         
         user_id = update.effective_user.id
-        username = update.effective_user.username
+        username = update.effective_user.username or f"tg_{user_id}"
         chat_id = update.effective_chat.id
         
         async with AsyncSessionLocal() as db:
@@ -184,7 +194,25 @@ class TelegramChannel(BaseChannel):
             if user:
                 welcome_message = start_text_existing(user.full_name or username, user.locale)
             else:
-                welcome_message = start_text_new(user_id, None)
+                # Auto-register the user
+                from app.core.security import get_password_hash
+                import secrets
+                
+                new_user = User(
+                    email=f"tg_{user_id}@telegram.local",
+                    username=username,
+                    hashed_password=get_password_hash(secrets.token_urlsafe(16)),
+                    telegram_id=user_id,
+                    telegram_username=username,
+                    full_name=update.effective_user.full_name,
+                    is_active=True,
+                    is_verified=False,
+                )
+                db.add(new_user)
+                await db.commit()
+                await db.refresh(new_user)
+                
+                welcome_message = start_text_auto_registered(username, new_user.locale)
         
         await update.message.reply_text(
             welcome_message,
@@ -204,6 +232,40 @@ class TelegramChannel(BaseChannel):
             help_text(None),
             parse_mode="Markdown"
         )
+    
+    async def handle_register(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Handle /register command to link email.
+        
+        Args:
+            update: Telegram update
+            context: Bot context
+        """
+        if not update.effective_user:
+            return
+        
+        user_id = update.effective_user.id
+        
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                await update.message.reply_text(error_text("please_start", None))
+                return
+            
+            # Check if already has real email (not telegram.local)
+            if user.email and not user.email.endswith("@telegram.local"):
+                text = register_already_linked(user.email, user.username, user.locale)
+                await update.message.reply_text(text, parse_mode="Markdown")
+                return
+            
+            # Store state to wait for email
+            context.user_data["awaiting_email"] = True
+            await update.message.reply_text(register_prompt_email(user.locale))
+
     
     async def handle_profile(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -237,10 +299,63 @@ class TelegramChannel(BaseChannel):
             else:
                 text = profile_not_linked_text(user_id, None)
         
-        await update.message.reply_text(
-            text,
-            parse_mode="Markdown"
-        )
+        await update.message.reply_text(text)
+
+    async def handle_locale(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Handle /locale command to change user locale.
+        Usage: /locale en|uk|ru
+        """
+        if not update.effective_user:
+            return
+        user_id = update.effective_user.id
+
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+
+            if not user:
+                await update.message.reply_text(error_text("please_start", None))
+                return
+
+            args = context.args if hasattr(context, "args") else []
+            available = ", ".join(settings.supported_locales)
+
+            if not args:
+                # Show inline keyboard to choose locale
+                labels = {
+                    "en": "English",
+                    "uk": "Українська",
+                    "ru": "Русский",
+                }
+                buttons = [
+                    [InlineKeyboardButton(labels[code], callback_data=f"locale:{code}")]
+                    for code in settings.supported_locales
+                ]
+                keyboard = InlineKeyboardMarkup(buttons)
+                await update.message.reply_text(
+                    locale_usage(user.locale, available),
+                    reply_markup=keyboard,
+                )
+                return
+
+            new_locale = (args[0] or "").lower()
+            if new_locale not in settings.supported_locales:
+                await update.message.reply_text(
+                    locale_invalid(user.locale, available)
+                )
+                return
+
+            # Update and persist locale
+            user.locale = new_locale
+            await db.commit()
+
+            # Respond in the new locale immediately
+            await update.message.reply_text(
+                locale_success(new_locale, new_locale)
+            )
     
     async def handle_text_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
@@ -270,6 +385,27 @@ class TelegramChannel(BaseChannel):
             if not user.is_active:
                 await update.message.reply_text(error_text("inactive", user.locale))
                 return
+            
+            # Check if awaiting email for registration
+            if context.user_data.get("awaiting_email"):
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                
+                if re.match(email_pattern, message_text):
+                    # Update user email
+                    user.email = message_text
+                    user.is_verified = False  # Require verification
+                    await db.commit()
+                    
+                    context.user_data["awaiting_email"] = False
+                    await update.message.reply_text(
+                        register_success(message_text, user.locale),
+                        parse_mode="Markdown"
+                    )
+                    return
+                else:
+                    await update.message.reply_text(register_invalid_email(user.locale))
+                    return
             
             # Create or update session
             session_id = f"tg_{user_id}_{uuid.uuid4().hex[:8]}"
@@ -301,10 +437,29 @@ class TelegramChannel(BaseChannel):
         
         await query.answer()
         
-        # TODO: Implement callback handling
-        await query.edit_message_text(
-            text=f"Callback received: {query.data}"
-        )
+        data = query.data or ""
+        if data.startswith("locale:"):
+            new_locale = data.split(":", 1)[1]
+            if new_locale not in settings.supported_locales:
+                await query.answer("Unsupported locale", show_alert=False)
+                return
+            user_id = query.from_user.id if query.from_user else None
+            if not user_id:
+                await query.answer()
+                return
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(User).where(User.telegram_id == user_id))
+                user = result.scalar_one_or_none()
+                if not user:
+                    await query.answer()
+                    return
+                user.locale = new_locale
+                await db.commit()
+            await query.answer()
+            await query.edit_message_text(locale_success(new_locale, new_locale))
+            return
+
+        await query.edit_message_text(text=f"Callback received: {query.data}")
 
 
 # Global Telegram channel instance

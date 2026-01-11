@@ -62,7 +62,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     
     class Config:
-        env_file = ".env"
+        import os as _os
+        env_file = ".env.local" if _os.path.exists(".env.local") else ".env"
         case_sensitive = False
 
 

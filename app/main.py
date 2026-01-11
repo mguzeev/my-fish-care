@@ -1,3 +1,4 @@
+# Follow SYSTEM_OVERVIEW.md and ARCHITECTURE_AND_COMPONENTS.md
 """FastAPI application entry point."""
 import asyncio
 import logging

@@ -1,21 +1,29 @@
 {
   "help": {
-    "text": "\ud83d\udcda *Available Commands:*\n\n/start - Start the bot\n/help - Show this help message\n/profile - Show your profile\n\n\ud83d\udcac *How to use:*\nJust send me any message and I'll respond using AI!"
+    "text": "📚 *Available Commands:*\n\n/start - Start the bot\n/help - Show this help message\n/profile - Show your profile\n/register - Link your email\n/locale - Change language\n\n💬 *How to use:*\nJust send me any message and I'll respond using AI!"
   },
   "start": {
-    "welcome_existing": "Welcome back, {name}! \ud83d\udc4b",
-    "welcome_new": "Hello! \ud83d\udc4b\n\nI'm your AI assistant bot. To get started, please register and link Telegram.\n\nYour Telegram ID: {telegram_id}"
+    "welcome_existing": "Welcome back, {name}! 👋",
+    "welcome_new": "Hello! 👋\n\nI'm your AI assistant bot. To get started, please register and link Telegram.\n\nYour Telegram ID: {telegram_id}",
+    "auto_registered": "Welcome! 👋\n\nYou've been automatically registered!\n\nUsername: @{username}\n\nYou can now use the bot. To link your email, use /register command."
+  },
+  "register": {
+    "already_linked": "Your account is already registered and active!\n\nEmail: {email}\nUsername: @{username}",
+    "prompt_email": "Please send me your email address to complete registration.",
+    "invalid_email": "Invalid email format. Please send a valid email address.",
+    "success": "✅ Email linked successfully!\n\nEmail: {email}\n\nYou can now use all features.",
+    "cancelled": "Registration cancelled. You can use /register anytime to link your email."
   },
   "profile": {
-    "header": "\ud83d\udc64 *Your Profile*",
+    "header": "👤 *Your Profile*",
     "name": "Name: {name}",
     "username": "Username: @{username}",
     "email": "Email: {email}",
     "role": "Role: {role}",
-    "status_active": "Status: \u2705 Active",
-    "status_inactive": "Status: \u274c Inactive",
-    "verified_yes": "Verified: \u2705 Yes",
-    "verified_no": "Verified: \u274c No",
+    "status_active": "Status: ✅ Active",
+    "status_inactive": "Status: ❌ Inactive",
+    "verified_yes": "Verified: ✅ Yes",
+    "verified_no": "Verified: ❌ No",
     "not_linked": "You haven't linked your account yet.\n\nYour Telegram ID: {telegram_id}\n\nPlease register on our web app and link your Telegram."
   },
   "echo": {
@@ -25,5 +33,11 @@
     "please_start": "Please use /start to register first.",
     "inactive": "Your account is inactive. Please contact support.",
     "unsupported_locale": "Unsupported locale"
+  }
+  ,
+  "locale": {
+    "usage": "Usage: /locale <code>\nAvailable: {locales}",
+    "success": "✅ Locale changed to: {code}",
+    "invalid": "Unsupported locale. Available: {locales}"
   }
 }
