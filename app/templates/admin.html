@@ -6,60 +6,60 @@
     <title>Admin Panel - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=2.0">
     <style>
-        .admin-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
+        // Other functions
+        async function viewOrg(id) {
+            try {
+                const org = await apiCall(`/admin/organizations/${id}`);
+                if (!org) return;
+
+                let membersHtml = '';
+                if (org.members && org.members.length > 0) {
+                    membersHtml = '<h3 style="margin-top: 1.5rem; color: var(--primary-color);">Members (' + org.members.length + ')</h3>';
+                    membersHtml += '<table style="width: 100%; margin-top: 1rem;"><thead><tr><th>Email</th><th>Username</th><th>Status</th></tr></thead><tbody>';
+                    org.members.forEach(member => {
+                        const status = member.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>';
+                        membersHtml += `<tr><td>${member.email}</td><td>${member.username || '-'}</td><td>${status}</td></tr>`;
+                    });
+                    membersHtml += '</tbody></table>';
+                }
+
+                let subHtml = '';
+                if (org.subscription) {
+                    const status = org.subscription.status === 'active' ? 
+                        '<span class="badge badge-active">Active</span>' : 
+                        '<span class="badge badge-inactive">' + org.subscription.status + '</span>';
+                    subHtml = `<h3 style="margin-top: 1.5rem; color: var(--primary-color);">Subscription</h3>
+                        <div style="background: #f5f5f5; padding: 1rem; border-radius: 8px;">
+                            <p><strong>Plan:</strong> ${org.subscription.plan_name || 'Free'}</p>
+                            <p><strong>Status:</strong> ${status}</p>
+                            <p><strong>Total Spent:</strong> $${parseFloat(org.subscription.total_spent).toFixed(2)}</p>
+                        </div>`;
+                }
+
+                const content = `
+                    <div style="background: #f5f5f5; padding: 1rem; border-radius: 8px;">
+                        <p><strong>ID:</strong> ${org.id}</p>
+                        <p><strong>Name:</strong> ${org.name}</p>
+                        <p><strong>Slug:</strong> ${org.slug}</p>
+                        <p><strong>Members:</strong> ${org.member_count}</p>
+                        <p><strong>Created:</strong> ${new Date(org.created_at).toLocaleDateString()}</p>
+                    </div>
+                    ${subHtml}
+                    ${membersHtml}
+                `;
+
+                document.getElementById('orgDetailsContent').innerHTML = content;
+                openModal('viewOrgModal');
+            } catch (error) {
+                showAlert('Failed to load organization details: ' + error.message, 'error');
+            }
         }
-        
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
+
+        function logout() {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            window.location.href = '/';
         }
-        
-        .admin-header h1 {
-            color: var(--primary-color);
-            margin: 0;
-        }
-        
-        .admin-tabs {
-            display: flex;
-            gap: 1rem;
-            border-bottom: 2px solid #f0f0f0;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-        
-        .admin-tab {
-            padding: 1rem 1.5rem;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        
-        .admin-tab.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-        }
-        
-        .admin-tab:hover {
-            color: var(--primary-color);
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
             display: block;
         }
         
@@ -692,13 +692,7 @@
         </div>
     </div>
 
-    <script>
-        const API_BASE = '';
-        let currentTab = 'dashboard';
-        let editingUserId = null;
-        let editingSubscriptionId = null;
-        let editingPlanId = null;
-
+    <!-- View Organization Modal -->
     <div id="viewOrgModal" class="modal">
         <div class="modal-content" style="max-width: 700px;">
             <div class="modal-header">
@@ -711,6 +705,13 @@
             </div>
         </div>
     </div>
+
+    <script>
+        const API_BASE = '';
+        let currentTab = 'dashboard';
+        let editingUserId = null;
+        let editingSubscriptionId = null;
+        let editingPlanId = null;
 
         // Get auth token
         function getAuthToken() {
