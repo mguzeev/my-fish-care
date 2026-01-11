@@ -376,7 +376,7 @@ async def telegram_login_callback(
     auth_date: int = Query(...),
     hash: str = Query(...),
     db: AsyncSession = Depends(get_db),
-) -> Token:
+):
     """
     Telegram login callback.
     
@@ -391,7 +391,7 @@ async def telegram_login_callback(
         db: Database session
         
     Returns:
-        Access and refresh tokens
+        Redirect to dashboard with tokens
         
     Raises:
         HTTPException: If authentication fails
@@ -473,11 +473,15 @@ async def telegram_login_callback(
     access_token = create_access_token(data={"sub": user.id})
     refresh_token = create_refresh_token(data={"sub": user.id})
     
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-    )
+    # Redirect to dashboard with tokens in query parameters
+    dashboard_url = f"{settings.app_base_url}/dashboard"
+    params = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+    }
+    redirect_url = f"{dashboard_url}?{urlencode(params)}"
+    
+    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/telegram/link")
