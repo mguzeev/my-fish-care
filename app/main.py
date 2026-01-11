@@ -1,0 +1,3 @@
+# Entry point
+
+# Follow SYSTEM_OVERVIEW.md and ARCHITECTURE_AND_COMPONENTS.md

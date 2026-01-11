@@ -1,0 +1,1 @@
+See provided architecture description
