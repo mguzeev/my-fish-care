@@ -69,7 +69,9 @@ async def test_agent_runtime_completion(monkeypatch, llm_model):
         def __init__(self):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(agent_runtime, "client", FakeClient())
+    # Mock _get_client_for_agent to return our fake client
+    fake_client = FakeClient()
+    monkeypatch.setattr(agent_runtime, "_get_client_for_agent", lambda agent: fake_client)
 
     agent = Agent(
         name="Demo",
@@ -77,7 +79,9 @@ async def test_agent_runtime_completion(monkeypatch, llm_model):
         system_prompt="You are a demo agent",
         prompt_template="{input}",
         llm_model_id=llm_model.id,
+        max_tokens=2000,
     )
+    agent.llm_model = llm_model
 
     result = await agent_runtime.run(agent, {"input": "Ping"}, stream=False)
     assert result == "ok"
@@ -119,7 +123,9 @@ async def test_agent_runtime_uses_prompt_version(monkeypatch, llm_model):
         def __init__(self):
             self.chat = FakeChat()
 
-    monkeypatch.setattr(agent_runtime, "client", FakeClient())
+    # Mock _get_client_for_agent to return our fake client
+    fake_client = FakeClient()
+    monkeypatch.setattr(agent_runtime, "_get_client_for_agent", lambda agent: fake_client)
 
     agent = Agent(
         name="Demo",
@@ -127,7 +133,9 @@ async def test_agent_runtime_uses_prompt_version(monkeypatch, llm_model):
         system_prompt="You are a demo agent",
         prompt_template="{input}",
         llm_model_id=llm_model.id,
+        max_tokens=2000,
     )
+    agent.llm_model = llm_model
 
     prompt_version = PromptVersion(
         agent_id=1,

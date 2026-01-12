@@ -128,6 +128,8 @@ async def llm_model(db_session):
         provider="openai",
         api_key="test-key",
         is_default=True,
+        max_tokens_limit=8000,
+        context_window=128000,
     )
     db_session.add(model)
     await db_session.commit()

@@ -18,6 +18,7 @@ from app.models.usage import UsageRecord
 from app.models.policy import PolicyRule
 from app.models.prompt import PromptVersion
 from app.models.agent import Agent
+from app.models.llm_model import LLMModel
 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -1378,3 +1379,272 @@ async def delete_subscription(
     await db.commit()
     
     return {"detail": "Subscription canceled"}
+
+
+# ============================================================================
+# LLM Models Management
+# ============================================================================
+
+class LLMModelResponse(BaseModel):
+    id: int
+    name: str
+    display_name: str
+    provider: str
+    api_key: str  # Will be masked in response
+    api_base_url: Optional[str]
+    max_tokens_limit: int
+    context_window: int
+    cost_per_1k_input_tokens: Optional[float]
+    cost_per_1k_output_tokens: Optional[float]
+    is_active: bool
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateLLMModelRequest(BaseModel):
+    name: str = Field(..., description="Model identifier (e.g., 'gpt-4')")
+    display_name: str = Field(..., description="Human-readable name")
+    provider: str = Field(..., description="Provider: openai, anthropic, google")
+    api_key: str = Field(..., description="API key for this model")
+    api_base_url: Optional[str] = Field(None, description="Custom API endpoint")
+    max_tokens_limit: int = Field(4096, description="Maximum tokens per request")
+    context_window: int = Field(8192, description="Model context window size")
+    cost_per_1k_input_tokens: Optional[float] = None
+    cost_per_1k_output_tokens: Optional[float] = None
+    is_active: bool = True
+    is_default: bool = False
+
+
+class UpdateLLMModelRequest(BaseModel):
+    display_name: Optional[str] = None
+    api_key: Optional[str] = None
+    api_base_url: Optional[str] = None
+    max_tokens_limit: Optional[int] = None
+    context_window: Optional[int] = None
+    cost_per_1k_input_tokens: Optional[float] = None
+    cost_per_1k_output_tokens: Optional[float] = None
+    is_active: Optional[bool] = None
+    is_default: Optional[bool] = None
+
+
+@router.get("/llm-models", response_model=list[LLMModelResponse])
+async def list_llm_models(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List all LLM models."""
+    result = await db.execute(select(LLMModel).order_by(LLMModel.name))
+    models = result.scalars().all()
+    
+    # Mask API keys (show only first 8 and last 4 characters)
+    response = []
+    for model in models:
+        model_dict = {
+            "id": model.id,
+            "name": model.name,
+            "display_name": model.display_name,
+            "provider": model.provider,
+            "api_key": f"{model.api_key[:8]}...{model.api_key[-4:]}" if len(model.api_key) > 12 else "***",
+            "api_base_url": model.api_base_url,
+            "max_tokens_limit": model.max_tokens_limit,
+            "context_window": model.context_window,
+            "cost_per_1k_input_tokens": float(model.cost_per_1k_input_tokens) if model.cost_per_1k_input_tokens else None,
+            "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
+            "is_active": model.is_active,
+            "is_default": model.is_default,
+            "created_at": model.created_at,
+            "updated_at": model.updated_at,
+        }
+        response.append(LLMModelResponse(**model_dict))
+    
+    return response
+
+
+@router.get("/llm-models/{model_id}", response_model=LLMModelResponse)
+async def get_llm_model(
+    model_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get LLM model by ID."""
+    result = await db.execute(select(LLMModel).where(LLMModel.id == model_id))
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    
+    # Mask API key
+    model_dict = {
+        "id": model.id,
+        "name": model.name,
+        "display_name": model.display_name,
+        "provider": model.provider,
+        "api_key": f"{model.api_key[:8]}...{model.api_key[-4:]}" if len(model.api_key) > 12 else "***",
+        "api_base_url": model.api_base_url,
+        "max_tokens_limit": model.max_tokens_limit,
+        "context_window": model.context_window,
+        "cost_per_1k_input_tokens": float(model.cost_per_1k_input_tokens) if model.cost_per_1k_input_tokens else None,
+        "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
+        "is_active": model.is_active,
+        "is_default": model.is_default,
+        "created_at": model.created_at,
+        "updated_at": model.updated_at,
+    }
+    return LLMModelResponse(**model_dict)
+
+
+@router.post("/llm-models", response_model=LLMModelResponse)
+async def create_llm_model(
+    request: CreateLLMModelRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create new LLM model."""
+    # Check if name already exists
+    existing = await db.execute(select(LLMModel).where(LLMModel.name == request.name))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="LLM model with this name already exists")
+    
+    # If setting as default, unset other defaults
+    if request.is_default:
+        await db.execute(
+            update(LLMModel)
+            .where(LLMModel.is_default == True)
+            .values(is_default=False)
+        )
+    
+    model = LLMModel(
+        name=request.name,
+        display_name=request.display_name,
+        provider=request.provider,
+        api_key=request.api_key,
+        api_base_url=request.api_base_url,
+        max_tokens_limit=request.max_tokens_limit,
+        context_window=request.context_window,
+        cost_per_1k_input_tokens=request.cost_per_1k_input_tokens,
+        cost_per_1k_output_tokens=request.cost_per_1k_output_tokens,
+        is_active=request.is_active,
+        is_default=request.is_default,
+    )
+    db.add(model)
+    await db.commit()
+    await db.refresh(model)
+    
+    # Mask API key in response
+    model_dict = {
+        "id": model.id,
+        "name": model.name,
+        "display_name": model.display_name,
+        "provider": model.provider,
+        "api_key": f"{model.api_key[:8]}...{model.api_key[-4:]}",
+        "api_base_url": model.api_base_url,
+        "max_tokens_limit": model.max_tokens_limit,
+        "context_window": model.context_window,
+        "cost_per_1k_input_tokens": float(model.cost_per_1k_input_tokens) if model.cost_per_1k_input_tokens else None,
+        "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
+        "is_active": model.is_active,
+        "is_default": model.is_default,
+        "created_at": model.created_at,
+        "updated_at": model.updated_at,
+    }
+    return LLMModelResponse(**model_dict)
+
+
+@router.put("/llm-models/{model_id}", response_model=LLMModelResponse)
+async def update_llm_model(
+    model_id: int,
+    request: UpdateLLMModelRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update LLM model."""
+    result = await db.execute(select(LLMModel).where(LLMModel.id == model_id))
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    
+    # If setting as default, unset other defaults
+    if request.is_default and not model.is_default:
+        await db.execute(
+            update(LLMModel)
+            .where(LLMModel.is_default == True)
+            .values(is_default=False)
+        )
+    
+    # Update fields
+    if request.display_name is not None:
+        model.display_name = request.display_name
+    if request.api_key is not None:
+        model.api_key = request.api_key
+    if request.api_base_url is not None:
+        model.api_base_url = request.api_base_url
+    if request.max_tokens_limit is not None:
+        model.max_tokens_limit = request.max_tokens_limit
+    if request.context_window is not None:
+        model.context_window = request.context_window
+    if request.cost_per_1k_input_tokens is not None:
+        model.cost_per_1k_input_tokens = request.cost_per_1k_input_tokens
+    if request.cost_per_1k_output_tokens is not None:
+        model.cost_per_1k_output_tokens = request.cost_per_1k_output_tokens
+    if request.is_active is not None:
+        model.is_active = request.is_active
+    if request.is_default is not None:
+        model.is_default = request.is_default
+    
+    await db.commit()
+    await db.refresh(model)
+    
+    # Mask API key in response
+    model_dict = {
+        "id": model.id,
+        "name": model.name,
+        "display_name": model.display_name,
+        "provider": model.provider,
+        "api_key": f"{model.api_key[:8]}...{model.api_key[-4:]}" if len(model.api_key) > 12 else "***",
+        "api_base_url": model.api_base_url,
+        "max_tokens_limit": model.max_tokens_limit,
+        "context_window": model.context_window,
+        "cost_per_1k_input_tokens": float(model.cost_per_1k_input_tokens) if model.cost_per_1k_input_tokens else None,
+        "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
+        "is_active": model.is_active,
+        "is_default": model.is_default,
+        "created_at": model.created_at,
+        "updated_at": model.updated_at,
+    }
+    return LLMModelResponse(**model_dict)
+
+
+@router.delete("/llm-models/{model_id}")
+async def delete_llm_model(
+    model_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete LLM model (only if not used by any agents)."""
+    # Check if any agents use this model
+    agents_count = await db.execute(
+        select(func.count(Agent.id)).where(Agent.llm_model_id == model_id)
+    )
+    count = agents_count.scalar()
+    
+    if count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete LLM model: {count} agent(s) are using it"
+        )
+    
+    result = await db.execute(select(LLMModel).where(LLMModel.id == model_id))
+    model = result.scalar_one_or_none()
+    if not model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    
+    await db.delete(model)
+    await db.commit()
+    
+    return {"detail": "LLM model deleted"}
+

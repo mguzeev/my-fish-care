@@ -18,12 +18,33 @@ class AgentRuntime:
 	"""Runtime to execute agents using LLM provider."""
 
 	def __init__(self):
+		# Default client for backward compatibility
 		if not settings.openai_api_key:
 			logger.warning("OpenAI API key is not configured")
-		self.client = AsyncOpenAI(api_key=settings.openai_api_key)
-		self.model = settings.openai_model
-		self.temperature = settings.openai_temperature
-		self.max_tokens = settings.openai_max_tokens
+		self.default_client = AsyncOpenAI(api_key=settings.openai_api_key)
+		self.default_model = settings.openai_model
+		self.default_temperature = settings.openai_temperature
+		self.default_max_tokens = settings.openai_max_tokens
+	
+	def _get_client_for_agent(self, agent: Agent) -> AsyncOpenAI:
+		"""Get OpenAI client configured for the agent's LLM model."""
+		if not agent.llm_model:
+			logger.warning(f"Agent {agent.id} has no LLM model, using default client")
+			return self.default_client
+		
+		llm_model = agent.llm_model
+		
+		if not llm_model.is_active:
+			raise ValueError(f"LLM model '{llm_model.name}' is not active")
+		
+		if llm_model.provider != "openai":
+			raise ValueError(f"Provider '{llm_model.provider}' is not supported yet. Only 'openai' is supported.")
+		
+		# Create client with model's API key
+		return AsyncOpenAI(
+			api_key=llm_model.api_key,
+			base_url=llm_model.api_base_url if llm_model.api_base_url else None
+		)
 
 	async def _build_prompt(
 		self,
@@ -87,31 +108,52 @@ class AgentRuntime:
 	) -> Any:
 		"""Run agent and return completion or async generator when streaming."""
 		prompt = await self._build_prompt(agent, variables, prompt_version)
+		
+		# Get client and model config from agent's LLM model
+		client = self._get_client_for_agent(agent)
+		model_name = agent.llm_model.name if agent.llm_model else self.default_model
+		temperature = agent.temperature
+		max_tokens = min(
+			agent.max_tokens,
+			agent.llm_model.max_tokens_limit if agent.llm_model else self.default_max_tokens
+		)
 
 		if stream:
-			return self._stream_completion(prompt)
-		return await self._completion(prompt)
+			return self._stream_completion(prompt, client, model_name, temperature, max_tokens)
+		return await self._completion(prompt, client, model_name, temperature, max_tokens)
 
-	async def _completion(self, prompt: RenderedPrompt) -> str:
+	async def _completion(
+		self, 
+		prompt: RenderedPrompt,
+		client: AsyncOpenAI,
+		model: str,
+		temperature: float,
+		max_tokens: int
+	) -> str:
 		"""Non-streaming completion."""
-		logger.debug("Sending completion request to OpenAI")
-		response = await self.client.chat.completions.create(
-			model=self.model,
-			temperature=self.temperature,
-			max_tokens=self.max_tokens,
+		logger.debug(f"Sending completion request to {model}")
+		response = await client.chat.completions.create(
+			model=model,
+			temperature=temperature,
+			max_tokens=max_tokens,
 			messages=prompt.to_messages(),
 		)
 		return response.choices[0].message.content or ""
 
 	async def _stream_completion(
-		self, prompt: RenderedPrompt
+		self, 
+		prompt: RenderedPrompt,
+		client: AsyncOpenAI,
+		model: str,
+		temperature: float,
+		max_tokens: int
 	) -> AsyncGenerator[str, None]:
 		"""Streaming completion generator."""
-		logger.debug("Sending streaming completion request to OpenAI")
-		stream = await self.client.chat.completions.create(
-			model=self.model,
-			temperature=self.temperature,
-			max_tokens=self.max_tokens,
+		logger.debug(f"Sending streaming completion request to {model}")
+		stream = await client.chat.completions.create(
+			model=model,
+			temperature=temperature,
+			max_tokens=max_tokens,
 			messages=prompt.to_messages(),
 			stream=True,
 		)
