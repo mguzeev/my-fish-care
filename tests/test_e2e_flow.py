@@ -10,7 +10,7 @@ from decimal import Decimal
 
 
 @pytest.mark.asyncio
-async def test_e2e_register_login_invoke(client, db_session, monkeypatch):
+async def test_e2e_register_login_invoke(client, db_session, monkeypatch, llm_model):
     # Register a user
     register_resp = await client.post(
         "/auth/register",
@@ -49,6 +49,7 @@ async def test_e2e_register_login_invoke(client, db_session, monkeypatch):
         prompt_template="Echo: {input}",
         model_name="gpt-4",
         is_public=False,
+        llm_model_id=llm_model.id,
     )
     db_session.add(agent)
     await db_session.commit()

@@ -15,6 +15,7 @@ from app.main import app  # noqa: E402
 from app.core.security import get_password_hash, create_access_token  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.models.agent import Agent  # noqa: E402
+from app.models.llm_model import LLMModel  # noqa: E402
 
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
@@ -119,7 +120,23 @@ async def user_factory(db_session):
 
 
 @pytest.fixture()
-async def agent_factory(db_session):
+async def llm_model(db_session):
+    """Create default LLM model for tests."""
+    model = LLMModel(
+        name="gpt-4",
+        display_name="GPT-4 (OpenAI)",
+        provider="openai",
+        api_key="test-key",
+        is_default=True,
+    )
+    db_session.add(model)
+    await db_session.commit()
+    await db_session.refresh(model)
+    return model
+
+
+@pytest.fixture()
+async def agent_factory(db_session, llm_model):
     """Factory to create agents in the test DB."""
 
     async def _create_agent(
@@ -128,6 +145,7 @@ async def agent_factory(db_session):
         system_prompt: str = "You are a test agent",
         prompt_template: str | None = None,
         model_name: str = "gpt-4",
+        llm_model_id: int | None = None,
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -135,6 +153,7 @@ async def agent_factory(db_session):
             system_prompt=system_prompt,
             prompt_template=prompt_template,
             model_name=model_name,
+            llm_model_id=llm_model_id or llm_model.id,
         )
         db_session.add(agent)
         await db_session.commit()

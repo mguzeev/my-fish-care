@@ -1,12 +1,13 @@
 """Agent model."""
 from datetime import datetime
 from typing import Optional, List, TYPE_CHECKING
-from sqlalchemy import String, Boolean, DateTime, Integer, Text
+from sqlalchemy import String, Boolean, DateTime, Integer, Text, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.billing import SubscriptionPlan
+    from app.models.llm_model import LLMModel
 
 
 class Agent(Base):
@@ -23,8 +24,15 @@ class Agent(Base):
     system_prompt: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_template: Mapped[Optional[str]] = mapped_column(Text)
     
-    # Model settings
-    model_name: Mapped[str] = mapped_column(String(100), default="gpt-4", nullable=False)
+    # LLM Model reference
+    llm_model_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("llm_models.id", ondelete="RESTRICT"),
+        nullable=False
+    )
+    
+    # Model settings (kept for backward compatibility during migration)
+    model_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     temperature: Mapped[float] = mapped_column(default=0.7, nullable=False)
     max_tokens: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
     
@@ -48,6 +56,9 @@ class Agent(Base):
         back_populates="agents",
         lazy="selectin"
     )
+    
+    # Relationship to LLM Model
+    llm_model: Mapped["LLMModel"] = relationship("LLMModel", lazy="selectin")
     
     def __repr__(self) -> str:
         return f"<Agent(id={self.id}, name={self.name}, version={self.version})>"

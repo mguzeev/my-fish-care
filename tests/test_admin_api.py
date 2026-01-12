@@ -462,12 +462,12 @@ async def test_admin_activate_prompt_version(
     assert any(p.id == p2.id and p.is_active for p in prompts)
 
 @pytest.mark.asyncio
-async def test_admin_list_agents(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_list_agents(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test listing agents."""
     # Create test agents
     agents = [
-        Agent(name="Agent 1", slug="agent-1", system_prompt="You are helpful", model_name="gpt-4", is_active=True),
-        Agent(name="Agent 2", slug="agent-2", system_prompt="You are kind", model_name="gpt-3.5-turbo", is_active=False),
+        Agent(name="Agent 1", slug="agent-1", system_prompt="You are helpful", model_name="gpt-4", is_active=True, llm_model_id=llm_model.id),
+        Agent(name="Agent 2", slug="agent-2", system_prompt="You are kind", model_name="gpt-3.5-turbo", is_active=False, llm_model_id=llm_model.id),
     ]
     for agent in agents:
         db_session.add(agent)
@@ -482,12 +482,12 @@ async def test_admin_list_agents(client: AsyncClient, admin_client: AsyncClient,
 
 
 @pytest.mark.asyncio
-async def test_admin_list_agents_active_only(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_list_agents_active_only(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test listing only active agents."""
     # Create test agents
     agents = [
-        Agent(name="Active Agent", slug="active-agent", system_prompt="Active", is_active=True),
-        Agent(name="Inactive Agent", slug="inactive-agent", system_prompt="Inactive", is_active=False),
+        Agent(name="Active Agent", slug="active-agent", system_prompt="Active", model_name="gpt-4", is_active=True, llm_model_id=llm_model.id),
+        Agent(name="Inactive Agent", slug="inactive-agent", system_prompt="Inactive", model_name="gpt-4", is_active=False, llm_model_id=llm_model.id),
     ]
     for agent in agents:
         db_session.add(agent)
@@ -500,7 +500,7 @@ async def test_admin_list_agents_active_only(client: AsyncClient, admin_client: 
 
 
 @pytest.mark.asyncio
-async def test_admin_get_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_get_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test getting single agent details."""
     agent = Agent(
         name="Test Agent",
@@ -512,6 +512,7 @@ async def test_admin_get_agent(client: AsyncClient, admin_client: AsyncClient, d
         max_tokens=1500,
         is_active=True,
         is_public=False,
+        llm_model_id=llm_model.id,
     )
     db_session.add(agent)
     await db_session.commit()
@@ -528,13 +529,14 @@ async def test_admin_get_agent(client: AsyncClient, admin_client: AsyncClient, d
 
 
 @pytest.mark.asyncio
-async def test_admin_create_agent(client: AsyncClient, admin_client: AsyncClient):
+async def test_admin_create_agent(client: AsyncClient, admin_client: AsyncClient, llm_model):
     """Test creating new agent."""
     payload = {
         "name": "New Agent",
         "slug": "new-agent",
         "description": "A new test agent",
         "system_prompt": "You are a helpful assistant",
+        "llm_model_id": llm_model.id,
         "model_name": "gpt-4-turbo",
         "temperature": 0.5,
         "max_tokens": 3000,
@@ -557,10 +559,10 @@ async def test_admin_create_agent(client: AsyncClient, admin_client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_admin_create_agent_duplicate_slug(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_create_agent_duplicate_slug(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test that duplicate slugs are rejected."""
     # Create first agent
-    agent = Agent(name="Agent 1", slug="duplicate-slug", system_prompt="Test")
+    agent = Agent(name="Agent 1", slug="duplicate-slug", system_prompt="Test", llm_model_id=llm_model.id)
     db_session.add(agent)
     await db_session.commit()
     
@@ -568,6 +570,8 @@ async def test_admin_create_agent_duplicate_slug(client: AsyncClient, admin_clie
     payload = {
         "name": "Agent 2",
         "slug": "duplicate-slug",
+        "system_prompt": "Test",
+        "llm_model_id": llm_model.id,
     }
     
     response = await admin_client.post("/admin/agents", json=payload)
@@ -576,7 +580,7 @@ async def test_admin_create_agent_duplicate_slug(client: AsyncClient, admin_clie
 
 
 @pytest.mark.asyncio
-async def test_admin_update_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_update_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test updating agent."""
     agent = Agent(
         name="Original Name",
@@ -585,6 +589,7 @@ async def test_admin_update_agent(client: AsyncClient, admin_client: AsyncClient
         model_name="gpt-3.5-turbo",
         temperature=0.7,
         is_active=True,
+        llm_model_id=llm_model.id,
     )
     db_session.add(agent)
     await db_session.commit()
@@ -609,9 +614,9 @@ async def test_admin_update_agent(client: AsyncClient, admin_client: AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_admin_delete_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+async def test_admin_delete_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession, llm_model):
     """Test soft delete agent."""
-    agent = Agent(name="To Delete", slug="to-delete", system_prompt="Test", is_active=True)
+    agent = Agent(name="To Delete", slug="to-delete", system_prompt="Test", model_name="gpt-4", is_active=True, llm_model_id=llm_model.id)
     db_session.add(agent)
     await db_session.commit()
     await db_session.refresh(agent)

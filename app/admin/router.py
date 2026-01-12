@@ -857,6 +857,7 @@ class CreateAgentRequest(BaseModel):
     slug: str
     description: Optional[str] = None
     system_prompt: str = "You are a helpful assistant"
+    llm_model_id: int
     model_name: str = "gpt-4"
     temperature: float = 0.7
     max_tokens: int = 2000
@@ -868,6 +869,7 @@ class UpdateAgentRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     system_prompt: Optional[str] = None
+    llm_model_id: Optional[int] = None
     model_name: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
@@ -953,6 +955,7 @@ async def create_agent(
         slug=request.slug,
         description=request.description,
         system_prompt=request.system_prompt,
+        llm_model_id=request.llm_model_id,
         model_name=request.model_name,
         temperature=request.temperature,
         max_tokens=request.max_tokens,
@@ -1000,6 +1003,8 @@ async def update_agent(
         agent.description = request.description
     if request.system_prompt is not None:
         agent.system_prompt = request.system_prompt
+    if request.llm_model_id is not None:
+        agent.llm_model_id = request.llm_model_id
     if request.model_name is not None:
         agent.model_name = request.model_name
     if request.temperature is not None:

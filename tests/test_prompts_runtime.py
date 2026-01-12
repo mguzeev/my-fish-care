@@ -27,7 +27,7 @@ def test_prompt_template_rendering():
 
 
 @pytest.mark.asyncio
-async def test_agent_runtime_completion(monkeypatch):
+async def test_agent_runtime_completion(monkeypatch, llm_model):
     class FakeMessage:
         def __init__(self, content: str):
             self.content = content
@@ -76,6 +76,7 @@ async def test_agent_runtime_completion(monkeypatch):
         slug="demo",
         system_prompt="You are a demo agent",
         prompt_template="{input}",
+        llm_model_id=llm_model.id,
     )
 
     result = await agent_runtime.run(agent, {"input": "Ping"}, stream=False)
@@ -89,7 +90,7 @@ async def test_agent_runtime_completion(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_agent_runtime_uses_prompt_version(monkeypatch):
+async def test_agent_runtime_uses_prompt_version(monkeypatch, llm_model):
     class FakeMessage:
         def __init__(self, content: str):
             self.content = content
@@ -125,6 +126,7 @@ async def test_agent_runtime_uses_prompt_version(monkeypatch):
         slug="demo",
         system_prompt="You are a demo agent",
         prompt_template="{input}",
+        llm_model_id=llm_model.id,
     )
 
     prompt_version = PromptVersion(
