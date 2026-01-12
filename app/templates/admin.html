@@ -533,57 +533,10 @@
         <!-- Agents Tab -->
         <div id="agents" class="tab-content" role="tabpanel" aria-labelledby="agents-tab">
             <div class="data-table">
-                <h2>Agent Management</h2>
-                <div class="form-section" style="margin-bottom: 2rem;">
-                    <h3>Create New Agent</h3>
-                    <div class="form-group">
-                        <label>Agent Name</label>
-                        <input type="text" id="agentName" placeholder="e.g., Customer Support Bot">
-                    </div>
-                    <div class="form-group">
-                        <label>Slug (URL-friendly identifier)</label>
-                        <input type="text" id="agentSlug" placeholder="e.g., support-bot">
-                    </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <textarea id="agentDescription" placeholder="What does this agent do?"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>System Prompt</label>
-                        <textarea id="agentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Model</label>
-                        <select id="agentModel">
-                            <option value="gpt-4">GPT-4</option>
-                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Temperature (0-2, higher = more creative)</label>
-                        <input type="number" id="agentTemperature" min="0" max="2" step="0.1" value="0.7">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Tokens</label>
-                        <input type="number" id="agentMaxTokens" min="1" value="2000">
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="agentActive" checked> Active
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; gap: 0.5rem;">
-                            <input type="checkbox" id="agentPublic"> Public (visible to users)
-                        </label>
-                    </div>
-                    <div class="form-actions" style="display: flex; justify-content: flex-end;">
-                        <button onclick="createAgent()" class="btn-primary">Create Agent</button>
-                    </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0;">Agent Management</h2>
+                    <button onclick="openModal('createAgentModal')" class="btn-primary">+ Create New Agent</button>
                 </div>
-
-                <h3>Agents List</h3>
                 <div id="agentsTable" class="loading">Loading agents...</div>
             </div>
         </div>
@@ -599,32 +552,8 @@
                     </select>
                 </div>
                 <div id="promptsList" style="display:none;">
-                    <div class="form-section" style="margin-bottom: 2rem;">
-                        <h3>Create New Prompt Version</h3>
-                        <div class="form-group">
-                            <label>Prompt Name</label>
-                            <input type="text" id="promptName" placeholder="e.g., Welcome Message">
-                        </div>
-                        <div class="form-group">
-                            <label>Version</label>
-                            <input type="text" id="promptVersion" placeholder="1.0.0" value="1.0.0">
-                        </div>
-                        <div class="form-group">
-                            <label>System Prompt</label>
-                            <textarea id="promptSystem" placeholder="You are a helpful assistant..."></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>User Template</label>
-                            <textarea id="promptTemplate" placeholder="Hello {name}, how can I help?"></textarea>
-                        </div>
-                        <div class="form-group">
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
-                                <input type="checkbox" id="promptActive"> Set as Active
-                            </label>
-                        </div>
-                        <div class="form-actions" style="display: flex; justify-content: flex-end;">
-                            <button onclick="createPrompt()" class="btn-primary">Create Prompt Version</button>
-                        </div>
+                    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                        <button onclick="openModal('createPromptModal')" class="btn-primary">+ Create New Prompt Version</button>
                     </div>
                     <div id="promptsTable" class="loading">Loading prompts</div>
                 </div>
@@ -647,90 +576,20 @@
 
         <!-- Plans Tab -->
         <div id="plans" class="tab-content" role="tabpanel" aria-labelledby="plans-tab">
-            <div class="form-section">
-                <h2>Create New Plan</h2>
-                <div class="form-group">
-                    <label>Plan Name</label>
-                    <input type="text" id="planName" placeholder="e.g., Professional Plan">
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label>Price</label>
-                        <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
-                    </div>
-                    <div class="form-group">
-                        <label>Interval</label>
-                        <select id="planInterval">
-                            <option value="monthly">Monthly</option>
-                            <option value="yearly">Yearly</option>
-                            <option value="weekly">Weekly</option>
-                            <option value="daily">Daily</option>
-                        </select>
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                    <div class="form-group">
-                        <label>Max Requests Per Interval</label>
-                        <input type="number" id="planMaxRequests" placeholder="10000" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label>Max Tokens Per Request</label>
-                        <input type="number" id="planMaxTokens" placeholder="4000" min="1">
-                    </div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
-                            <input type="checkbox" id="planApiAccess"> API Access
-                        </label>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
-                            <input type="checkbox" id="planPrioritySupport"> Priority Support
-                        </label>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
-                            <input type="checkbox" id="planAdvancedAnalytics"> Advanced Analytics
-                        </label>
-                    </div>
-                </div>
-                <div class="form-actions" style="display: flex; justify-content: flex-end;">
-                    <button onclick="createPlan()" class="btn-primary">Create Plan</button>
-                </div>
-            </div>
-            
             <div class="data-table">
-                <h2>Existing Plans</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0;">Subscription Plans</h2>
+                    <button onclick="openModal('createPlanModal')" class="btn-primary">+ Create New Plan</button>
+                </div>
                 <div id="plansTable" class="loading">Loading plans</div>
             </div>
         </div>
         <div id="policies" class="tab-content" role="tabpanel" aria-labelledby="policies-tab">
-            <div class="form-section">
-                <h2>Create New Policy</h2>
-                <div class="form-group">
-                    <label>Policy Name</label>
-                    <input type="text" id="policyName" placeholder="e.g., Free Plan Policy">
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea id="policyDescription" placeholder="Policy description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Max Requests Per Minute</label>
-                    <input type="number" id="policyMaxRequests" value="60">
-                </div>
-                <div class="form-group">
-                    <label>Max Tokens Per Request</label>
-                    <input type="number" id="policyMaxTokens" value="4000">
-                </div>
-                <div class="form-actions" style="display: flex; justify-content: flex-end;">
-                    <button onclick="createPolicy()" class="btn-primary">Create Policy</button>
-                </div>
-            </div>
-            
             <div class="data-table">
-                <h2>Existing Policies</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0;">Policies</h2>
+                    <button onclick="openModal('createPolicyModal')" class="btn-primary">+ Create New Policy</button>
+                </div>
                 <div id="policiesTable" class="loading">Loading policies</div>
             </div>
         </div>
@@ -915,6 +774,191 @@
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal('editAgentModal')">Cancel</button>
                 <button class="btn-primary" onclick="saveAgentChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Agent Modal -->
+    <div id="createAgentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Agent</h2>
+                <button class="modal-close" onclick="closeModal('createAgentModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Agent Name</label>
+                <input type="text" id="agentName" placeholder="e.g., Customer Support Bot">
+            </div>
+            <div class="form-group">
+                <label>Slug (URL-friendly identifier)</label>
+                <input type="text" id="agentSlug" placeholder="e.g., support-bot">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="agentDescription" placeholder="What does this agent do?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>System Prompt</label>
+                <textarea id="agentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Model</label>
+                    <select id="agentModel">
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Temperature</label>
+                    <input type="number" id="agentTemperature" min="0" max="2" step="0.1" value="0.7">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Max Tokens</label>
+                <input type="number" id="agentMaxTokens" min="1" value="2000">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="agentActive" checked> Active
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="agentPublic"> Public
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createAgentModal')">Cancel</button>
+                <button class="btn-primary" onclick="createAgent()">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Prompt Modal -->
+    <div id="createPromptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Prompt Version</h2>
+                <button class="modal-close" onclick="closeModal('createPromptModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Prompt Name</label>
+                <input type="text" id="promptName" placeholder="e.g., Welcome Message">
+            </div>
+            <div class="form-group">
+                <label>Version</label>
+                <input type="text" id="promptVersion" placeholder="1.0.0" value="1.0.0">
+            </div>
+            <div class="form-group">
+                <label>System Prompt</label>
+                <textarea id="promptSystem" placeholder="You are a helpful assistant..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>User Template</label>
+                <textarea id="promptTemplate" placeholder="Hello {name}, how can I help?"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                    <input type="checkbox" id="promptActive"> Set as Active
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createPromptModal')">Cancel</button>
+                <button class="btn-primary" onclick="createPrompt()">Create Prompt</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Plan Modal -->
+    <div id="createPlanModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Plan</h2>
+                <button class="modal-close" onclick="closeModal('createPlanModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Plan Name</label>
+                <input type="text" id="planName" placeholder="e.g., Professional Plan">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
+                </div>
+                <div class="form-group">
+                    <label>Interval</label>
+                    <select id="planInterval">
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Requests</label>
+                    <input type="number" id="planMaxRequests" placeholder="10000" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Max Tokens</label>
+                    <input type="number" id="planMaxTokens" placeholder="4000" min="1">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="planApiAccess"> API Access
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="planPrioritySupport"> Priority
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="planAdvancedAnalytics"> Analytics
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createPlanModal')">Cancel</button>
+                <button class="btn-primary" onclick="createPlan()">Create Plan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Policy Modal -->
+    <div id="createPolicyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Policy</h2>
+                <button class="modal-close" onclick="closeModal('createPolicyModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Policy Name</label>
+                <input type="text" id="policyName" placeholder="e.g., Free Plan Policy">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="policyDescription" placeholder="Policy description"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Max Requests Per Minute</label>
+                <input type="number" id="policyMaxRequests" value="60">
+            </div>
+            <div class="form-group">
+                <label>Max Tokens Per Request</label>
+                <input type="number" id="policyMaxTokens" value="4000">
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createPolicyModal')">Cancel</button>
+                <button class="btn-primary" onclick="createPolicy()">Create Policy</button>
             </div>
         </div>
     </div>
@@ -1482,6 +1526,8 @@
                 document.getElementById('planApiAccess').checked = false;
                 document.getElementById('planPrioritySupport').checked = false;
                 document.getElementById('planAdvancedAnalytics').checked = false;
+                
+                closeModal('createPlanModal');
                 await loadPlans();
             } catch (error) {
                 showAlert('Failed to create plan: ' + error.message, 'error');
@@ -1579,6 +1625,8 @@
                 showAlert('Policy created successfully');
                 document.getElementById('policyName').value = '';
                 document.getElementById('policyDescription').value = '';
+                
+                closeModal('createPolicyModal');
                 await loadPolicies();
             } catch (error) {
                 showAlert('Failed to create policy: ' + error.message, 'error');
@@ -1707,6 +1755,7 @@
                 document.getElementById('agentActive').checked = true;
                 document.getElementById('agentPublic').checked = false;
                 
+                closeModal('createAgentModal');
                 await loadAgents();
             } catch (error) {
                 showAlert('Failed to create agent: ' + error.message, 'error');
@@ -1899,6 +1948,8 @@
                 document.getElementById('promptSystem').value = '';
                 document.getElementById('promptTemplate').value = '';
                 document.getElementById('promptActive').checked = false;
+                
+                closeModal('createPromptModal');
                 await loadAgentPrompts();
             } catch (error) {
                 showAlert('Failed to create prompt: ' + error.message, 'error');
