@@ -1,9 +1,10 @@
 """Agent API endpoints."""
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.auth.dependencies import get_current_active_user
 from app.agents.runtime import agent_runtime
@@ -13,6 +14,36 @@ from app.models.prompt import PromptVersion
 
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
+
+
+class AgentListResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: Optional[str] = None
+    is_active: bool
+    version: str
+
+
+@router.get("", response_model=list[AgentListResponse])
+async def list_agents(
+    db: AsyncSession = Depends(get_db),
+):
+    """List all active agents."""
+    result = await db.execute(select(Agent).where(Agent.is_active.is_(True)))
+    agents = result.scalars().all()
+    return [
+        AgentListResponse(
+            id=agent.id,
+            name=agent.name,
+            slug=agent.slug,
+            description=agent.description,
+            is_active=agent.is_active,
+            version=agent.version,
+        )
+        for agent in agents
+    ]
+
 
 
 async def _get_agent_or_404(agent_id: int, db: AsyncSession) -> Agent:
