@@ -521,6 +521,7 @@
             <button class="admin-tab" onclick="switchTab('plans')" role="tab" aria-selected="false" aria-controls="plans">Plans</button>
             <button class="admin-tab" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
             <button class="admin-tab" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
+            <button class="admin-tab" onclick="switchTab('llm-models')" role="tab" aria-selected="false" aria-controls="llm-models">LLM Models</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -601,6 +602,17 @@
             <div class="data-table">
                 <h2>Organizations</h2>
                 <div id="organizationsTable" class="loading">Loading organizations</div>
+            </div>
+        </div>
+
+        <!-- LLM Models Tab -->
+        <div id="llm-models" class="tab-content" role="tabpanel" aria-labelledby="llm-models-tab">
+            <div class="data-table">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2>LLM Models</h2>
+                    <button class="btn-primary" onclick="showCreateLLMModelModal()">+ Add Model</button>
+                </div>
+                <div id="llmModelsTable" class="loading">Loading LLM models</div>
             </div>
         </div>
     </div>
@@ -965,6 +977,122 @@
         </div>
     </div>
 
+    <!-- Create LLM Model Modal -->
+    <div id="createLLMModelModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New LLM Model</h2>
+                <button class="modal-close" onclick="closeModal('createLLMModelModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Model Name (identifier)</label>
+                <input type="text" id="llmModelName" placeholder="e.g., gpt-4, claude-3-sonnet">
+            </div>
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="llmModelDisplayName" placeholder="e.g., GPT-4 (OpenAI)">
+            </div>
+            <div class="form-group">
+                <label>Provider</label>
+                <select id="llmModelProvider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="llmModelApiKey" placeholder="sk-...">
+            </div>
+            <div class="form-group">
+                <label>API Base URL (optional)</label>
+                <input type="text" id="llmModelApiBaseUrl" placeholder="https://api.openai.com/v1">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Tokens Limit</label>
+                    <input type="number" id="llmModelMaxTokensLimit" min="1" value="4000" placeholder="4000">
+                </div>
+                <div class="form-group">
+                    <label>Context Window</label>
+                    <input type="number" id="llmModelContextWindow" min="1" value="8000" placeholder="8000">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="llmModelActive" checked> Active
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="llmModelIsDefault"> Set as Default
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createLLMModelModal')">Cancel</button>
+                <button class="btn-primary" onclick="createLLMModel()">Create Model</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit LLM Model Modal -->
+    <div id="editLLMModelModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit LLM Model</h2>
+                <button class="modal-close" onclick="closeModal('editLLMModelModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Model Name</label>
+                <input type="text" id="editLLMModelName" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="editLLMModelDisplayName">
+            </div>
+            <div class="form-group">
+                <label>Provider</label>
+                <input type="text" id="editLLMModelProvider" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>API Key (leave empty to keep current)</label>
+                <input type="password" id="editLLMModelApiKey" placeholder="••••••••">
+            </div>
+            <div class="form-group">
+                <label>API Base URL (optional)</label>
+                <input type="text" id="editLLMModelApiBaseUrl">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Tokens Limit</label>
+                    <input type="number" id="editLLMModelMaxTokensLimit" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Context Window</label>
+                    <input type="number" id="editLLMModelContextWindow" min="1">
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editLLMModelActive"> Active
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editLLMModelIsDefault"> Set as Default
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editLLMModelModal')">Cancel</button>
+                <button class="btn-primary" onclick="saveLLMModelChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let currentTab = 'dashboard';
@@ -1090,6 +1218,9 @@
                     break;
                 case 'organizations':
                     await loadOrganizations();
+                    break;
+                case 'llm-models':
+                    await loadLLMModels();
                     break;
             }
         }
@@ -2091,6 +2222,197 @@
         window.onclick = function(event) {
             if (event.target.classList.contains('modal')) {
                 event.target.classList.remove('active');
+            }
+        }
+
+        // LLM Models functions
+        let editingLLMModelId = null;
+
+        async function loadLLMModels() {
+            try {
+                document.getElementById('llmModelsTable').innerHTML = '<div class="loading">Loading LLM models</div>';
+                const models = await apiCall('/admin/llm-models');
+                
+                if (!models || models.length === 0) {
+                    document.getElementById('llmModelsTable').innerHTML = '<div class="empty-state">No LLM models found</div>';
+                    return;
+                }
+                
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Provider</th>
+                                <th>API Key</th>
+                                <th>Max Tokens</th>
+                                <th>Context</th>
+                                <th>Status</th>
+                                <th>Default</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                models.forEach(model => {
+                    const statusBadge = model.is_active ? 
+                        '<span class="badge badge-active">Active</span>' : 
+                        '<span class="badge badge-inactive">Inactive</span>';
+                    const defaultBadge = model.is_default ? 
+                        '<span class="badge badge-active">Default</span>' : '';
+                    
+                    html += `
+                        <tr>
+                            <td>${model.id}</td>
+                            <td>${model.display_name || model.name}</td>
+                            <td>${model.provider}</td>
+                            <td><code style="font-size: 0.85em;">${model.api_key_masked}</code></td>
+                            <td>${model.max_tokens_limit.toLocaleString()}</td>
+                            <td>${model.context_window.toLocaleString()}</td>
+                            <td>${statusBadge}</td>
+                            <td>${defaultBadge}</td>
+                            <td>
+                                <button onclick="editLLMModel(${model.id})" class="btn-small">Edit</button>
+                                <button onclick="deleteLLMModel(${model.id})" class="btn-small btn-danger">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('llmModelsTable').innerHTML = html;
+            } catch (error) {
+                document.getElementById('llmModelsTable').innerHTML = `<div class="error">Failed to load LLM models: ${error.message}</div>`;
+            }
+        }
+
+        function showCreateLLMModelModal() {
+            document.getElementById('createLLMModelModal').classList.add('active');
+        }
+
+        async function createLLMModel() {
+            const name = document.getElementById('llmModelName').value.trim();
+            const displayName = document.getElementById('llmModelDisplayName').value.trim();
+            const provider = document.getElementById('llmModelProvider').value;
+            const apiKey = document.getElementById('llmModelApiKey').value.trim();
+            const apiBaseUrl = document.getElementById('llmModelApiBaseUrl').value.trim() || null;
+            const maxTokensLimit = parseInt(document.getElementById('llmModelMaxTokensLimit').value);
+            const contextWindow = parseInt(document.getElementById('llmModelContextWindow').value);
+            const isActive = document.getElementById('llmModelActive').checked;
+            const isDefault = document.getElementById('llmModelIsDefault').checked;
+
+            if (!name || !displayName || !apiKey) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+
+            try {
+                await apiCall('/admin/llm-models', 'POST', {
+                    name,
+                    display_name: displayName,
+                    provider,
+                    api_key: apiKey,
+                    api_base_url: apiBaseUrl,
+                    max_tokens_limit: maxTokensLimit,
+                    context_window: contextWindow,
+                    is_active: isActive,
+                    is_default: isDefault
+                });
+
+                showAlert('LLM model created successfully', 'success');
+                closeModal('createLLMModelModal');
+                
+                // Reset form
+                document.getElementById('llmModelName').value = '';
+                document.getElementById('llmModelDisplayName').value = '';
+                document.getElementById('llmModelApiKey').value = '';
+                document.getElementById('llmModelApiBaseUrl').value = '';
+                document.getElementById('llmModelMaxTokensLimit').value = '4000';
+                document.getElementById('llmModelContextWindow').value = '8000';
+                document.getElementById('llmModelActive').checked = true;
+                document.getElementById('llmModelIsDefault').checked = false;
+                
+                await loadLLMModels();
+            } catch (error) {
+                showAlert(`Failed to create LLM model: ${error.message}`, 'error');
+            }
+        }
+
+        async function editLLMModel(id) {
+            try {
+                const model = await apiCall(`/admin/llm-models/${id}`);
+                
+                editingLLMModelId = id;
+                document.getElementById('editLLMModelName').value = model.name;
+                document.getElementById('editLLMModelDisplayName').value = model.display_name || model.name;
+                document.getElementById('editLLMModelProvider').value = model.provider;
+                document.getElementById('editLLMModelApiKey').value = '';  // Don't show existing key
+                document.getElementById('editLLMModelApiBaseUrl').value = model.api_base_url || '';
+                document.getElementById('editLLMModelMaxTokensLimit').value = model.max_tokens_limit;
+                document.getElementById('editLLMModelContextWindow').value = model.context_window;
+                document.getElementById('editLLMModelActive').checked = model.is_active;
+                document.getElementById('editLLMModelIsDefault').checked = model.is_default;
+                
+                document.getElementById('editLLMModelModal').classList.add('active');
+            } catch (error) {
+                showAlert(`Failed to load LLM model: ${error.message}`, 'error');
+            }
+        }
+
+        async function saveLLMModelChanges() {
+            if (!editingLLMModelId) return;
+
+            const displayName = document.getElementById('editLLMModelDisplayName').value.trim();
+            const apiKey = document.getElementById('editLLMModelApiKey').value.trim();
+            const apiBaseUrl = document.getElementById('editLLMModelApiBaseUrl').value.trim() || null;
+            const maxTokensLimit = parseInt(document.getElementById('editLLMModelMaxTokensLimit').value);
+            const contextWindow = parseInt(document.getElementById('editLLMModelContextWindow').value);
+            const isActive = document.getElementById('editLLMModelActive').checked;
+            const isDefault = document.getElementById('editLLMModelIsDefault').checked;
+
+            try {
+                const updateData = {
+                    display_name: displayName,
+                    api_base_url: apiBaseUrl,
+                    max_tokens_limit: maxTokensLimit,
+                    context_window: contextWindow,
+                    is_active: isActive,
+                    is_default: isDefault
+                };
+
+                // Only include api_key if it was changed
+                if (apiKey) {
+                    updateData.api_key = apiKey;
+                }
+
+                await apiCall(`/admin/llm-models/${editingLLMModelId}`, 'PUT', updateData);
+
+                showAlert('LLM model updated successfully', 'success');
+                closeModal('editLLMModelModal');
+                editingLLMModelId = null;
+                await loadLLMModels();
+            } catch (error) {
+                showAlert(`Failed to update LLM model: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteLLMModel(id) {
+            if (!confirm('Are you sure you want to delete this LLM model? This will fail if any agents are using it.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/llm-models/${id}`, 'DELETE');
+                showAlert('LLM model deleted successfully', 'success');
+                await loadLLMModels();
+            } catch (error) {
+                showAlert(`Failed to delete LLM model: ${error.message}`, 'error');
             }
         }
 
