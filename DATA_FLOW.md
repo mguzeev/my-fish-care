@@ -1,5 +1,65 @@
 # Поток данных: регистрация → биллинг → промпт
 
+## КРАТКАЯ СХЕМА: От регистрации до вызова агента
+
+### 1. **Регистрация**
+- POST /auth/register → создается User в таблице `users`
+
+### 2. **Настройка подписки** (админ или автоматически)
+- Создается Organization в `organizations`
+- User.organization_id = organization.id (связываем пользователя с организацией)
+- Админ создает Agent в `agents` (например, "Sales Bot")
+- Админ создает SubscriptionPlan в `subscription_plans` (например, "Monthly Plan")
+- В таблицу `plan_agents` записывается связь: plan_id + agent_id (какие агенты входят в план)
+- Создается BillingAccount в `billing_accounts`: organization_id + subscription_plan_id + status=ACTIVE
+
+### 3. **Пользователь открывает dashboard**
+- GET /agents → по токену находим user_id → User в `users`
+- По user.organization_id → BillingAccount в `billing_accounts`
+- По billing_account.subscription_plan_id → SubscriptionPlan в `subscription_plans`
+- Через `plan_agents` (по plan_id) → получаем список agent_id → агенты из `agents`
+- **Показываем пользователю только эти агенты в dropdown для выбора**
+
+### 4. **Пользователь выбирает агента и вводит запрос**
+- Пользователь выбирает агента из dropdown (например, agent_id=5)
+- Вводит запрос "Привет" и нажимает "Send Query"
+- POST /agents/5/invoke {"input": "Привет"}
+- **Policy Engine проверяет доступ (дополнительная проверка на backend):**
+  - User → organization_id → BillingAccount → проверяем status=ACTIVE
+  - BillingAccount → subscription_plan_id → через `plan_agents` → проверяем есть ли agent_id=5
+  - Если нет → 403 Forbidden "Agent not included in your plan"
+- **Если доступ есть:**
+  - Берем Agent из `agents` по id=5
+  - Ищем PromptVersion в `prompt_versions` где agent_id=5 AND is_active=True
+  - Agent Runtime подставляет input в промпт, вызывает OpenAI API
+  - Возвращаем результат пользователю
+
+### Ключевые таблицы и их связи:
+```
+users → organizations → billing_accounts → subscription_plans → (plan_agents) → agents → prompt_versions
+```
+
+**Таблицы:**
+- `users` - пользователи системы
+- `organizations` - организации (multi-tenant)
+- `billing_accounts` - биллинг аккаунт организации с подпиской
+- `subscription_plans` - тарифные планы
+- `plan_agents` - связь планов и агентов (many-to-many)
+- `agents` - AI агенты
+- `prompt_versions` - версии промптов для агентов
+
+**Важные поля связей:**
+- User.organization_id → Organization.id
+- BillingAccount.organization_id → Organization.id
+- BillingAccount.subscription_plan_id → SubscriptionPlan.id
+- plan_agents.plan_id → SubscriptionPlan.id
+- plan_agents.agent_id → Agent.id
+- PromptVersion.agent_id → Agent.id
+
+---
+
+## ДЕТАЛЬНОЕ ОПИСАНИЕ
+
 ## 1. Регистрация и идентификация
 - Email/пароль: `POST /auth/register` и `POST /auth/login` создают запись `User`, хранят `hashed_password`, задают `locale` и статусы активности/верификации ([app/auth/router.py](app/auth/router.py)).
 - Telegram OAuth: `POST /auth/telegram/callback` проверяет HMAC, находит или создает `User` с временными `username`/`email`, выдает пары `access_token`/`refresh_token` и редиректит на dashboard с токенами в query ([app/auth/router.py](app/auth/router.py)).
