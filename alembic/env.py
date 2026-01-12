@@ -22,6 +22,7 @@ from app.models.policy import PolicyRule
 from app.models.usage import UsageRecord
 from app.models.session import Session
 from app.models.agent import Agent
+from app.models.prompt import PromptVersion
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

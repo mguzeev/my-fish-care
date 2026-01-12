@@ -7,6 +7,8 @@ from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import SubscriptionPlan, SubscriptionInterval, BillingAccount, SubscriptionStatus
 from app.models.policy import PolicyRule
+from app.models.prompt import PromptVersion
+from app.models.agent import Agent
 import json
 
 
@@ -348,3 +350,113 @@ async def test_admin_delete_plan(client: AsyncClient, db_session: AsyncSession):
         __import__('sqlalchemy').select(SubscriptionPlan).where(SubscriptionPlan.id == plan.id)
     )
     assert result.scalar_one_or_none() is None
+
+
+@pytest.mark.asyncio
+async def test_admin_create_and_list_prompts(
+    client: AsyncClient, db_session: AsyncSession, agent_factory
+):
+    """Create prompt version for an agent and list it."""
+    from app.core.security import get_password_hash, create_access_token
+
+    admin = User(
+        email="admin@example.com",
+        username="admin",
+        hashed_password=get_password_hash("admin123"),
+        is_superuser=True,
+    )
+    db_session.add(admin)
+    await db_session.commit()
+    await db_session.refresh(admin)
+
+    agent: Agent = await agent_factory(name="Prompted", slug="prompted")
+
+    token = create_access_token({"sub": admin.id})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_resp = await client.post(
+        f"/admin/agents/{agent.id}/prompts",
+        headers=headers,
+        json={
+            "name": "Welcome",
+            "version": "1.0.0",
+            "system_prompt": "Be nice",
+            "user_template": "Hello {name}",
+            "variables": [{"name": "name", "required": True}],
+            "is_active": True,
+        },
+    )
+    assert create_resp.status_code == 200
+    created = create_resp.json()
+    assert created["agent_id"] == agent.id
+    assert created["is_active"] is True
+
+    list_resp = await client.get(f"/admin/agents/{agent.id}/prompts", headers=headers)
+    assert list_resp.status_code == 200
+    prompts = list_resp.json()
+    assert len(prompts) == 1
+    assert prompts[0]["name"] == "Welcome"
+
+
+@pytest.mark.asyncio
+async def test_admin_activate_prompt_version(
+    client: AsyncClient, db_session: AsyncSession, agent_factory
+):
+    """Activating a prompt deactivates previous active version."""
+    from app.core.security import get_password_hash, create_access_token
+
+    admin = User(
+        email="admin@example.com",
+        username="admin",
+        hashed_password=get_password_hash("admin123"),
+        is_superuser=True,
+    )
+    db_session.add(admin)
+    await db_session.commit()
+    await db_session.refresh(admin)
+
+    agent: Agent = await agent_factory(name="Prompted2", slug="prompted2")
+    agent_id = agent.id
+
+    # Seed two prompt versions
+    p1 = PromptVersion(
+        agent_id=agent_id,
+        name="Old",
+        version="1.0",
+        system_prompt="S1",
+        user_template="Hi {name}",
+        variables_json="[]",
+        is_active=True,
+    )
+    p2 = PromptVersion(
+        agent_id=agent_id,
+        name="New",
+        version="2.0",
+        system_prompt="S2",
+        user_template="Hello {name}",
+        variables_json="[]",
+        is_active=False,
+    )
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+    await db_session.refresh(p1)
+    await db_session.refresh(p2)
+
+    token = create_access_token({"sub": admin.id})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    resp = await client.post(f"/admin/prompts/{p2.id}/activate", headers=headers)
+    assert resp.status_code == 200
+    activated = resp.json()
+    assert activated["id"] == p2.id
+    assert activated["is_active"] is True
+
+    # Check DB states
+    db_session.expire_all()
+    result = await db_session.execute(
+        __import__('sqlalchemy').select(PromptVersion).where(PromptVersion.agent_id == agent_id)
+    )
+    prompts = result.scalars().all()
+    active_count = sum(1 for p in prompts if p.is_active)
+    assert active_count == 1
+    assert any(p.id == p2.id and p.is_active for p in prompts)

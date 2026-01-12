@@ -1,8 +1,10 @@
 import types
+import json
 import pytest
 from app.prompts.models import PromptTemplate, PromptVariable
 from app.agents.runtime import agent_runtime
 from app.models.agent import Agent
+from app.models.prompt import PromptVersion
 
 
 def test_prompt_template_rendering():
@@ -84,3 +86,61 @@ async def test_agent_runtime_completion(monkeypatch):
     async for chunk in stream_gen:
         chunks.append(chunk)
     assert "hello" in "".join(chunks)
+
+
+@pytest.mark.asyncio
+async def test_agent_runtime_uses_prompt_version(monkeypatch):
+    class FakeMessage:
+        def __init__(self, content: str):
+            self.content = content
+
+    class FakeChoice:
+        def __init__(self, content: str):
+            self.message = FakeMessage(content)
+            self.delta = types.SimpleNamespace(content=content)
+
+    class FakeResponse:
+        def __init__(self, content: str):
+            self.choices = [FakeChoice(content)]
+
+    async def fake_create(*args, **kwargs):
+        return FakeResponse("prompt-version-ok")
+
+    class FakeCompletions:
+        async def create(self, *args, **kwargs):
+            return await fake_create(*args, **kwargs)
+
+    class FakeChat:
+        def __init__(self):
+            self.completions = FakeCompletions()
+
+    class FakeClient:
+        def __init__(self):
+            self.chat = FakeChat()
+
+    monkeypatch.setattr(agent_runtime, "client", FakeClient())
+
+    agent = Agent(
+        name="Demo",
+        slug="demo",
+        system_prompt="You are a demo agent",
+        prompt_template="{input}",
+    )
+
+    prompt_version = PromptVersion(
+        agent_id=1,
+        name="DB Prompt",
+        version="2.0",
+        system_prompt="DB system",
+        user_template="Hello {topic}",
+        variables_json=json.dumps([{"name": "topic", "required": True}]),
+    )
+
+    result = await agent_runtime.run(
+        agent,
+        {"topic": "AI", "input": "Hi"},
+        prompt_version=prompt_version,
+        stream=False,
+    )
+
+    assert result == "prompt-version-ok"

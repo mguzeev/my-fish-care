@@ -1,11 +1,12 @@
 """Admin API routes for SaaS management."""
+import json
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from pydantic import BaseModel
-from sqlalchemy import select, func
+from pydantic import BaseModel, Field
+from sqlalchemy import select, func, and_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_active_user
@@ -15,6 +16,8 @@ from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
 from app.models.usage import UsageRecord
 from app.models.policy import PolicyRule
+from app.models.prompt import PromptVersion
+from app.models.agent import Agent
 
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -520,6 +523,231 @@ async def delete_policy_rule(
     await db.delete(rule)
     await db.commit()
     return {"detail": "Policy rule deleted"}
+
+
+# ============================================================================
+# Prompt Versions Management
+# ============================================================================
+
+
+class PromptVersionResponse(BaseModel):
+    id: int
+    agent_id: int
+    name: str
+    version: str
+    system_prompt: str
+    user_template: str
+    variables: list[dict]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreatePromptVersionRequest(BaseModel):
+    name: str
+    version: str = "1.0.0"
+    system_prompt: str
+    user_template: str
+    variables: list[dict] = Field(default_factory=list)
+    is_active: bool = True
+
+
+def _parse_variables(raw: str) -> list[dict]:
+    try:
+        return json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+
+
+def _dump_variables(variables: list[dict]) -> str:
+    return json.dumps(variables or [])
+
+
+async def _ensure_single_active(agent_id: int, db: AsyncSession, active_prompt_id: int) -> None:
+    await db.execute(
+        update(PromptVersion)
+        .where(
+            and_(
+                PromptVersion.agent_id == agent_id,
+                PromptVersion.id != active_prompt_id,
+            )
+        )
+        .values(is_active=False)
+    )
+
+
+@router.get("/agents/{agent_id}/prompts", response_model=list[PromptVersionResponse])
+async def list_agent_prompts(
+    agent_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """List prompt versions for an agent."""
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    result = await db.execute(
+        select(PromptVersion)
+        .where(PromptVersion.agent_id == agent_id)
+        .order_by(PromptVersion.updated_at.desc())
+    )
+    prompts = result.scalars().all()
+    return [
+        PromptVersionResponse(
+            id=p.id,
+            agent_id=p.agent_id,
+            name=p.name,
+            version=p.version,
+            system_prompt=p.system_prompt,
+            user_template=p.user_template,
+            variables=_parse_variables(p.variables_json),
+            is_active=p.is_active,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
+        )
+        for p in prompts
+    ]
+
+
+@router.post("/agents/{agent_id}/prompts", response_model=PromptVersionResponse)
+async def create_prompt_version(
+    agent_id: int,
+    request: CreatePromptVersionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new prompt version for an agent."""
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    prompt = PromptVersion(
+        agent_id=agent.id,
+        name=request.name,
+        version=request.version,
+        system_prompt=request.system_prompt,
+        user_template=request.user_template,
+        variables_json=_dump_variables(request.variables),
+        is_active=request.is_active,
+    )
+    db.add(prompt)
+    await db.commit()
+    await db.refresh(prompt)
+
+    if prompt.is_active:
+        await _ensure_single_active(agent.id, db, prompt.id)
+        await db.commit()
+
+    return PromptVersionResponse(
+        id=prompt.id,
+        agent_id=prompt.agent_id,
+        name=prompt.name,
+        version=prompt.version,
+        system_prompt=prompt.system_prompt,
+        user_template=prompt.user_template,
+        variables=_parse_variables(prompt.variables_json),
+        is_active=prompt.is_active,
+        created_at=prompt.created_at,
+        updated_at=prompt.updated_at,
+    )
+
+
+@router.put("/prompts/{prompt_id}", response_model=PromptVersionResponse)
+async def update_prompt_version(
+    prompt_id: int,
+    request: CreatePromptVersionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an existing prompt version."""
+    result = await db.execute(select(PromptVersion).where(PromptVersion.id == prompt_id))
+    prompt = result.scalar_one_or_none()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    prompt.name = request.name
+    prompt.version = request.version
+    prompt.system_prompt = request.system_prompt
+    prompt.user_template = request.user_template
+    prompt.variables_json = _dump_variables(request.variables)
+    prompt.is_active = request.is_active
+
+    await db.commit()
+    await db.refresh(prompt)
+
+    if prompt.is_active:
+        await _ensure_single_active(prompt.agent_id, db, prompt.id)
+        await db.commit()
+
+    return PromptVersionResponse(
+        id=prompt.id,
+        agent_id=prompt.agent_id,
+        name=prompt.name,
+        version=prompt.version,
+        system_prompt=prompt.system_prompt,
+        user_template=prompt.user_template,
+        variables=_parse_variables(prompt.variables_json),
+        is_active=prompt.is_active,
+        created_at=prompt.created_at,
+        updated_at=prompt.updated_at,
+    )
+
+
+@router.post("/prompts/{prompt_id}/activate", response_model=PromptVersionResponse)
+async def activate_prompt_version(
+    prompt_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark a prompt version as active and deactivate others for the agent."""
+    result = await db.execute(select(PromptVersion).where(PromptVersion.id == prompt_id))
+    prompt = result.scalar_one_or_none()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    prompt.is_active = True
+    await db.commit()
+    await _ensure_single_active(prompt.agent_id, db, prompt.id)
+    await db.commit()
+    await db.refresh(prompt)
+
+    return PromptVersionResponse(
+        id=prompt.id,
+        agent_id=prompt.agent_id,
+        name=prompt.name,
+        version=prompt.version,
+        system_prompt=prompt.system_prompt,
+        user_template=prompt.user_template,
+        variables=_parse_variables(prompt.variables_json),
+        is_active=prompt.is_active,
+        created_at=prompt.created_at,
+        updated_at=prompt.updated_at,
+    )
+
+
+@router.delete("/prompts/{prompt_id}")
+async def delete_prompt_version(
+    prompt_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a prompt version."""
+    result = await db.execute(select(PromptVersion).where(PromptVersion.id == prompt_id))
+    prompt = result.scalar_one_or_none()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    await db.delete(prompt)
+    await db.commit()
+    return {"detail": "Prompt deleted"}
 
 
 # ============================================================================

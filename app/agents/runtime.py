@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, AsyncGenerator, Dict, Optional
+import json
+from typing import Any, AsyncGenerator, Dict, List, Optional
 from openai import AsyncOpenAI
 from app.core.config import settings
 from app.prompts.models import PromptTemplate, PromptVariable, RenderedPrompt
 from app.models.agent import Agent
+from app.models.prompt import PromptVersion
 
 
 logger = logging.getLogger(__name__)
@@ -27,28 +29,64 @@ class AgentRuntime:
 		self,
 		agent: Agent,
 		variables: Dict[str, Any],
+		prompt_version: Optional[PromptVersion] = None,
 	) -> RenderedPrompt:
-		"""Render prompt for the given agent."""
-		version = agent.version or "1.0.0"
-		template = PromptTemplate(
-			name=agent.name,
-			version=version,
-			system=agent.system_prompt,
-			user=agent.prompt_template or "{input}",
-			variables=[
-				PromptVariable(name="input", required=True, description="User message"),
-			],
-		)
+		"""Render prompt for the given agent using DB-stored version if provided."""
+
+		if prompt_version:
+			template = PromptTemplate(
+				name=prompt_version.name,
+				version=prompt_version.version,
+				system=prompt_version.system_prompt,
+				user=prompt_version.user_template,
+				variables=self._load_variables(prompt_version),
+			)
+		else:
+			template = PromptTemplate(
+				name=agent.name,
+				version=agent.version or "1.0.0",
+				system=agent.system_prompt,
+				user=agent.prompt_template or "{input}",
+				variables=[
+					PromptVariable(name="input", required=True, description="User message"),
+				],
+			)
+
 		return template.render(variables)
+
+	def _load_variables(self, prompt_version: PromptVersion) -> List[PromptVariable]:
+		"""Deserialize variables JSON into PromptVariable list with fallback."""
+		try:
+			variables_data = json.loads(prompt_version.variables_json or "[]")
+		except json.JSONDecodeError:
+			variables_data = []
+
+		variables: List[PromptVariable] = []
+		for item in variables_data:
+			if not isinstance(item, dict) or "name" not in item:
+				continue
+			variables.append(
+				PromptVariable(
+					name=item.get("name"),
+					description=item.get("description"),
+					required=bool(item.get("required", True)),
+				)
+			)
+
+		if not any(var.name == "input" for var in variables):
+			variables.append(PromptVariable(name="input", required=True, description="User message"))
+
+		return variables
 
 	async def run(
 		self,
 		agent: Agent,
 		variables: Dict[str, Any],
+		prompt_version: Optional[PromptVersion] = None,
 		stream: bool = False,
 	) -> Any:
 		"""Run agent and return completion or async generator when streaming."""
-		prompt = await self._build_prompt(agent, variables)
+		prompt = await self._build_prompt(agent, variables, prompt_version)
 
 		if stream:
 			return self._stream_completion(prompt)

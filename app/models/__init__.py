@@ -7,6 +7,7 @@ from app.models.usage import UsageRecord
 from app.models.agent import Agent
 from app.models.policy import PolicyRule
 from app.models.session import Session
+from app.models.prompt import PromptVersion
 
 __all__ = [
     "Base",
@@ -18,4 +19,5 @@ __all__ = [
     "Agent",
     "PolicyRule",
     "Session",
+    "PromptVersion",
 ]
