@@ -154,3 +154,43 @@ async def cancel_subscription(
 
 	return await get_billing_account(current_user, db)
 
+
+@router.get("/usage")
+async def get_usage_info(
+	current_user: User = Depends(get_current_active_user),
+	db: AsyncSession = Depends(get_db)
+):
+	"""Get current usage information and limits."""
+	if not current_user.organization_id:
+		raise HTTPException(status_code=403, detail="No organization assigned")
+	
+	# Get billing account and plan
+	billing_result = await db.execute(
+		select(BillingAccount, SubscriptionPlan)
+		.join(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+		.where(BillingAccount.organization_id == current_user.organization_id)
+	)
+	row = billing_result.one_or_none()
+	
+	if not row:
+		raise HTTPException(status_code=404, detail="No billing account found")
+	
+	billing_account, plan = row
+	
+	# Calculate remaining
+	free_remaining = max(0, plan.free_requests_limit - billing_account.free_requests_used)
+	paid_remaining = max(0, plan.max_requests_per_interval - billing_account.requests_used_current_period)
+	
+	return {
+		"plan_name": plan.name,
+		"plan_interval": plan.interval.value,
+		"subscription_status": billing_account.subscription_status.value,
+		"free_requests_limit": plan.free_requests_limit,
+		"free_requests_used": billing_account.free_requests_used,
+		"free_remaining": free_remaining,
+		"paid_requests_limit": plan.max_requests_per_interval,
+		"paid_requests_used": billing_account.requests_used_current_period,
+		"paid_remaining": paid_remaining,
+		"period_started_at": billing_account.period_started_at.isoformat() if billing_account.period_started_at else None,
+		"trial_started_at": billing_account.trial_started_at.isoformat() if billing_account.trial_started_at else None,
+	}

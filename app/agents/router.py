@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.auth.dependencies import get_current_active_user
 from app.agents.runtime import agent_runtime
-from app.agents.schemas import AgentInvokeRequest, AgentResponse
+from app.agents.schemas import AgentInvokeRequest, AgentResponse, UsageInfo
 from app.models.agent import Agent
 from app.models.prompt import PromptVersion
 from app.models.user import User
@@ -123,8 +123,19 @@ async def invoke_agent(
     current_user: User = Depends(get_current_active_user),
 ):
     """Invoke an agent with user input (non-streaming by default)."""
-    # Check access through Policy Engine
-    await policy_engine.check_agent_access(db, current_user, agent_id)
+    # Check usage limits through Policy Engine
+    usage_info = await policy_engine.check_usage_limits(db, current_user, agent_id)
+    
+    if not usage_info["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "message": usage_info["reason"],
+                "should_upgrade": usage_info["should_upgrade"],
+                "free_remaining": usage_info["free_remaining"],
+                "paid_remaining": usage_info["paid_remaining"]
+            }
+        )
     
     agent = await _get_agent_or_404(agent_id, db)
 
@@ -138,8 +149,24 @@ async def invoke_agent(
         async def streamer() -> AsyncGenerator[bytes, None]:
             async for chunk in await agent_runtime.run(agent, variables, prompt_version=prompt_version, stream=True):
                 yield chunk.encode()
+        
+        # Increment usage counter after successful invocation
+        await policy_engine.increment_usage(db, current_user)
 
         return StreamingResponse(streamer(), media_type="text/plain")
 
     output = await agent_runtime.run(agent, variables, prompt_version=prompt_version, stream=False)
-    return AgentResponse(agent_id=agent_id, output=output, model=agent.model_name)
+    
+    # Increment usage counter after successful invocation
+    await policy_engine.increment_usage(db, current_user)
+    
+    return AgentResponse(
+        agent_id=agent_id,
+        output=output,
+        model=agent.model_name,
+        usage=UsageInfo(
+            free_remaining=usage_info["free_remaining"],
+            paid_remaining=usage_info["paid_remaining"],
+            should_upgrade=usage_info["should_upgrade"]
+        )
+    )

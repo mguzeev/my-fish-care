@@ -38,6 +38,8 @@ from app.auth.schemas import (
 )
 from app.auth.dependencies import get_current_user, get_current_active_user
 from app.models.user import User
+from app.models.organization import Organization
+from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
 from app.core.config import settings
 
 
@@ -89,8 +91,61 @@ async def register(
     )
     
     db.add(user)
+    await db.flush()  # Flush to get user.id
+    
+    # Create organization for the user
+    org = Organization(
+        name=f"{user.username}'s Organization",
+        slug=f"{user.username}-org".lower(),
+        description=f"Personal organization for {user.username}"
+    )
+    db.add(org)
+    await db.flush()
+    
+    # Assign user to organization
+    user.organization_id = org.id
+    
+    # Find or create "Free Trial" plan
+    free_trial_plan_result = await db.execute(
+        select(SubscriptionPlan).where(SubscriptionPlan.name == "Free Trial")
+    )
+    free_trial_plan = free_trial_plan_result.scalar_one_or_none()
+    
+    if not free_trial_plan:
+        # Create default Free Trial plan if doesn't exist
+        from app.models.billing import SubscriptionInterval
+        free_trial_plan = SubscriptionPlan(
+            name="Free Trial",
+            interval=SubscriptionInterval.MONTHLY,
+            price=0.00,
+            currency="USD",
+            max_requests_per_interval=0,  # After free requests - block
+            max_tokens_per_request=2000,
+            free_requests_limit=10,  # 10 free requests
+            free_trial_days=0,
+            has_api_access=False,
+            has_priority_support=False,
+            has_advanced_analytics=False
+        )
+        db.add(free_trial_plan)
+        await db.flush()
+    
+    # Create billing account with Free Trial plan
+    billing_account = BillingAccount(
+        organization_id=org.id,
+        subscription_plan_id=free_trial_plan.id,
+        subscription_status=SubscriptionStatus.TRIALING,
+        free_requests_used=0,
+        requests_used_current_period=0,
+        trial_started_at=datetime.utcnow(),
+        period_started_at=datetime.utcnow()
+    )
+    db.add(billing_account)
+    
     await db.commit()
     await db.refresh(user)
+    
+    logger.info(f"New user registered: {user.email} with Free Trial plan (org_id={org.id})")
     
     return user
 

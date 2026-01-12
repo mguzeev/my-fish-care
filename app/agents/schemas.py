@@ -13,10 +13,18 @@ class AgentInvokeRequest(BaseModel):
     stream: bool = Field(False, description="Return streaming response if True")
 
 
+class UsageInfo(BaseModel):
+    """Usage limits information."""
+    free_remaining: int
+    paid_remaining: int
+    should_upgrade: bool
+
+
 class AgentResponse(BaseModel):
     """Non-streaming agent response."""
 
     agent_id: int
     output: str
     model: str
+    usage: Optional[UsageInfo] = None
     usage_tokens: Optional[int] = None
