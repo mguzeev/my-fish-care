@@ -16,6 +16,19 @@ async def seed_data():
         # Seed subscription plans
         plans = [
             SubscriptionPlan(
+                name="Free Trial",
+                interval=SubscriptionInterval.MONTHLY,
+                price=Decimal("0.00"),
+                currency="USD",
+                max_requests_per_interval=0,  # После бесплатных - блокировка
+                max_tokens_per_request=2000,
+                free_requests_limit=10,  # 10 бесплатных обращений
+                free_trial_days=0,  # Без временного лимита
+                has_api_access=False,
+                has_priority_support=False,
+                has_advanced_analytics=False,
+            ),
+            SubscriptionPlan(
                 name="Daily",
                 interval=SubscriptionInterval.DAILY,
                 price=Decimal("0.99"),
