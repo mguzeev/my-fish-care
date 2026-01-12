@@ -460,3 +460,167 @@ async def test_admin_activate_prompt_version(
     active_count = sum(1 for p in prompts if p.is_active)
     assert active_count == 1
     assert any(p.id == p2.id and p.is_active for p in prompts)
+
+@pytest.mark.asyncio
+async def test_admin_list_agents(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test listing agents."""
+    # Create test agents
+    agents = [
+        Agent(name="Agent 1", slug="agent-1", system_prompt="You are helpful", model_name="gpt-4", is_active=True),
+        Agent(name="Agent 2", slug="agent-2", system_prompt="You are kind", model_name="gpt-3.5-turbo", is_active=False),
+    ]
+    for agent in agents:
+        db_session.add(agent)
+    await db_session.commit()
+    
+    response = await admin_client.get("/admin/agents")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 2
+    assert any(a["slug"] == "agent-1" for a in data)
+    assert any(a["slug"] == "agent-2" for a in data)
+
+
+@pytest.mark.asyncio
+async def test_admin_list_agents_active_only(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test listing only active agents."""
+    # Create test agents
+    agents = [
+        Agent(name="Active Agent", slug="active-agent", system_prompt="Active", is_active=True),
+        Agent(name="Inactive Agent", slug="inactive-agent", system_prompt="Inactive", is_active=False),
+    ]
+    for agent in agents:
+        db_session.add(agent)
+    await db_session.commit()
+    
+    response = await admin_client.get("/admin/agents?active_only=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert all(a["is_active"] for a in data)
+
+
+@pytest.mark.asyncio
+async def test_admin_get_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test getting single agent details."""
+    agent = Agent(
+        name="Test Agent",
+        slug="test-agent",
+        description="A test agent",
+        system_prompt="Test prompt",
+        model_name="gpt-4",
+        temperature=0.8,
+        max_tokens=1500,
+        is_active=True,
+        is_public=False,
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    await db_session.refresh(agent)
+    
+    response = await admin_client.get(f"/admin/agents/{agent.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == agent.id
+    assert data["name"] == "Test Agent"
+    assert data["slug"] == "test-agent"
+    assert data["temperature"] == 0.8
+    assert data["max_tokens"] == 1500
+
+
+@pytest.mark.asyncio
+async def test_admin_create_agent(client: AsyncClient, admin_client: AsyncClient):
+    """Test creating new agent."""
+    payload = {
+        "name": "New Agent",
+        "slug": "new-agent",
+        "description": "A new test agent",
+        "system_prompt": "You are a helpful assistant",
+        "model_name": "gpt-4-turbo",
+        "temperature": 0.5,
+        "max_tokens": 3000,
+        "is_active": True,
+        "is_public": True,
+    }
+    
+    response = await admin_client.post("/admin/agents", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "New Agent"
+    assert data["slug"] == "new-agent"
+    assert data["model_name"] == "gpt-4-turbo"
+    assert data["temperature"] == 0.5
+    assert data["is_public"] is True
+    
+    # Verify it can be retrieved
+    get_response = await admin_client.get(f"/admin/agents/{data['id']}")
+    assert get_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_admin_create_agent_duplicate_slug(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test that duplicate slugs are rejected."""
+    # Create first agent
+    agent = Agent(name="Agent 1", slug="duplicate-slug", system_prompt="Test")
+    db_session.add(agent)
+    await db_session.commit()
+    
+    # Try to create another with same slug
+    payload = {
+        "name": "Agent 2",
+        "slug": "duplicate-slug",
+    }
+    
+    response = await admin_client.post("/admin/agents", json=payload)
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_admin_update_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test updating agent."""
+    agent = Agent(
+        name="Original Name",
+        slug="original-slug",
+        system_prompt="Test prompt",
+        model_name="gpt-3.5-turbo",
+        temperature=0.7,
+        is_active=True,
+    )
+    db_session.add(agent)
+    await db_session.commit()
+    await db_session.refresh(agent)
+    
+    payload = {
+        "name": "Updated Name",
+        "model_name": "gpt-4",
+        "temperature": 0.9,
+        "is_active": False,
+    }
+    
+    response = await admin_client.put(f"/admin/agents/{agent.id}", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["name"] == "Updated Name"
+    assert data["model_name"] == "gpt-4"
+    assert data["temperature"] == 0.9
+    assert data["is_active"] is False
+    # Slug should not change if not provided
+    assert data["slug"] == "original-slug"
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_agent(client: AsyncClient, admin_client: AsyncClient, db_session: AsyncSession):
+    """Test soft delete agent."""
+    agent = Agent(name="To Delete", slug="to-delete", system_prompt="Test", is_active=True)
+    db_session.add(agent)
+    await db_session.commit()
+    await db_session.refresh(agent)
+    agent_id = agent.id
+    
+    response = await admin_client.delete(f"/admin/agents/{agent_id}")
+    assert response.status_code == 200
+    
+    # Verify it's marked inactive but still exists
+    verify = await admin_client.get(f"/admin/agents/{agent_id}")
+    assert verify.status_code == 200
+    assert verify.json()["is_active"] is False

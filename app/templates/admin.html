@@ -193,6 +193,11 @@
             background: #f3e5f5;
             color: #7b1fa2;
         }
+
+        .btn-danger {
+            background: #ffcdd2;
+            color: #b71c1c;
+        }
         
         .loading {
             text-align: center;
@@ -447,6 +452,7 @@
 
         <div class="admin-tabs">
             <button class="admin-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+            <button class="admin-tab" onclick="switchTab('agents')">Agents</button>
             <button class="admin-tab" onclick="switchTab('prompts')">Prompts</button>
             <button class="admin-tab" onclick="switchTab('users')">Users</button>
             <button class="admin-tab" onclick="switchTab('subscriptions')">Subscriptions</button>
@@ -459,6 +465,58 @@
         <div id="dashboard" class="tab-content active">
             <div class="stats-grid" id="statsGrid">
                 <div class="loading">Loading statistics</div>
+            </div>
+        </div>
+
+        <!-- Agents Tab -->
+        <div id="agents" class="tab-content">
+            <div class="data-table">
+                <h2>Agent Management</h2>
+                <div class="form-section" style="margin-bottom: 2rem;">
+                    <h3>Create New Agent</h3>
+                    <div class="form-group">
+                        <label>Agent Name</label>
+                        <input type="text" id="agentName" placeholder="e.g., Customer Support Bot">
+                    </div>
+                    <div class="form-group">
+                        <label>Slug (URL-friendly identifier)</label>
+                        <input type="text" id="agentSlug" placeholder="e.g., support-bot">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="agentDescription" placeholder="What does this agent do?"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Model</label>
+                        <select id="agentModel">
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Temperature (0-2, higher = more creative)</label>
+                        <input type="number" id="agentTemperature" min="0" max="2" step="0.1" value="0.7">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Tokens</label>
+                        <input type="number" id="agentMaxTokens" min="1" value="2000">
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="agentActive" checked> Active
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="checkbox" id="agentPublic"> Public (visible to users)
+                        </label>
+                    </div>
+                    <button onclick="createAgent()" class="btn-primary">Create Agent</button>
+                </div>
+
+                <h3>Agents List</h3>
+                <div id="agentsTable" class="loading">Loading agents...</div>
             </div>
         </div>
 
@@ -732,6 +790,57 @@
         </div>
     </div>
 
+    <div id="editAgentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Agent</h2>
+                <button class="modal-close" onclick="closeModal('editAgentModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Agent Name</label>
+                <input type="text" id="editAgentName">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="editAgentDescription" placeholder="What does this agent do?"></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Model</label>
+                    <select id="editAgentModel">
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Temperature</label>
+                    <input type="number" id="editAgentTemperature" min="0" max="2" step="0.1">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Max Tokens</label>
+                <input type="number" id="editAgentMaxTokens" min="1">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editAgentActive"> Active
+                    </label>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editAgentPublic"> Public
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editAgentModal')">Cancel</button>
+                <button class="btn-primary" onclick="saveAgentChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let currentTab = 'dashboard';
@@ -834,6 +943,9 @@
             switch(tabName) {
                 case 'dashboard':
                     await loadDashboard();
+                    break;
+                case 'agents':
+                    await loadAgents();
                     break;
                 case 'prompts':
                     await loadAgentsDropdown();
@@ -1404,6 +1516,178 @@
                 await loadPolicies();
             } catch (error) {
                 showAlert('Failed to delete policy: ' + error.message, 'error');
+            }
+        }
+
+        // Agent functions
+        async function loadAgents() {
+            try {
+                document.getElementById('agentsTable').innerHTML = '<div class="loading">Loading agents</div>';
+                const agents = await apiCall('/admin/agents?active_only=false');
+                
+                if (!agents || agents.length === 0) {
+                    document.getElementById('agentsTable').innerHTML = '<div class="empty-state">No agents found</div>';
+                    return;
+                }
+                
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Slug</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                agents.forEach(agent => {
+                    const statusBadge = agent.is_active ? 
+                        '<span class="badge badge-success">Active</span>' : 
+                        '<span class="badge badge-inactive">Inactive</span>';
+                    const createdDate = new Date(agent.created_at).toLocaleDateString();
+                    
+                    html += `
+                        <tr>
+                            <td>${agent.id}</td>
+                            <td>${agent.name}</td>
+                            <td>${agent.slug}</td>
+                            <td>${agent.model_name}</td>
+                            <td>${statusBadge}</td>
+                            <td>${createdDate}</td>
+                            <td>
+                                <button onclick="editAgent(${agent.id})" class="btn-small">Edit</button>
+                                <button onclick="deleteAgent(${agent.id})" class="btn-small btn-danger">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('agentsTable').innerHTML = html;
+            } catch (error) {
+                document.getElementById('agentsTable').innerHTML = `<div class="error">Failed to load agents: ${error.message}</div>`;
+            }
+        }
+
+        async function createAgent() {
+            const name = document.getElementById('agentName').value.trim();
+            const slug = document.getElementById('agentSlug').value.trim();
+            const description = document.getElementById('agentDescription').value.trim();
+            const model = document.getElementById('agentModel').value;
+            const temperature = parseFloat(document.getElementById('agentTemperature').value);
+            const maxTokens = parseInt(document.getElementById('agentMaxTokens').value);
+            const isActive = document.getElementById('agentActive').checked;
+            const isPublic = document.getElementById('agentPublic').checked;
+            
+            if (!name || !slug) {
+                showAlert('Name and slug are required', 'error');
+                return;
+            }
+            
+            if (isNaN(temperature) || isNaN(maxTokens)) {
+                showAlert('Temperature and max tokens must be valid numbers', 'error');
+                return;
+            }
+            
+            try {
+                await apiCall('/admin/agents', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        slug,
+                        description: description || null,
+                        model_name: model,
+                        temperature,
+                        max_tokens: maxTokens,
+                        is_active: isActive,
+                        is_public: isPublic
+                    })
+                });
+                
+                showAlert('Agent created successfully');
+                document.getElementById('agentName').value = '';
+                document.getElementById('agentSlug').value = '';
+                document.getElementById('agentDescription').value = '';
+                document.getElementById('agentModel').value = 'gpt-4';
+                document.getElementById('agentTemperature').value = '0.7';
+                document.getElementById('agentMaxTokens').value = '2000';
+                document.getElementById('agentActive').checked = true;
+                document.getElementById('agentPublic').checked = false;
+                
+                await loadAgents();
+            } catch (error) {
+                showAlert('Failed to create agent: ' + error.message, 'error');
+            }
+        }
+
+        let editingAgentId = null;
+
+        async function editAgent(agentId) {
+            try {
+                const agent = await apiCall(`/admin/agents/${agentId}`);
+                
+                editingAgentId = agentId;
+                document.getElementById('editAgentName').value = agent.name;
+                document.getElementById('editAgentDescription').value = agent.description || '';
+                document.getElementById('editAgentModel').value = agent.model_name;
+                document.getElementById('editAgentTemperature').value = agent.temperature;
+                document.getElementById('editAgentMaxTokens').value = agent.max_tokens;
+                document.getElementById('editAgentActive').checked = agent.is_active;
+                document.getElementById('editAgentPublic').checked = agent.is_public;
+                
+                openModal('editAgentModal');
+            } catch (error) {
+                showAlert('Failed to load agent: ' + error.message, 'error');
+            }
+        }
+
+        async function saveAgentChanges() {
+            if (!editingAgentId) return;
+            
+            try {
+                await apiCall(`/admin/agents/${editingAgentId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name: document.getElementById('editAgentName').value,
+                        description: document.getElementById('editAgentDescription').value || null,
+                        model_name: document.getElementById('editAgentModel').value,
+                        temperature: parseFloat(document.getElementById('editAgentTemperature').value),
+                        max_tokens: parseInt(document.getElementById('editAgentMaxTokens').value),
+                        is_active: document.getElementById('editAgentActive').checked,
+                        is_public: document.getElementById('editAgentPublic').checked
+                    })
+                });
+                
+                showAlert('Agent updated successfully');
+                closeModal('editAgentModal');
+                editingAgentId = null;
+                await loadAgents();
+            } catch (error) {
+                showAlert('Failed to update agent: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteAgent(agentId) {
+            if (!confirm('Are you sure you want to delete this agent? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/agents/${agentId}`, { method: 'DELETE' });
+                showAlert('Agent deleted successfully');
+                await loadAgents();
+            } catch (error) {
+                showAlert('Failed to delete agent: ' + error.message, 'error');
             }
         }
 

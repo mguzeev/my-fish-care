@@ -751,6 +751,226 @@ async def delete_prompt_version(
 
 
 # ============================================================================
+# Agent Management
+# ============================================================================
+
+class AgentResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: Optional[str] = None
+    model_name: str
+    temperature: float
+    max_tokens: int
+    is_active: bool
+    is_public: bool
+    version: str
+    created_at: datetime
+    updated_at: datetime
+
+class AgentListResponse(BaseModel):
+    id: int
+    name: str
+    slug: str
+    description: Optional[str] = None
+    model_name: str
+    is_active: bool
+    created_at: datetime
+
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    slug: str
+    description: Optional[str] = None
+    system_prompt: str = "You are a helpful assistant"
+    model_name: str = "gpt-4"
+    temperature: float = 0.7
+    max_tokens: int = 2000
+    is_active: bool = True
+    is_public: bool = False
+
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    model_name: Optional[str] = None
+    temperature: Optional[float] = None
+    max_tokens: Optional[int] = None
+    is_active: Optional[bool] = None
+    is_public: Optional[bool] = None
+
+
+@router.get("/agents", response_model=list[AgentListResponse])
+async def list_agents(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    active_only: bool = Query(False),
+):
+    """List all agents."""
+    query = select(Agent)
+    if active_only:
+        query = query.where(Agent.is_active == True)
+    query = query.order_by(Agent.created_at.desc())
+    
+    result = await db.execute(query)
+    agents = result.scalars().all()
+    
+    return [
+        AgentListResponse(
+            id=a.id,
+            name=a.name,
+            slug=a.slug,
+            description=a.description,
+            model_name=a.model_name,
+            is_active=a.is_active,
+            created_at=a.created_at,
+        )
+        for a in agents
+    ]
+
+
+@router.get("/agents/{agent_id}", response_model=AgentResponse)
+async def get_agent(
+    agent_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get agent details."""
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    return AgentResponse(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        description=agent.description,
+        model_name=agent.model_name,
+        temperature=agent.temperature,
+        max_tokens=agent.max_tokens,
+        is_active=agent.is_active,
+        is_public=agent.is_public,
+        version=agent.version,
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
+
+
+@router.post("/agents", response_model=AgentResponse)
+async def create_agent(
+    request: CreateAgentRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create new agent."""
+    # Check if slug already exists
+    existing = await db.execute(select(Agent).where(Agent.slug == request.slug))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Agent with this slug already exists")
+    
+    agent = Agent(
+        name=request.name,
+        slug=request.slug,
+        description=request.description,
+        system_prompt=request.system_prompt,
+        model_name=request.model_name,
+        temperature=request.temperature,
+        max_tokens=request.max_tokens,
+        is_active=request.is_active,
+        is_public=request.is_public,
+    )
+    db.add(agent)
+    await db.commit()
+    await db.refresh(agent)
+    
+    return AgentResponse(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        description=agent.description,
+        model_name=agent.model_name,
+        temperature=agent.temperature,
+        max_tokens=agent.max_tokens,
+        is_active=agent.is_active,
+        is_public=agent.is_public,
+        version=agent.version,
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
+
+
+@router.put("/agents/{agent_id}", response_model=AgentResponse)
+async def update_agent(
+    agent_id: int,
+    request: UpdateAgentRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update agent."""
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    if request.name is not None:
+        agent.name = request.name
+    if request.description is not None:
+        agent.description = request.description
+    if request.model_name is not None:
+        agent.model_name = request.model_name
+    if request.temperature is not None:
+        agent.temperature = request.temperature
+    if request.max_tokens is not None:
+        agent.max_tokens = request.max_tokens
+    if request.is_active is not None:
+        agent.is_active = request.is_active
+    if request.is_public is not None:
+        agent.is_public = request.is_public
+    
+    await db.commit()
+    await db.refresh(agent)
+    
+    return AgentResponse(
+        id=agent.id,
+        name=agent.name,
+        slug=agent.slug,
+        description=agent.description,
+        model_name=agent.model_name,
+        temperature=agent.temperature,
+        max_tokens=agent.max_tokens,
+        is_active=agent.is_active,
+        is_public=agent.is_public,
+        version=agent.version,
+        created_at=agent.created_at,
+        updated_at=agent.updated_at,
+    )
+
+
+@router.delete("/agents/{agent_id}")
+async def delete_agent(
+    agent_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete agent (soft delete - mark as inactive)."""
+    result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    agent.is_active = False
+    await db.commit()
+    
+    return {"detail": "Agent deleted"}
+
+
+# ============================================================================
 # User Activity & Monitoring
 # ============================================================================
 

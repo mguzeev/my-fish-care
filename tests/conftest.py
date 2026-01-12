@@ -164,3 +164,23 @@ async def auth_header(user):
     """Create Authorization header for the test user."""
     token = create_access_token({"sub": user.id})
     return {"Authorization": f"Bearer {token}"}
+
+@pytest.fixture()
+async def admin_client(db_session, client: AsyncClient):
+    """Create admin user and return client with admin auth header."""
+    admin_user = User(
+        email="admin@example.com",
+        username="admin",
+        hashed_password=get_password_hash("admin123"),
+        is_superuser=True,
+        organization_id=None,
+    )
+    db_session.add(admin_user)
+    await db_session.commit()
+    await db_session.refresh(admin_user)
+    
+    token = create_access_token({"sub": admin_user.id})
+    
+    # Create a new client with admin headers
+    async with AsyncClient(app=app, base_url="http://test", headers={"Authorization": f"Bearer {token}"}) as ac:
+        yield ac
