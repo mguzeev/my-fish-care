@@ -2313,16 +2313,19 @@
             }
 
             try {
-                await apiCall('/admin/llm-models', 'POST', {
-                    name,
-                    display_name: displayName,
-                    provider,
-                    api_key: apiKey,
-                    api_base_url: apiBaseUrl,
-                    max_tokens_limit: maxTokensLimit,
-                    context_window: contextWindow,
-                    is_active: isActive,
-                    is_default: isDefault
+                await apiCall('/admin/llm-models', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        display_name: displayName,
+                        provider,
+                        api_key: apiKey,
+                        api_base_url: apiBaseUrl,
+                        max_tokens_limit: maxTokensLimit,
+                        context_window: contextWindow,
+                        is_active: isActive,
+                        is_default: isDefault
+                    })
                 });
 
                 showAlert('LLM model created successfully', 'success');
@@ -2391,7 +2394,10 @@
                     updateData.api_key = apiKey;
                 }
 
-                await apiCall(`/admin/llm-models/${editingLLMModelId}`, 'PUT', updateData);
+                await apiCall(`/admin/llm-models/${editingLLMModelId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updateData)
+                });
 
                 showAlert('LLM model updated successfully', 'success');
                 closeModal('editLLMModelModal');
@@ -2408,7 +2414,7 @@
             }
 
             try {
-                await apiCall(`/admin/llm-models/${id}`, 'DELETE');
+                await apiCall(`/admin/llm-models/${id}`, { method: 'DELETE' });
                 showAlert('LLM model deleted successfully', 'success');
                 await loadLLMModels();
             } catch (error) {
