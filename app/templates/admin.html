@@ -622,7 +622,9 @@
                                 <input type="checkbox" id="promptActive"> Set as Active
                             </label>
                         </div>
-                        <button onclick="createPrompt()" class="btn-primary">Create Prompt Version</button>
+                        <div class="form-actions" style="display: flex; justify-content: flex-end;">
+                            <button onclick="createPrompt()" class="btn-primary">Create Prompt Version</button>
+                        </div>
                     </div>
                     <div id="promptsTable" class="loading">Loading prompts</div>
                 </div>
@@ -693,7 +695,9 @@
                         </label>
                     </div>
                 </div>
-                <button onclick="createPlan()" class="btn-primary">Create Plan</button>
+                <div class="form-actions" style="display: flex; justify-content: flex-end;">
+                    <button onclick="createPlan()" class="btn-primary">Create Plan</button>
+                </div>
             </div>
             
             <div class="data-table">
@@ -720,7 +724,9 @@
                     <label>Max Tokens Per Request</label>
                     <input type="number" id="policyMaxTokens" value="4000">
                 </div>
-                <button onclick="createPolicy()" class="btn-primary">Create Policy</button>
+                <div class="form-actions" style="display: flex; justify-content: flex-end;">
+                    <button onclick="createPolicy()" class="btn-primary">Create Policy</button>
+                </div>
             </div>
             
             <div class="data-table">
