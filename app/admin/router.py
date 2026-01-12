@@ -759,6 +759,7 @@ class AgentResponse(BaseModel):
     name: str
     slug: str
     description: Optional[str] = None
+    system_prompt: str
     model_name: str
     temperature: float
     max_tokens: int
@@ -793,6 +794,7 @@ class CreateAgentRequest(BaseModel):
 class UpdateAgentRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    system_prompt: Optional[str] = None
     model_name: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = None
@@ -848,6 +850,7 @@ async def get_agent(
         name=agent.name,
         slug=agent.slug,
         description=agent.description,
+        system_prompt=agent.system_prompt,
         model_name=agent.model_name,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,
@@ -892,6 +895,7 @@ async def create_agent(
         name=agent.name,
         slug=agent.slug,
         description=agent.description,
+        system_prompt=agent.system_prompt,
         model_name=agent.model_name,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,
@@ -921,6 +925,8 @@ async def update_agent(
         agent.name = request.name
     if request.description is not None:
         agent.description = request.description
+    if request.system_prompt is not None:
+        agent.system_prompt = request.system_prompt
     if request.model_name is not None:
         agent.model_name = request.model_name
     if request.temperature is not None:
@@ -940,6 +946,7 @@ async def update_agent(
         name=agent.name,
         slug=agent.slug,
         description=agent.description,
+        system_prompt=agent.system_prompt,
         model_name=agent.model_name,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,

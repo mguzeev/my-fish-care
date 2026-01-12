@@ -487,6 +487,10 @@
                         <textarea id="agentDescription" placeholder="What does this agent do?"></textarea>
                     </div>
                     <div class="form-group">
+                        <label>System Prompt</label>
+                        <textarea id="agentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
+                    </div>
+                    <div class="form-group">
                         <label>Model</label>
                         <select id="agentModel">
                             <option value="gpt-4">GPT-4</option>
@@ -512,7 +516,9 @@
                             <input type="checkbox" id="agentPublic"> Public (visible to users)
                         </label>
                     </div>
-                    <button onclick="createAgent()" class="btn-primary">Create Agent</button>
+                    <div class="form-actions" style="display: flex; justify-content: flex-end;">
+                        <button onclick="createAgent()" class="btn-primary">Create Agent</button>
+                    </div>
                 </div>
 
                 <h3>Agents List</h3>
@@ -803,6 +809,10 @@
             <div class="form-group">
                 <label>Description</label>
                 <textarea id="editAgentDescription" placeholder="What does this agent do?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>System Prompt</label>
+                <textarea id="editAgentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div class="form-group">
@@ -1583,6 +1593,7 @@
             const name = document.getElementById('agentName').value.trim();
             const slug = document.getElementById('agentSlug').value.trim();
             const description = document.getElementById('agentDescription').value.trim();
+            const systemPrompt = document.getElementById('agentSystemPrompt').value.trim();
             const model = document.getElementById('agentModel').value;
             const temperature = parseFloat(document.getElementById('agentTemperature').value);
             const maxTokens = parseInt(document.getElementById('agentMaxTokens').value);
@@ -1606,6 +1617,7 @@
                         name,
                         slug,
                         description: description || null,
+                        system_prompt: systemPrompt || 'You are a helpful assistant',
                         model_name: model,
                         temperature,
                         max_tokens: maxTokens,
@@ -1618,6 +1630,7 @@
                 document.getElementById('agentName').value = '';
                 document.getElementById('agentSlug').value = '';
                 document.getElementById('agentDescription').value = '';
+                document.getElementById('agentSystemPrompt').value = '';
                 document.getElementById('agentModel').value = 'gpt-4';
                 document.getElementById('agentTemperature').value = '0.7';
                 document.getElementById('agentMaxTokens').value = '2000';
@@ -1639,6 +1652,7 @@
                 editingAgentId = agentId;
                 document.getElementById('editAgentName').value = agent.name;
                 document.getElementById('editAgentDescription').value = agent.description || '';
+                document.getElementById('editAgentSystemPrompt').value = agent.system_prompt || '';
                 document.getElementById('editAgentModel').value = agent.model_name;
                 document.getElementById('editAgentTemperature').value = agent.temperature;
                 document.getElementById('editAgentMaxTokens').value = agent.max_tokens;
@@ -1660,6 +1674,7 @@
                     body: JSON.stringify({
                         name: document.getElementById('editAgentName').value,
                         description: document.getElementById('editAgentDescription').value || null,
+                        system_prompt: document.getElementById('editAgentSystemPrompt').value || null,
                         model_name: document.getElementById('editAgentModel').value,
                         temperature: parseFloat(document.getElementById('editAgentTemperature').value),
                         max_tokens: parseInt(document.getElementById('editAgentMaxTokens').value),
