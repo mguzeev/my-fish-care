@@ -1921,6 +1921,7 @@
                     models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model.name;
+                        option.setAttribute('data-id', model.id);
                         option.textContent = model.display_name || model.name;
                         selectElement.appendChild(option);
                     });
@@ -1942,7 +1943,9 @@
             const slug = document.getElementById('agentSlug').value.trim();
             const description = document.getElementById('agentDescription').value.trim();
             const systemPrompt = document.getElementById('agentSystemPrompt').value.trim();
-            const model = document.getElementById('agentModel').value;
+            const modelSelect = document.getElementById('agentModel');
+            const modelName = modelSelect.value;
+            const llmModelId = parseInt(modelSelect.selectedOptions[0].getAttribute('data-id'));
             const temperature = parseFloat(document.getElementById('agentTemperature').value);
             const maxTokens = parseInt(document.getElementById('agentMaxTokens').value);
             const isActive = document.getElementById('agentActive').checked;
@@ -1953,8 +1956,8 @@
                 return;
             }
             
-            if (isNaN(temperature) || isNaN(maxTokens)) {
-                showAlert('Temperature and max tokens must be valid numbers', 'error');
+            if (isNaN(temperature) || isNaN(maxTokens) || isNaN(llmModelId)) {
+                showAlert('Temperature, max tokens, and model must be valid', 'error');
                 return;
             }
             
@@ -1966,7 +1969,8 @@
                         slug,
                         description: description || null,
                         system_prompt: systemPrompt || 'You are a helpful assistant',
-                        model_name: model,
+                        llm_model_id: llmModelId,
+                        model_name: modelName,
                         temperature,
                         max_tokens: maxTokens,
                         is_active: isActive,
@@ -2021,13 +2025,18 @@
             if (!editingAgentId) return;
             
             try {
+                const modelSelect = document.getElementById('editAgentModel');
+                const modelName = modelSelect.value;
+                const llmModelId = parseInt(modelSelect.selectedOptions[0].getAttribute('data-id'));
+                
                 await apiCall(`/admin/agents/${editingAgentId}`, {
                     method: 'PUT',
                     body: JSON.stringify({
                         name: document.getElementById('editAgentName').value,
                         description: document.getElementById('editAgentDescription').value || null,
                         system_prompt: document.getElementById('editAgentSystemPrompt').value || null,
-                        model_name: document.getElementById('editAgentModel').value,
+                        llm_model_id: llmModelId,
+                        model_name: modelName,
                         temperature: parseFloat(document.getElementById('editAgentTemperature').value),
                         max_tokens: parseInt(document.getElementById('editAgentMaxTokens').value),
                         is_active: document.getElementById('editAgentActive').checked,
