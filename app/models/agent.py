@@ -1,9 +1,12 @@
 """Agent model."""
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, TYPE_CHECKING
 from sqlalchemy import String, Boolean, DateTime, Integer, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.billing import SubscriptionPlan
 
 
 class Agent(Base):
@@ -36,6 +39,14 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    
+    # Relationships - plans that include this agent
+    plans: Mapped[List["SubscriptionPlan"]] = relationship(
+        "SubscriptionPlan",
+        secondary="plan_agents",
+        back_populates="agents",
+        lazy="selectin"
     )
     
     def __repr__(self) -> str:

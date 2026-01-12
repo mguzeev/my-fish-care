@@ -225,6 +225,27 @@
             </div>
         </div>
 
+        <!-- Agent Query Section -->
+        <div class="dashboard-card" style="margin-bottom: 2rem;">
+            <h2>AI Agent</h2>
+            <div class="form-group">
+                <label>Select Agent</label>
+                <select id="agentSelect" class="agent-select">
+                    <option value="">Loading agents...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Your Query</label>
+                <textarea id="queryInput" rows="4" placeholder="Enter your query here..." style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; resize: vertical;"></textarea>
+            </div>
+            <button onclick="sendQuery()" class="btn-save" id="sendQueryBtn">Send Query</button>
+            
+            <div id="queryResponse" class="hidden" style="margin-top: 1.5rem;">
+                <h3 style="color: var(--primary-color); font-size: 1rem; margin-bottom: 0.5rem;">Response:</h3>
+                <div id="responseContent" style="background: #f8f9fa; padding: 1rem; border-radius: 8px; white-space: pre-wrap; color: var(--text-color);"></div>
+            </div>
+        </div>
+
         <div class="dashboard-grid">
             <!-- Profile Card -->
             <div class="dashboard-card">
@@ -538,6 +559,74 @@
             `;
         }
 
+        // Load available agents
+        async function loadAgents() {
+            try {
+                const agents = await apiCall('/agents');
+                const select = document.getElementById('agentSelect');
+                
+                if (agents && agents.length > 0) {
+                    select.innerHTML = '<option value="">Select an agent...</option>';
+                    agents.forEach(agent => {
+                        const option = document.createElement('option');
+                        option.value = agent.id;
+                        option.textContent = `${agent.name} - ${agent.description || ''}`;
+                        select.appendChild(option);
+                    });
+                } else {
+                    select.innerHTML = '<option value="">No agents available</option>';
+                }
+            } catch (error) {
+                console.error('Failed to load agents:', error);
+                document.getElementById('agentSelect').innerHTML = '<option value="">Error loading agents</option>';
+            }
+        }
+
+        // Send query to agent
+        async function sendQuery() {
+            const agentId = document.getElementById('agentSelect').value;
+            const query = document.getElementById('queryInput').value.trim();
+            
+            if (!agentId) {
+                showAlert('Please select an agent', 'error');
+                return;
+            }
+            
+            if (!query) {
+                showAlert('Please enter a query', 'error');
+                return;
+            }
+
+            const sendBtn = document.getElementById('sendQueryBtn');
+            const responseDiv = document.getElementById('queryResponse');
+            const responseContent = document.getElementById('responseContent');
+            
+            try {
+                sendBtn.disabled = true;
+                sendBtn.textContent = 'Sending...';
+                responseContent.textContent = 'Processing your request...';
+                responseDiv.classList.remove('hidden');
+
+                const result = await apiCall(`/agents/${agentId}/invoke`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        input: query,
+                        variables: {},
+                        stream: false
+                    })
+                });
+
+                responseContent.textContent = result.output;
+                showAlert('Query completed successfully', 'success');
+            } catch (error) {
+                responseContent.textContent = 'Error: ' + error.message;
+                showAlert('Failed to process query: ' + error.message, 'error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send Query';
+            }
+        }
+
         // Change language
         function changeLanguage(lang) {
             const currentUrl = new URL(window.location.href);
@@ -555,6 +644,7 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await loadProfile();
+            await loadAgents();
             await loadUsageMetrics();
             await loadSubscription();
         });

@@ -383,6 +383,79 @@ async def delete_subscription_plan(
     return {"detail": "Plan deleted"}
 
 
+@router.post("/plans/{plan_id}/agents/{agent_id}")
+async def add_agent_to_plan(
+    plan_id: int,
+    agent_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add an agent to a subscription plan."""
+    from app.models.agent import Agent
+    
+    plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    plan = plan_result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    # Check if already added
+    if agent not in plan.agents:
+        plan.agents.append(agent)
+        await db.commit()
+    
+    return {"detail": "Agent added to plan", "plan_id": plan_id, "agent_id": agent_id}
+
+
+@router.delete("/plans/{plan_id}/agents/{agent_id}")
+async def remove_agent_from_plan(
+    plan_id: int,
+    agent_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove an agent from a subscription plan."""
+    from app.models.agent import Agent
+    
+    plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    plan = plan_result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    agent_result = await db.execute(select(Agent).where(Agent.id == agent_id))
+    agent = agent_result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    if agent in plan.agents:
+        plan.agents.remove(agent)
+        await db.commit()
+    
+    return {"detail": "Agent removed from plan", "plan_id": plan_id, "agent_id": agent_id}
+
+
+@router.get("/plans/{plan_id}/agents", response_model=list[int])
+async def get_plan_agents(
+    plan_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get list of agent IDs included in a plan."""
+    plan_result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    plan = plan_result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    return [agent.id for agent in plan.agents]
+
+
 # ============================================================================
 # Policy Rules Management
 # ============================================================================

@@ -1,11 +1,20 @@
 """Billing models."""
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
-from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Enum as SQLEnum
+from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Enum as SQLEnum, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
 from app.core.database import Base
+
+
+# Association table for Plan <-> Agent many-to-many relationship
+plan_agents = Table(
+    "plan_agents",
+    Base.metadata,
+    Column("plan_id", Integer, ForeignKey("subscription_plans.id", ondelete="CASCADE"), primary_key=True),
+    Column("agent_id", Integer, ForeignKey("agents.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class SubscriptionInterval(str, Enum):
@@ -57,6 +66,14 @@ class SubscriptionPlan(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
+    
+    # Relationships - agents included in this plan
+    agents: Mapped[List["Agent"]] = relationship(
+        "Agent",
+        secondary=plan_agents,
+        back_populates="plans",
+        lazy="selectin"
     )
     
     def __repr__(self) -> str:

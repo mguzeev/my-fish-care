@@ -11,6 +11,9 @@ from app.agents.runtime import agent_runtime
 from app.agents.schemas import AgentInvokeRequest, AgentResponse
 from app.models.agent import Agent
 from app.models.prompt import PromptVersion
+from app.models.user import User
+from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
+from app.policy.engine import engine as policy_engine
 
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
@@ -28,10 +31,57 @@ class AgentListResponse(BaseModel):
 @router.get("", response_model=list[AgentListResponse])
 async def list_agents(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
 ):
-    """List all active agents."""
-    result = await db.execute(select(Agent).where(Agent.is_active.is_(True)))
-    agents = result.scalars().all()
+    """List agents accessible to the current user based on their subscription."""
+    # Superusers see all active agents
+    if current_user.is_superuser:
+        result = await db.execute(select(Agent).where(Agent.is_active == True))
+        agents = result.scalars().all()
+        return [
+            AgentListResponse(
+                id=agent.id,
+                name=agent.name,
+                slug=agent.slug,
+                description=agent.description,
+                is_active=agent.is_active,
+                version=agent.version,
+            )
+            for agent in agents
+        ]
+    
+    # Get public agents
+    public_result = await db.execute(
+        select(Agent).where(Agent.is_active == True, Agent.is_public == True)
+    )
+    public_agents = list(public_result.scalars().all())
+    
+    # Get agents from user's subscription plan
+    plan_agents = []
+    if current_user.organization_id:
+        billing_result = await db.execute(
+            select(BillingAccount, SubscriptionPlan)
+            .join(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+            .where(
+                BillingAccount.organization_id == current_user.organization_id,
+                BillingAccount.subscription_status.in_([
+                    SubscriptionStatus.ACTIVE,
+                    SubscriptionStatus.TRIALING
+                ])
+            )
+        )
+        row = billing_result.one_or_none()
+        if row:
+            _, plan = row
+            plan_with_agents = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.id == plan.id)
+            )
+            plan_obj = plan_with_agents.scalar_one()
+            plan_agents = [a for a in plan_obj.agents if a.is_active]
+    
+    # Combine and deduplicate
+    all_agents = {agent.id: agent for agent in public_agents + plan_agents}
+    
     return [
         AgentListResponse(
             id=agent.id,
@@ -41,7 +91,7 @@ async def list_agents(
             is_active=agent.is_active,
             version=agent.version,
         )
-        for agent in agents
+        for agent in all_agents.values()
     ]
 
 
@@ -70,9 +120,12 @@ async def invoke_agent(
     agent_id: int,
     payload: AgentInvokeRequest,
     db: AsyncSession = Depends(get_db),
-    _=Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user),
 ):
     """Invoke an agent with user input (non-streaming by default)."""
+    # Check access through Policy Engine
+    await policy_engine.check_agent_access(db, current_user, agent_id)
+    
     agent = await _get_agent_or_404(agent_id, db)
 
     # Merge variables ensuring 'input' is present
