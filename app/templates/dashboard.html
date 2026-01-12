@@ -238,7 +238,9 @@
                 <label>Your Query</label>
                 <textarea id="queryInput" rows="4" placeholder="Enter your query here..." style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; resize: vertical;"></textarea>
             </div>
-            <button onclick="sendQuery()" class="btn-save" id="sendQueryBtn">Send Query</button>
+            <div class="form-group">
+                <button onclick="sendQuery()" class="btn-save" id="sendQueryBtn" style="width: 100%;">Send Query</button>
+            </div>
             
             <div id="queryResponse" class="hidden" style="margin-top: 1.5rem;">
                 <h3 style="color: var(--primary-color); font-size: 1rem; margin-bottom: 0.5rem;">Response:</h3>
