@@ -53,6 +53,10 @@ class SubscriptionPlan(Base):
     max_requests_per_interval: Mapped[int] = mapped_column(Integer, nullable=False)
     max_tokens_per_request: Mapped[int] = mapped_column(Integer, default=2000, nullable=False)
     
+    # Free trial limits
+    free_requests_limit: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    free_trial_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
     # Features
     has_api_access: Mapped[bool] = mapped_column(default=False, nullable=False)
     has_priority_support: Mapped[bool] = mapped_column(default=False, nullable=False)
@@ -110,6 +114,12 @@ class BillingAccount(Base):
     # Balance and usage
     balance: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
     total_spent: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)
+    
+    # Usage tracking
+    free_requests_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    requests_used_current_period: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    period_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    trial_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
