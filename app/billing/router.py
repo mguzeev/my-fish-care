@@ -15,12 +15,24 @@ from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
 from app.models.usage import UsageRecord
+from app.i18n.loader import i18n
 
 from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="app/templates")
 
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
+
+
+@router.get("/upgrade", response_class=HTMLResponse)
+async def upgrade_page(request: Request):
+	"""Render upgrade page."""
+	lang = request.query_params.get("lang", "en")
+	t = lambda key, **params: i18n.t(key, locale=lang, **params)
+	return templates.TemplateResponse(
+		"upgrade.html",
+		{"request": request, "language": lang, "t": t}
+	)
 
 
 class SubscribeRequest(BaseModel):
