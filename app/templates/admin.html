@@ -6,6 +6,12 @@
     <title>Admin Panel - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=2.0">
     <style>
+        :root {
+            --primary-color: #1e40af;
+            --text-color: #1f2937;
+            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
         .admin-container {
             max-width: 1400px;
             margin: 0 auto;
@@ -275,6 +281,12 @@
             resize: vertical;
         }
         
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
         .btn-primary {
             background: var(--gradient);
             color: white;
@@ -427,6 +439,56 @@
         .pagination button.active:hover {
             background: var(--primary-color);
         }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .admin-container {
+                padding: 1rem 0.5rem;
+            }
+            
+            .admin-tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding-bottom: 0.5rem;
+            }
+            
+            .admin-tab {
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+                white-space: nowrap;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .data-table {
+                overflow-x: auto;
+            }
+            
+            table {
+                min-width: 600px;
+            }
+            
+            .modal-content {
+                width: 95%;
+                padding: 1.5rem;
+            }
+            
+            .form-group input,
+            .form-group select,
+            .form-group textarea {
+                font-size: 16px; /* Prevents iOS zoom */
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .btn-small {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -450,26 +512,26 @@
             </div>
         </div>
 
-        <div class="admin-tabs">
-            <button class="admin-tab active" onclick="switchTab('dashboard')">Dashboard</button>
-            <button class="admin-tab" onclick="switchTab('agents')">Agents</button>
-            <button class="admin-tab" onclick="switchTab('prompts')">Prompts</button>
-            <button class="admin-tab" onclick="switchTab('users')">Users</button>
-            <button class="admin-tab" onclick="switchTab('subscriptions')">Subscriptions</button>
-            <button class="admin-tab" onclick="switchTab('plans')">Plans</button>
-            <button class="admin-tab" onclick="switchTab('policies')">Policies</button>
-            <button class="admin-tab" onclick="switchTab('organizations')">Organizations</button>
+        <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+            <button class="admin-tab active" onclick="switchTab('dashboard')" role="tab" aria-selected="true" aria-controls="dashboard">Dashboard</button>
+            <button class="admin-tab" onclick="switchTab('agents')" role="tab" aria-selected="false" aria-controls="agents">Agents</button>
+            <button class="admin-tab" onclick="switchTab('prompts')" role="tab" aria-selected="false" aria-controls="prompts">Prompts</button>
+            <button class="admin-tab" onclick="switchTab('users')" role="tab" aria-selected="false" aria-controls="users">Users</button>
+            <button class="admin-tab" onclick="switchTab('subscriptions')" role="tab" aria-selected="false" aria-controls="subscriptions">Subscriptions</button>
+            <button class="admin-tab" onclick="switchTab('plans')" role="tab" aria-selected="false" aria-controls="plans">Plans</button>
+            <button class="admin-tab" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
+            <button class="admin-tab" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
         </div>
 
         <!-- Dashboard Tab -->
-        <div id="dashboard" class="tab-content active">
+        <div id="dashboard" class="tab-content active" role="tabpanel" aria-labelledby="dashboard-tab">
             <div class="stats-grid" id="statsGrid">
                 <div class="loading">Loading statistics</div>
             </div>
         </div>
 
         <!-- Agents Tab -->
-        <div id="agents" class="tab-content">
+        <div id="agents" class="tab-content" role="tabpanel" aria-labelledby="agents-tab">
             <div class="data-table">
                 <h2>Agent Management</h2>
                 <div class="form-section" style="margin-bottom: 2rem;">
@@ -527,7 +589,7 @@
         </div>
 
         <!-- Prompts Tab -->
-        <div id="prompts" class="tab-content">
+        <div id="prompts" class="tab-content" role="tabpanel" aria-labelledby="prompts-tab">
             <div class="data-table">
                 <h2>Prompt Versions Management</h2>
                 <div class="form-group">
@@ -566,7 +628,7 @@
                 </div>
             </div>
         </div>
-        <div id="users" class="tab-content">
+        <div id="users" class="tab-content" role="tabpanel" aria-labelledby="users-tab">
             <div class="data-table">
                 <h2>User Management</h2>
                 <div id="usersTable" class="loading">Loading users</div>
@@ -574,7 +636,7 @@
         </div>
 
         <!-- Subscriptions Tab -->
-        <div id="subscriptions" class="tab-content">
+        <div id="subscriptions" class="tab-content" role="tabpanel" aria-labelledby="subscriptions-tab">
             <div class="data-table">
                 <h2>Subscription Management</h2>
                 <div id="subscriptionsTable" class="loading">Loading subscriptions</div>
@@ -582,7 +644,7 @@
         </div>
 
         <!-- Plans Tab -->
-        <div id="plans" class="tab-content">
+        <div id="plans" class="tab-content" role="tabpanel" aria-labelledby="plans-tab">
             <div class="form-section">
                 <h2>Create New Plan</h2>
                 <div class="form-group">
@@ -639,7 +701,7 @@
                 <div id="plansTable" class="loading">Loading plans</div>
             </div>
         </div>
-        <div id="policies" class="tab-content">
+        <div id="policies" class="tab-content" role="tabpanel" aria-labelledby="policies-tab">
             <div class="form-section">
                 <h2>Create New Policy</h2>
                 <div class="form-group">
@@ -668,7 +730,7 @@
         </div>
 
         <!-- Organizations Tab -->
-        <div id="organizations" class="tab-content">
+        <div id="organizations" class="tab-content" role="tabpanel" aria-labelledby="organizations-tab">
             <div class="data-table">
                 <h2>Organizations</h2>
                 <div id="organizationsTable" class="loading">Loading organizations</div>
@@ -935,8 +997,10 @@
             // Update tab buttons
             document.querySelectorAll('.admin-tab').forEach(tab => {
                 tab.classList.remove('active');
+                tab.setAttribute('aria-selected', 'false');
             });
             event.target.classList.add('active');
+            event.target.setAttribute('aria-selected', 'true');
             
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => {
@@ -1558,7 +1622,7 @@
                 
                 agents.forEach(agent => {
                     const statusBadge = agent.is_active ? 
-                        '<span class="badge badge-success">Active</span>' : 
+                        '<span class="badge badge-active">Active</span>' : 
                         '<span class="badge badge-inactive">Inactive</span>';
                     const createdDate = new Date(agent.created_at).toLocaleDateString();
                     
