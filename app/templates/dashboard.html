@@ -244,6 +244,19 @@
                 <h3 style="color: var(--primary-color); font-size: 1rem; margin-bottom: 0.5rem;">Response:</h3>
                 <div id="responseContent" style="background: #f8f9fa; padding: 1rem; border-radius: 8px; white-space: pre-wrap; color: var(--text-color);"></div>
             </div>
+            
+            <!-- Usage Info -->
+            <div id="usageInfo" class="hidden" style="margin-top: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div>
+                        <strong style="color: #1976D2;">Usage:</strong>
+                        <span id="usageText" style="margin-left: 0.5rem; color: #424242;"></span>
+                    </div>
+                    <button id="upgradeBtn" class="hidden" onclick="goToUpgrade()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
+                        Upgrade Now 🚀
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div class="dashboard-grid">
@@ -617,6 +630,33 @@
                 });
 
                 responseContent.textContent = result.output;
+                
+                // Show usage information
+                if (result.usage) {
+                    const usageDiv = document.getElementById('usageInfo');
+                    const usageText = document.getElementById('usageText');
+                    const upgradeBtn = document.getElementById('upgradeBtn');
+                    
+                    usageDiv.classList.remove('hidden');
+                    
+                    let message = '';
+                    if (result.usage.free_remaining !== undefined && result.usage.free_remaining > 0) {
+                        message = `${result.usage.free_remaining} free requests remaining`;
+                    } else if (result.usage.paid_remaining !== undefined && result.usage.paid_remaining > 0) {
+                        message = `${result.usage.paid_remaining} requests remaining this period`;
+                    } else {
+                        message = 'No requests remaining';
+                    }
+                    
+                    usageText.textContent = message;
+                    
+                    if (result.usage.should_upgrade) {
+                        upgradeBtn.classList.remove('hidden');
+                    } else {
+                        upgradeBtn.classList.add('hidden');
+                    }
+                }
+                
                 showAlert('Query completed successfully', 'success');
             } catch (error) {
                 responseContent.textContent = 'Error: ' + error.message;
@@ -632,6 +672,11 @@
             const currentUrl = new URL(window.location.href);
             currentUrl.searchParams.set('lang', lang);
             window.location.href = currentUrl.toString();
+        }
+        
+        // Go to upgrade page
+        function goToUpgrade() {
+            window.location.href = '/billing/upgrade';
         }
 
         // Logout

@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upgrade - {{ t('site_name') }}</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+    <style>
+        .upgrade-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+        
+        .upgrade-header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+        
+        .upgrade-header h1 {
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .upgrade-header p {
+            color: #666;
+            font-size: 1.125rem;
+        }
+        
+        .current-plan {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 3rem;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .current-plan h2 {
+            color: var(--primary-color);
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+        }
+        
+        .current-plan-info {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .plan-stat {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .plan-stat-label {
+            color: #666;
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .plan-stat-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+        
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+        
+        .plan-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .plan-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        }
+        
+        .plan-card.recommended {
+            border: 2px solid var(--primary-color);
+        }
+        
+        .plan-card.recommended::before {
+            content: 'RECOMMENDED';
+            position: absolute;
+            top: 1rem;
+            right: -2rem;
+            background: var(--gradient);
+            color: white;
+            padding: 0.25rem 3rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transform: rotate(45deg);
+        }
+        
+        .plan-name {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .plan-price {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 0.25rem;
+        }
+        
+        .plan-price-period {
+            color: #666;
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .plan-features {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 2rem 0;
+        }
+        
+        .plan-features li {
+            padding: 0.75rem 0;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .plan-features li::before {
+            content: '✓';
+            color: #4caf50;
+            font-weight: bold;
+            font-size: 1.25rem;
+        }
+        
+        .btn-subscribe {
+            width: 100%;
+            padding: 1rem;
+            background: var(--gradient);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .btn-subscribe:hover {
+            transform: scale(1.02);
+        }
+        
+        .btn-subscribe:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="upgrade-container">
+        <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+        
+        <div class="upgrade-header">
+            <h1>Upgrade Your Plan</h1>
+            <p>Choose the perfect plan for your needs</p>
+        </div>
+        
+        <div class="current-plan">
+            <h2>Your Current Plan</h2>
+            <div class="current-plan-info">
+                <div class="plan-stat">
+                    <span class="plan-stat-label">Plan</span>
+                    <span class="plan-stat-value" id="currentPlanName">Free Trial</span>
+                </div>
+                <div class="plan-stat">
+                    <span class="plan-stat-label">Free Requests Used</span>
+                    <span class="plan-stat-value" id="freeRequestsUsed">0 / 10</span>
+                </div>
+                <div class="plan-stat">
+                    <span class="plan-stat-label">Status</span>
+                    <span class="plan-stat-value" id="planStatus">TRIALING</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="plans-grid" id="plansGrid">
+            <!-- Plans will be loaded here dynamically -->
+            <div class="plan-card">
+                <div class="plan-name">Loading...</div>
+                <div class="plan-price">-</div>
+                <div class="plan-price-period">per month</div>
+                <ul class="plan-features">
+                    <li>Loading plans...</li>
+                </ul>
+                <button class="btn-subscribe" disabled>Loading...</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '';
+        
+        async function apiCall(endpoint, options = {}) {
+            const token = localStorage.getItem('access_token');
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(token && { 'Authorization': `Bearer ${token}` })
+            };
+            
+            const response = await fetch(API_BASE + endpoint, {
+                ...options,
+                headers: { ...headers, ...options.headers }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Request failed');
+            }
+            
+            return response.json();
+        }
+        
+        async function loadCurrentPlan() {
+            try {
+                const usage = await apiCall('/billing/usage');
+                
+                document.getElementById('currentPlanName').textContent = usage.plan_name || 'Free Trial';
+                document.getElementById('freeRequestsUsed').textContent = 
+                    `${usage.free_requests_used || 0} / ${usage.free_requests_limit || 10}`;
+                document.getElementById('planStatus').textContent = usage.subscription_status || 'TRIALING';
+            } catch (error) {
+                console.error('Failed to load current plan:', error);
+            }
+        }
+        
+        async function loadPlans() {
+            try {
+                const plans = await apiCall('/billing/plans');
+                const plansGrid = document.getElementById('plansGrid');
+                
+                // Filter out free trial plan
+                const paidPlans = plans.filter(p => p.price > 0);
+                
+                if (paidPlans.length === 0) {
+                    plansGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #666;">No paid plans available at the moment.</div>';
+                    return;
+                }
+                
+                plansGrid.innerHTML = paidPlans.map((plan, index) => `
+                    <div class="plan-card ${index === 0 ? 'recommended' : ''}">
+                        <div class="plan-name">${plan.name}</div>
+                        <div class="plan-price">$${plan.price.toFixed(2)}</div>
+                        <div class="plan-price-period">per ${plan.interval}</div>
+                        <ul class="plan-features">
+                            <li>${plan.max_requests_per_interval} requests per ${plan.interval}</li>
+                            ${plan.max_tokens_per_request > 0 ? `<li>Up to ${plan.max_tokens_per_request} tokens per request</li>` : ''}
+                            ${plan.has_api_access ? '<li>API Access</li>' : ''}
+                            ${plan.has_priority_support ? '<li>Priority Support</li>' : ''}
+                            ${plan.has_advanced_analytics ? '<li>Advanced Analytics</li>' : ''}
+                        </ul>
+                        <button class="btn-subscribe" onclick="subscribeToPlan(${plan.id}, '${plan.name}')">
+                            Subscribe Now
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load plans:', error);
+                document.getElementById('plansGrid').innerHTML = 
+                    '<div style="grid-column: 1/-1; text-align: center; color: #f44336;">Failed to load plans. Please try again later.</div>';
+            }
+        }
+        
+        async function subscribeToPlan(planId, planName) {
+            if (!confirm(`Subscribe to ${planName}?`)) {
+                return;
+            }
+            
+            try {
+                const result = await apiCall('/billing/subscribe', {
+                    method: 'POST',
+                    body: JSON.stringify({ plan_id: planId })
+                });
+                
+                if (result.checkout_url) {
+                    // Redirect to Paddle checkout
+                    window.location.href = result.checkout_url;
+                } else {
+                    alert('Subscription successful!');
+                    window.location.href = '/dashboard';
+                }
+            } catch (error) {
+                alert('Failed to subscribe: ' + error.message);
+            }
+        }
+        
+        function changeLanguage(lang) {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('lang', lang);
+            window.location.href = currentUrl.toString();
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadCurrentPlan();
+            await loadPlans();
+        });
+    </script>
+</body>
+</html>

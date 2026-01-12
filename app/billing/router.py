@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,9 @@ from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
 from app.models.usage import UsageRecord
+
+from fastapi.templating import Jinja2Templates
+templates = Jinja2Templates(directory="app/templates")
 
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
@@ -194,3 +198,38 @@ async def get_usage_info(
 		"period_started_at": billing_account.period_started_at.isoformat() if billing_account.period_started_at else None,
 		"trial_started_at": billing_account.trial_started_at.isoformat() if billing_account.trial_started_at else None,
 	}
+
+
+@router.get("/plans")
+async def get_available_plans(db: AsyncSession = Depends(get_db)):
+	"""Get all available subscription plans."""
+	result = await db.execute(select(SubscriptionPlan).order_by(SubscriptionPlan.price))
+	plans = result.scalars().all()
+	
+	return [
+		{
+			"id": plan.id,
+			"name": plan.name,
+			"interval": plan.interval.value,
+			"price": float(plan.price),
+			"currency": plan.currency,
+			"max_requests_per_interval": plan.max_requests_per_interval,
+			"max_tokens_per_request": plan.max_tokens_per_request,
+			"free_requests_limit": plan.free_requests_limit,
+			"free_trial_days": plan.free_trial_days,
+			"has_api_access": plan.has_api_access,
+			"has_priority_support": plan.has_priority_support,
+			"has_advanced_analytics": plan.has_advanced_analytics,
+		}
+		for plan in plans
+	]
+
+
+@router.get("/upgrade", response_class=HTMLResponse)
+async def upgrade_page(request: Request):
+	"""Render upgrade page."""
+	return templates.TemplateResponse("upgrade.html", {
+		"request": request,
+		"language": "en",
+		"t": lambda key: key
+	})
