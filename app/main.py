@@ -92,9 +92,9 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 # Usage tracking middleware (non-blocking, low priority)
-if not settings.debug:
-    # Only add in production to avoid test issues
-    app.add_middleware(UsageMiddleware)
+# Note: Always enabled to track API usage regardless of debug mode
+# Usage logging is essential for billing and analytics
+app.add_middleware(UsageMiddleware)
 
 @app.post(settings.telegram_webhook_path)
 async def telegram_webhook(
