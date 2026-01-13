@@ -600,7 +600,10 @@
         <!-- Organizations Tab -->
         <div id="organizations" class="tab-content" role="tabpanel" aria-labelledby="organizations-tab">
             <div class="data-table">
-                <h2>Organizations</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                    <h2 style="margin: 0;">Organizations</h2>
+                    <button onclick="openModal('createOrgModal')" class="btn-primary">+ Create New Organization</button>
+                </div>
                 <div id="organizationsTable" class="loading">Loading organizations</div>
             </div>
         </div>
@@ -1089,6 +1092,80 @@
         </div>
     </div>
 
+    <!-- Create Organization Modal -->
+    <div id="createOrgModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Organization</h2>
+                <button class="modal-close" onclick="closeModal('createOrgModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Organization Name</label>
+                <input type="text" id="orgName" placeholder="e.g., Acme Corp">
+            </div>
+            <div class="form-group">
+                <label>Slug (URL-friendly identifier)</label>
+                <input type="text" id="orgSlug" placeholder="e.g., acme-corp">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="orgDescription" placeholder="Organization description"></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Users</label>
+                    <input type="number" id="orgMaxUsers" min="1" value="10">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="orgActive" checked> Active
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('createOrgModal')">Cancel</button>
+                <button class="btn-primary" onclick="createOrg()">Create Organization</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Organization Modal -->
+    <div id="editOrgModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Organization</h2>
+                <button class="modal-close" onclick="closeModal('editOrgModal')">&times;</button>
+            </div>
+            <div class="form-group">
+                <label>Organization Name</label>
+                <input type="text" id="editOrgName">
+            </div>
+            <div class="form-group">
+                <label>Slug</label>
+                <input type="text" id="editOrgSlug" readonly style="background: #f5f5f5;">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="editOrgDescription"></textarea>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div class="form-group">
+                    <label>Max Users</label>
+                    <input type="number" id="editOrgMaxUsers" min="1">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                        <input type="checkbox" id="editOrgActive"> Active
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editOrgModal')">Cancel</button>
+                <button class="btn-primary" onclick="saveOrgChanges()">Save</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '';
         let currentTab = 'dashboard';
@@ -1495,6 +1572,7 @@
         // Load organizations
         async function loadOrganizations() {
             try {
+                document.getElementById('organizationsTable').innerHTML = '<div class="loading">Loading organizations</div>';
                 const orgs = await apiCall('/admin/organizations');
                 
                 if (!orgs || orgs.length === 0) {
@@ -1521,11 +1599,12 @@
                         <tr>
                             <td>${org.id}</td>
                             <td>${org.name}</td>
-                            <td>${org.slug}</td>
+                            <td><code>${org.slug}</code></td>
                             <td>${org.member_count || 0}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-view" onclick="viewOrg(${org.id})">View</button>
+                                    <button class="btn-small btn-edit" onclick="editOrg(${org.id})">Edit</button>
+                                    <button class="btn-small btn-delete" onclick="deleteOrg(${org.id})">Delete</button>
                                 </div>
                             </td>
                         </tr>
@@ -1535,7 +1614,7 @@
                 tableHtml += '</tbody></table>';
                 document.getElementById('organizationsTable').innerHTML = tableHtml;
             } catch (error) {
-                showAlert('Failed to load organizations: ' + error.message, 'error');
+                document.getElementById('organizationsTable').innerHTML = `<div class="error">Failed to load organizations: ${error.message}</div>`;
             }
         }
 
@@ -2009,7 +2088,13 @@
                 document.getElementById('editAgentName').value = agent.name;
                 document.getElementById('editAgentDescription').value = agent.description || '';
                 document.getElementById('editAgentSystemPrompt').value = agent.system_prompt || '';
-                document.getElementById('editAgentModel').value = agent.model_name;
+                // Set model by llm_model_id
+                const modelSelect = document.getElementById('editAgentModel');
+                Array.from(modelSelect.options).forEach(option => {
+                    if (parseInt(option.getAttribute('data-id')) === agent.llm_model_id) {
+                        option.selected = true;
+                    }
+                });
                 document.getElementById('editAgentTemperature').value = agent.temperature;
                 document.getElementById('editAgentMaxTokens').value = agent.max_tokens;
                 document.getElementById('editAgentActive').checked = agent.is_active;
@@ -2232,6 +2317,112 @@
             window.open(`/admin/organizations/${id}`, '_blank');
         }
 
+        async function createOrg() {
+            const name = document.getElementById('orgName').value.trim();
+            const slug = document.getElementById('orgSlug').value.trim();
+            const description = document.getElementById('orgDescription').value.trim();
+            const maxUsers = parseInt(document.getElementById('orgMaxUsers').value);
+            const isActive = document.getElementById('orgActive').checked;
+
+            if (!name || !slug) {
+                showAlert('Name and slug are required', 'error');
+                return;
+            }
+
+            try {
+                await apiCall('/admin/organizations', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name,
+                        slug,
+                        description: description || null,
+                        max_users: maxUsers,
+                        is_active: isActive
+                    })
+                });
+
+                showAlert('Organization created successfully', 'success');
+                closeModal('createOrgModal');
+                
+                // Reset form
+                document.getElementById('orgName').value = '';
+                document.getElementById('orgSlug').value = '';
+                document.getElementById('orgDescription').value = '';
+                document.getElementById('orgMaxUsers').value = '10';
+                document.getElementById('orgActive').checked = true;
+                
+                await loadOrganizations();
+            } catch (error) {
+                showAlert(`Failed to create organization: ${error.message}`, 'error');
+            }
+        }
+
+        let editingOrgId = null;
+
+        async function editOrg(id) {
+            try {
+                const org = await apiCall(`/admin/organizations/${id}`);
+                
+                editingOrgId = id;
+                document.getElementById('editOrgName').value = org.name;
+                document.getElementById('editOrgSlug').value = org.slug;
+                document.getElementById('editOrgDescription').value = org.description || '';
+                document.getElementById('editOrgMaxUsers').value = org.max_users || 10;
+                document.getElementById('editOrgActive').checked = org.is_active !== false;
+                
+                openModal('editOrgModal');
+            } catch (error) {
+                showAlert(`Failed to load organization: ${error.message}`, 'error');
+            }
+        }
+
+        async function saveOrgChanges() {
+            if (!editingOrgId) return;
+
+            const name = document.getElementById('editOrgName').value.trim();
+            const description = document.getElementById('editOrgDescription').value.trim();
+            const maxUsers = parseInt(document.getElementById('editOrgMaxUsers').value);
+            const isActive = document.getElementById('editOrgActive').checked;
+
+            if (!name) {
+                showAlert('Name is required', 'error');
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/organizations/${editingOrgId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name,
+                        description: description || null,
+                        max_users: maxUsers,
+                        is_active: isActive
+                    })
+                });
+
+                showAlert('Organization updated successfully', 'success');
+                closeModal('editOrgModal');
+                editingOrgId = null;
+                await loadOrganizations();
+            } catch (error) {
+                showAlert(`Failed to update organization: ${error.message}`, 'error');
+            }
+        }
+
+        async function deleteOrg(id) {
+            if (!confirm('Are you sure you want to delete this organization? This will fail if any users belong to it.')) {
+                return;
+            }
+
+            try {
+                await apiCall(`/admin/organizations/${id}`, { method: 'DELETE' });
+                showAlert('Organization deleted successfully', 'success');
+                await loadOrganizations();
+            } catch (error) {
+                showAlert(`Failed to delete organization: ${error.message}`, 'error');
+            }
+        }
+
         function logout() {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
@@ -2302,14 +2493,14 @@
                             <td>${model.id}</td>
                             <td>${model.display_name || model.name}</td>
                             <td>${model.provider}</td>
-                            <td><code style="font-size: 0.85em;">${model.api_key_masked}</code></td>
+                            <td><code style="font-size: 0.85em;">${model.api_key}</code></td>
                             <td>${model.max_tokens_limit.toLocaleString()}</td>
                             <td>${model.context_window.toLocaleString()}</td>
                             <td>${statusBadge}</td>
                             <td>${defaultBadge}</td>
                             <td>
-                                <button onclick="editLLMModel(${model.id})" class="btn-small">Edit</button>
-                                <button onclick="deleteLLMModel(${model.id})" class="btn-small btn-danger">Delete</button>
+                                <button onclick="editLLMModel(${model.id})" class="btn-small btn-edit">Edit</button>
+                                <button onclick="deleteLLMModel(${model.id})" class="btn-small btn-delete">Delete</button>
                             </td>
                         </tr>
                     `;

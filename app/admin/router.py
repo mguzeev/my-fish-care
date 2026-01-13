@@ -835,6 +835,7 @@ class AgentResponse(BaseModel):
     description: Optional[str] = None
     system_prompt: str
     model_name: str
+    llm_model_id: int  # Added for frontend to select correct model
     temperature: float
     max_tokens: int
     is_active: bool
@@ -928,6 +929,7 @@ async def get_agent(
         description=agent.description,
         system_prompt=agent.system_prompt,
         model_name=agent.model_name,
+        llm_model_id=agent.llm_model_id,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,
         is_active=agent.is_active,
@@ -974,6 +976,7 @@ async def create_agent(
         description=agent.description,
         system_prompt=agent.system_prompt,
         model_name=agent.model_name,
+        llm_model_id=agent.llm_model_id,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,
         is_active=agent.is_active,
@@ -1027,6 +1030,7 @@ async def update_agent(
         description=agent.description,
         system_prompt=agent.system_prompt,
         model_name=agent.model_name,
+        llm_model_id=agent.llm_model_id,
         temperature=agent.temperature,
         max_tokens=agent.max_tokens,
         is_active=agent.is_active,
@@ -1141,6 +1145,9 @@ class OrganizationResponse(BaseModel):
     name: str
     slug: str
     member_count: int
+    description: Optional[str] = None
+    max_users: int = 10
+    is_active: bool = True
 
 
 @router.get("/organizations", response_model=list[OrganizationResponse])
@@ -1166,10 +1173,165 @@ async def list_organizations(
                 name=org.name,
                 slug=org.slug,
                 member_count=member_count,
+                description=org.description,
+                max_users=org.max_users,
+                is_active=org.is_active,
             )
         )
     
     return org_list
+
+
+class CreateOrganizationRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    slug: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    max_users: int = Field(10, gt=0)
+    is_active: bool = True
+
+
+class UpdateOrganizationRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    max_users: Optional[int] = Field(None, gt=0)
+    is_active: Optional[bool] = None
+
+
+@router.post("/organizations", response_model=OrganizationResponse)
+async def create_organization(
+    request: CreateOrganizationRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create new organization."""
+    # Check if slug already exists
+    existing = await db.execute(select(Organization).where(Organization.slug == request.slug))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Organization with this slug already exists")
+    
+    org = Organization(
+        name=request.name,
+        slug=request.slug,
+        description=request.description,
+        max_users=request.max_users,
+        is_active=request.is_active,
+    )
+    db.add(org)
+    await db.commit()
+    await db.refresh(org)
+    
+    return OrganizationResponse(
+        id=org.id,
+        name=org.name,
+        slug=org.slug,
+        member_count=0,
+        description=org.description,
+        max_users=org.max_users,
+        is_active=org.is_active,
+    )
+
+
+@router.get("/organizations/{org_id}", response_model=OrganizationResponse)
+async def get_organization(
+    org_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get organization details."""
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    members_result = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org.id)
+    )
+    member_count = members_result.scalar() or 0
+    
+    return OrganizationResponse(
+        id=org.id,
+        name=org.name,
+        slug=org.slug,
+        member_count=member_count,
+        description=org.description,
+        max_users=org.max_users,
+        is_active=org.is_active,
+    )
+
+
+@router.put("/organizations/{org_id}", response_model=OrganizationResponse)
+async def update_organization(
+    org_id: int,
+    request: UpdateOrganizationRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update organization."""
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    if request.name is not None:
+        org.name = request.name
+    if request.description is not None:
+        org.description = request.description
+    if request.max_users is not None:
+        org.max_users = request.max_users
+    if request.is_active is not None:
+        org.is_active = request.is_active
+    
+    await db.commit()
+    await db.refresh(org)
+    
+    members_result = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org.id)
+    )
+    member_count = members_result.scalar() or 0
+    
+    return OrganizationResponse(
+        id=org.id,
+        name=org.name,
+        slug=org.slug,
+        member_count=member_count,
+        description=org.description,
+        max_users=org.max_users,
+        is_active=org.is_active,
+    )
+
+
+@router.delete("/organizations/{org_id}")
+async def delete_organization(
+    org_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete organization (only if no users)."""
+    result = await db.execute(select(Organization).where(Organization.id == org_id))
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    
+    # Check if any users belong to this organization
+    users_count = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org_id)
+    )
+    count = users_count.scalar()
+    
+    if count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete organization: {count} user(s) belong to it"
+        )
+    
+    await db.delete(org)
+    await db.commit()
+    
+    return {"detail": "Organization deleted"}
 
 
 # ============================================================================
