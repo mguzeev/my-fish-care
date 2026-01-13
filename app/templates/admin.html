@@ -1389,7 +1389,7 @@
                             <td>${new Date(user.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-edit" onclick="editUser(${user.id}, '${user.email}', ${user.is_active}, ${user.is_superuser})">Edit</button>
+                                    <button class="btn-small btn-edit" onclick="editUser(${user.id})">Edit</button>
                                     <button class="btn-small btn-delete" onclick="deleteUser(${user.id})">Delete</button>
                                 </div>
                             </td>
@@ -1446,7 +1446,7 @@
                             <td>${new Date(sub.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-edit" onclick="editSubscription(${sub.id}, '${sub.organization_name}', '${sub.status}')">Edit</button>
+                                    <button class="btn-small btn-edit" onclick="editSubscription(${sub.id})">Edit</button>
                                     <button class="btn-small btn-delete" onclick="deleteSubscription(${sub.id})">Delete</button>
                                 </div>
                             </td>
@@ -1505,7 +1505,7 @@
                             <td>${features.length ? features.join(', ') : 'None'}</td>
                             <td>
                                 <div class="action-buttons">
-                                    <button class="btn-small btn-edit" onclick="managePlanAgents(${plan.id}, '${plan.name}')">Agents</button>
+                                    <button class="btn-small btn-edit" onclick="managePlanAgents(${plan.id})">Agents</button>
                                     <button class="btn-small btn-edit" onclick="editPlan(${plan.id})">Edit</button>
                                     <button class="btn-small btn-delete" onclick="deletePlan(${plan.id})">Delete</button>
                                 </div>
@@ -1626,12 +1626,18 @@
         }
 
         // User functions
-        function editUser(userId, email, isActive, isAdmin) {
-            editingUserId = userId;
-            document.getElementById('editUserEmail').value = email;
-            document.getElementById('editUserActive').checked = isActive;
-            document.getElementById('editUserAdmin').checked = isAdmin;
-            openModal('editUserModal');
+        async function editUser(userId) {
+            try {
+                editingUserId = userId;
+                const user = await apiCall(`/admin/users/${userId}`);
+                
+                document.getElementById('editUserEmail').value = user.email;
+                document.getElementById('editUserActive').checked = user.is_active;
+                document.getElementById('editUserAdmin').checked = user.is_superuser;
+                openModal('editUserModal');
+            } catch (error) {
+                showAlert('Failed to load user details: ' + error.message, 'error');
+            }
         }
 
         async function saveUserChanges() {
@@ -1667,7 +1673,7 @@
         }
 
         // Subscription functions
-        async function editSubscription(subId, orgName, status) {
+        async function editSubscription(subId) {
             try {
                 editingSubscriptionId = subId;
                 
@@ -1693,8 +1699,8 @@
                     planSelect.innerHTML = '<option value="">No plans available</option>';
                 }
                 
-                document.getElementById('editSubsOrg').value = orgName;
-                document.getElementById('editSubsStatus').value = status;
+                document.getElementById('editSubsOrg').value = sub.organization_name;
+                document.getElementById('editSubsStatus').value = sub.status;
                 
                 openModal('editSubscriptionModal');
             } catch (error) {
@@ -1852,17 +1858,18 @@
         }
 
         // Manage plan-agent relationships
-        async function managePlanAgents(planId, planName) {
+        async function managePlanAgents(planId) {
             try {
-                // Load all agents and plan's current agents
-                const [allAgents, planAgentIds] = await Promise.all([
+                // Load plan details, all agents and plan's current agents
+                const [plan, allAgents, planAgentIds] = await Promise.all([
+                    apiCall(`/admin/plans/${planId}`),
                     apiCall('/admin/agents'),
                     apiCall(`/admin/plans/${planId}/agents`)
                 ]);
                 
                 let html = `
                     <div style="padding: 1.5rem;">
-                        <h3 style="margin-top: 0;">Manage Agents for "${planName}"</h3>
+                        <h3 style="margin-top: 0;">Manage Agents for "${plan.name}"</h3>
                         <p style="color: #666; margin-bottom: 1rem;">Select which agents are included in this plan:</p>
                 `;
                 
@@ -1876,7 +1883,7 @@
                             </div>
                             <button 
                                 class="${isIncluded ? 'btn-small btn-delete' : 'btn-small btn-primary'}" 
-                                onclick="${isIncluded ? `removePlanAgent(${planId}, ${agent.id}, '${planName}')` : `addPlanAgent(${planId}, ${agent.id}, '${planName}')`}">
+                                onclick="${isIncluded ? `removePlanAgent(${planId}, ${agent.id})` : `addPlanAgent(${planId}, ${agent.id})`}">
                                 ${isIncluded ? 'Remove' : 'Add'}
                             </button>
                         </div>
@@ -1905,21 +1912,21 @@
             }
         }
 
-        async function addPlanAgent(planId, agentId, planName) {
+        async function addPlanAgent(planId, agentId) {
             try {
                 await apiCall(`/admin/plans/${planId}/agents/${agentId}`, { method: 'POST' });
                 showAlert('Agent added to plan');
-                await managePlanAgents(planId, planName); // Refresh
+                await managePlanAgents(planId); // Refresh
             } catch (error) {
                 showAlert('Failed to add agent: ' + error.message, 'error');
             }
         }
 
-        async function removePlanAgent(planId, agentId, planName) {
+        async function removePlanAgent(planId, agentId) {
             try {
                 await apiCall(`/admin/plans/${planId}/agents/${agentId}`, { method: 'DELETE' });
                 showAlert('Agent removed from plan');
-                await managePlanAgents(planId, planName); // Refresh
+                await managePlanAgents(planId); // Refresh
             } catch (error) {
                 showAlert('Failed to remove agent: ' + error.message, 'error');
             }

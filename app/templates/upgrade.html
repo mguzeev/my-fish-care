@@ -285,7 +285,7 @@
                             ${plan.has_priority_support ? '<li>Priority Support</li>' : ''}
                             ${plan.has_advanced_analytics ? '<li>Advanced Analytics</li>' : ''}
                         </ul>
-                        <button class="btn-subscribe" onclick="subscribeToPlan(${plan.id}, '${plan.name}')">
+                        <button class="btn-subscribe" onclick="subscribeToPlan(${plan.id})">
                             Subscribe Now
                         </button>
                     </div>
@@ -297,7 +297,11 @@
             }
         }
         
-        async function subscribeToPlan(planId, planName) {
+        async function subscribeToPlan(planId) {
+            // Get plan name from DOM to avoid escaping issues
+            const planCard = event.target.closest('.plan-card');
+            const planName = planCard ? planCard.querySelector('h3').textContent : 'this plan';
+            
             if (!confirm(`Subscribe to ${planName}?`)) {
                 return;
             }
