@@ -81,7 +81,7 @@ async def test_e2e_register_login_invoke(client, db_session, monkeypatch, llm_mo
 
     async def fake_run(agent_obj, variables, stream=False, prompt_version=None):
         assert variables["input"] == "Hello"
-        return "Echo: Hello"
+        return "Echo: Hello", {"prompt_tokens": 5, "completion_tokens": 10, "total_tokens": 15}
 
     monkeypatch.setattr(agent_runtime, "run", fake_run)
 

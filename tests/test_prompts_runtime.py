@@ -40,6 +40,7 @@ async def test_agent_runtime_completion(monkeypatch, llm_model):
     class FakeResponse:
         def __init__(self, content: str):
             self.choices = [FakeChoice(content)]
+            self.usage = types.SimpleNamespace(prompt_tokens=10, completion_tokens=5, total_tokens=15)
 
     class FakeStreamChoice:
         def __init__(self, content: str):
@@ -83,8 +84,9 @@ async def test_agent_runtime_completion(monkeypatch, llm_model):
     )
     agent.llm_model = llm_model
 
-    result = await agent_runtime.run(agent, {"input": "Ping"}, stream=False)
-    assert result == "ok"
+    output, usage = await agent_runtime.run(agent, {"input": "Ping"}, stream=False)
+    assert output == "ok"
+    assert usage["total_tokens"] == 15
 
     chunks = []
     stream_gen = await agent_runtime.run(agent, {"input": "Ping"}, stream=True)
@@ -107,6 +109,7 @@ async def test_agent_runtime_uses_prompt_version(monkeypatch, llm_model):
     class FakeResponse:
         def __init__(self, content: str):
             self.choices = [FakeChoice(content)]
+            self.usage = types.SimpleNamespace(prompt_tokens=8, completion_tokens=12, total_tokens=20)
 
     async def fake_create(*args, **kwargs):
         return FakeResponse("prompt-version-ok")
@@ -146,11 +149,12 @@ async def test_agent_runtime_uses_prompt_version(monkeypatch, llm_model):
         variables_json=json.dumps([{"name": "topic", "required": True}]),
     )
 
-    result = await agent_runtime.run(
+    output, usage = await agent_runtime.run(
         agent,
         {"topic": "AI", "input": "Hi"},
         prompt_version=prompt_version,
         stream=False,
     )
 
-    assert result == "prompt-version-ok"
+    assert output == "prompt-version-ok"
+    assert usage["total_tokens"] == 20

@@ -50,7 +50,7 @@ async def test_agent_invoke_plain(client, db_session, agent_factory, user_factor
         assert variables["input"] == "ping"
         assert variables["extra"] == 1
         assert stream is False
-        return "pong"
+        return "pong", {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 
     monkeypatch.setattr(agent_runtime, "run", fake_run)
 
