@@ -1,7 +1,10 @@
 """Configuration settings for the application."""
+import logging
 from functools import lru_cache
 from typing import Optional
 from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -85,7 +88,10 @@ settings = get_settings()
 def validate_paddle_settings(current_settings: Settings) -> None:
     """Fail fast if Paddle billing is enabled but required settings are missing."""
     if not current_settings.paddle_billing_enabled:
+        logger.info("Paddle billing: DISABLED")
         return
+
+    logger.info(f"Paddle billing: ENABLED (environment: {current_settings.paddle_environment})")
 
     missing = [
         name
@@ -106,3 +112,5 @@ def validate_paddle_settings(current_settings: Settings) -> None:
         raise RuntimeError(
             f"Paddle billing enabled but missing settings: {missing_list}"
         )
+    
+    logger.info(f"Paddle configuration validated: API key present, webhook secret configured")

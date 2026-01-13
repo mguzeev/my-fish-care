@@ -177,6 +177,67 @@ PADDLE_VENDOR_ID=12345
 PADDLE_ENVIRONMENT=sandbox
 ```
 
+## Verifying Paddle Status
+
+After deployment, check server logs to confirm Paddle is running:
+
+### Expected Logs on Startup
+
+When **Paddle enabled** (`PADDLE_BILLING_ENABLED=true`):
+```
+INFO - Starting application...
+INFO - Paddle billing: ENABLED (environment: sandbox)
+INFO - Paddle configuration validated: API key present, webhook secret configured
+INFO - Starting Telegram bot...
+INFO - Application startup complete.
+```
+
+When **Paddle disabled** (`PADDLE_BILLING_ENABLED=false`):
+```
+INFO - Starting application...
+INFO - Paddle billing: DISABLED
+INFO - Starting Telegram bot...
+INFO - Application startup complete.
+```
+
+### Verification Methods
+
+1. **Check Logs**: `journalctl -u bot-generic.service -n 50 | grep -i paddle`
+   - Should show "Paddle billing: ENABLED" if configured correctly
+   - Should show "Paddle configuration validated" if credentials present
+
+2. **Health Check Endpoint**: `curl https://your-domain.com/health`
+   - Returns app status (doesn't include Paddle status yet)
+
+3. **Test Subscribe Endpoint**: 
+   ```bash
+   curl -X POST https://your-domain.com/billing/subscribe \
+     -H "Authorization: Bearer YOUR_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"plan_id": 1}'
+   ```
+   - Should return `checkout_url` if Paddle enabled and configured
+   - Should return 502 error if Paddle enabled but credentials invalid
+
+4. **Check Environment Variable**: `systemctl show bot-generic.service -p Environment`
+   - Verify `PADDLE_BILLING_ENABLED=true` is set
+
+### Troubleshooting
+
+**"Paddle billing: DISABLED" when it should be enabled:**
+- Check `.env` file has `PADDLE_BILLING_ENABLED=true`
+- Restart service: `sudo systemctl restart bot-generic.service`
+- Verify environment loaded: service file must use `EnvironmentFile=/path/to/.env`
+
+**"Paddle billing enabled but missing settings" error:**
+- Ensure `PADDLE_API_KEY` is set in `.env`
+- Ensure `PADDLE_WEBHOOK_SECRET` is set in `.env`
+- Both values must be non-empty strings
+
+**No Paddle logs at all:**
+- Check log level: ensure `LOG_LEVEL=INFO` (not `ERROR` or `WARNING`)
+- View full startup sequence: `journalctl -u bot-generic.service --since "5 minutes ago"`
+
 ## Deployment Safety ✅
 
 **Current state is SAFE to deploy** with the following guarantees:
