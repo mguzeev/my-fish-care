@@ -829,6 +829,57 @@ async def get_me(
     return current_user
 
 
+@router.get("/organization")
+async def get_current_organization(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get current user's organization.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        Organization data
+    """
+    if not current_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User has no organization",
+        )
+    
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    
+    if not org:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Organization not found",
+        )
+    
+    # Count users in organization
+    users_result = await db.execute(
+        select(User).where(User.organization_id == org.id)
+    )
+    users_count = len(users_result.scalars().all())
+    
+    return {
+        "id": org.id,
+        "name": org.name,
+        "slug": org.slug,
+        "description": org.description,
+        "is_active": org.is_active,
+        "max_users": org.max_users,
+        "users_count": users_count,
+        "created_at": org.created_at,
+        "updated_at": org.updated_at,
+    }
+
+
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user(
     user_id: int,

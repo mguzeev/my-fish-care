@@ -3,10 +3,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_active_user
@@ -37,6 +37,22 @@ async def upgrade_page(request: Request):
 
 class SubscribeRequest(BaseModel):
 	plan_id: int
+
+
+class UsageRecordResponse(BaseModel):
+	id: int
+	endpoint: str
+	method: str
+	channel: str
+	model_name: Optional[str]
+	prompt_tokens: int
+	completion_tokens: int
+	total_tokens: int
+	response_time_ms: int
+	status_code: int
+	cost: Decimal
+	error_message: Optional[str]
+	created_at: datetime
 
 
 class BillingAccountResponse(BaseModel):
@@ -169,6 +185,30 @@ async def cancel_subscription(
 	await db.refresh(ba)
 
 	return await get_billing_account(current_user, db)
+
+
+@router.get("/usage-records", response_model=list[UsageRecordResponse])
+async def get_usage_records(
+	current_user: User = Depends(get_current_active_user),
+	db: AsyncSession = Depends(get_db),
+	limit: int = Query(10, ge=1, le=100),
+	days: int = Query(30, ge=1, le=90),
+):
+	"""Get user's usage records (activity log)."""
+	start_date = datetime.utcnow() - timedelta(days=days)
+	
+	result = await db.execute(
+		select(UsageRecord)
+		.where(
+			(UsageRecord.user_id == current_user.id)
+			& (UsageRecord.created_at >= start_date)
+		)
+		.order_by(desc(UsageRecord.created_at))
+		.limit(limit)
+	)
+	
+	records = result.scalars().all()
+	return records
 
 
 @router.get("/usage")

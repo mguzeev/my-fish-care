@@ -283,8 +283,24 @@
                         <span id="profileStatus"></span>
                     </div>
                     <div class="stat-item">
+                        <span class="stat-label">Email Verification:</span>
+                        <span id="profileEmailVerified"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Account Created:</span>
+                        <span class="stat-value" id="profileCreatedAt">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last Login:</span>
+                        <span class="stat-value" id="profileLastLogin">-</span>
+                    </div>
+                    <div class="stat-item">
                         <span class="stat-label">Telegram:</span>
                         <span class="stat-value" id="profileTelegram">-</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Language:</span>
+                        <span class="stat-value" id="profileLocale">-</span>
                     </div>
                     <button onclick="editProfile()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Edit Profile</button>
                 </div>
@@ -316,15 +332,43 @@
             <!-- Usage Metrics Card -->
             <div class="dashboard-card">
                 <h2>Usage Metrics</h2>
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Last</label>
+                    <select id="usageRangeDays" onchange="loadUsageMetrics()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                        <option value="7">7 Days</option>
+                        <option value="30" selected>30 Days</option>
+                        <option value="60">60 Days</option>
+                        <option value="90">90 Days</option>
+                    </select>
+                </div>
                 <div id="usageMetrics" class="loading">Loading metrics...</div>
             </div>
 
             <!-- Subscription Card -->
             <div class="dashboard-card">
-                <h2>Subscription</h2>
+                <h2>Subscription & Billing</h2>
                 <div id="subscriptionInfo" class="loading">Loading subscription...</div>
             </div>
         </div>
+
+        <!-- Organization Card -->
+        <div class="dashboard-card" style="margin-bottom: 2rem;">
+            <h2>Organization</h2>
+            <div id="organizationInfo" class="loading">Loading organization...</div>
+        </div>
+
+        <!-- Activity Log Card -->
+        <div class="dashboard-card" style="margin-bottom: 2rem;">
+            <h2>Recent Activity</h2>
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label>Show Last</label>
+                <select id="activityLimit" onchange="loadActivityLog()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="5">5 Activities</option>
+                    <option value="10" selected>10 Activities</option>
+                    <option value="20">20 Activities</option>
+                </select>
+            </div>
+            <div id="activityLog" class="loading">Loading activity...</div>
 
         <!-- Security Section -->
         <div class="dashboard-card">
@@ -459,7 +503,30 @@
                 if (user.is_superuser) statusBadges.push('<span class="badge badge-verified">Admin</span>');
                 document.getElementById('profileStatus').innerHTML = statusBadges.join(' ') || '-';
                 
-                document.getElementById('profileTelegram').textContent = user.telegram_id ? 'Linked' : 'Not linked';
+                // Email verification status
+                if (user.email_verified_at) {
+                    document.getElementById('profileEmailVerified').innerHTML = '<span class="badge badge-verified">Verified</span>';
+                } else {
+                    document.getElementById('profileEmailVerified').innerHTML = '<span class="badge badge-inactive">Not Verified</span>';
+                }
+                
+                // Account created date
+                const createdDate = new Date(user.created_at).toLocaleDateString();
+                document.getElementById('profileCreatedAt').textContent = createdDate;
+                
+                // Last login
+                if (user.last_login_at) {
+                    const lastLoginDate = new Date(user.last_login_at).toLocaleDateString() + ' ' + new Date(user.last_login_at).toLocaleTimeString();
+                    document.getElementById('profileLastLogin').textContent = lastLoginDate;
+                } else {
+                    document.getElementById('profileLastLogin').textContent = 'Never';
+                }
+                
+                document.getElementById('profileTelegram').textContent = user.telegram_id ? `@${user.telegram_username || user.telegram_id}` : 'Not linked';
+                
+                // Locale
+                const localeNames = { 'en': 'English', 'ru': 'Русский', 'uk': 'Українська' };
+                document.getElementById('profileLocale').textContent = localeNames[user.locale] || user.locale;
 
                 // Set edit form values
                 document.getElementById('editFullName').value = user.full_name || '';
@@ -538,40 +605,96 @@
             }
         }
 
-        // Load usage metrics (placeholder)
+        // Load usage metrics (REAL DATA)
         async function loadUsageMetrics() {
             const container = document.getElementById('usageMetrics');
-            container.innerHTML = `
-                <div class="stat-item">
-                    <span class="stat-label">Total Requests:</span>
-                    <span class="stat-value">-</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Tokens Used:</span>
-                    <span class="stat-value">-</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Total Cost:</span>
-                    <span class="stat-value">-</span>
-                </div>
-                <p style="color: #666; font-size: 0.875rem; margin-top: 1rem;">Usage tracking coming soon</p>
-            `;
+            const days = document.getElementById('usageRangeDays').value || 30;
+            
+            try {
+                container.innerHTML = '<div class="loading">Loading metrics...</div>';
+                const data = await apiCall(`/billing/usage?days=${days}`);
+                
+                const requestsPerDay = (data.requests / days).toFixed(1);
+                const tokensPerDay = (data.tokens / days).toFixed(0);
+                const costPerDay = (data.cost / days).toFixed(4);
+                
+                container.innerHTML = `
+                    <div class="stat-item">
+                        <span class="stat-label">Total Requests:</span>
+                        <span class="stat-value">${data.requests}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Avg/Day:</span>
+                        <span class="stat-value">${requestsPerDay}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Tokens:</span>
+                        <span class="stat-value">${data.tokens.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Avg Tokens/Day:</span>
+                        <span class="stat-value">${tokensPerDay.toLocaleString()}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Cost:</span>
+                        <span class="stat-value">$${data.cost}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Avg Cost/Day:</span>
+                        <span class="stat-value">$${costPerDay}</span>
+                    </div>
+                    <div style="color: #666; font-size: 0.875rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0;">
+                        Period: ${new Date(data.from_date).toLocaleDateString()} - ${new Date(data.to_date).toLocaleDateString()}
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load metrics: ${error.message}</div>`;
+            }
         }
 
-        // Load subscription (placeholder)
+        // Load subscription (REAL DATA)
         async function loadSubscription() {
             const container = document.getElementById('subscriptionInfo');
-            container.innerHTML = `
-                <div class="stat-item">
-                    <span class="stat-label">Plan:</span>
-                    <span class="stat-value">Free</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Status:</span>
-                    <span class="badge badge-active">Active</span>
-                </div>
-                <p style="color: #666; font-size: 0.875rem; margin-top: 1rem;">Subscription management coming soon</p>
-            `;
+            
+            try {
+                container.innerHTML = '<div class="loading">Loading subscription...</div>';
+                const data = await apiCall('/billing/account');
+                
+                let statusBadge = '';
+                if (data.status === 'active') {
+                    statusBadge = '<span class="badge badge-active">Active</span>';
+                } else if (data.status === 'trialing') {
+                    statusBadge = '<span class="badge" style="background: #fff3cd; color: #856404;">Trial Period</span>';
+                } else if (data.status === 'canceled') {
+                    statusBadge = '<span class="badge badge-inactive">Canceled</span>';
+                } else if (data.status === 'past_due') {
+                    statusBadge = '<span class="badge badge-inactive">Past Due</span>';
+                } else {
+                    statusBadge = `<span class="badge">${data.status}</span>`;
+                }
+                
+                container.innerHTML = `
+                    <div class="stat-item">
+                        <span class="stat-label">Plan:</span>
+                        <span class="stat-value">${data.plan_name || 'No Plan'}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Status:</span>
+                        ${statusBadge}
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Balance:</span>
+                        <span class="stat-value">$${data.balance}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Spent:</span>
+                        <span class="stat-value">$${data.total_spent}</span>
+                    </div>
+                    <button onclick="goToUpgrade()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">View Plans & Upgrade</button>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load subscription: ${error.message}</div>`;
+            }
         }
 
         // Load available agents
@@ -681,6 +804,108 @@
             window.location.href = '/billing/upgrade';
         }
 
+        // Load organization info
+        async function loadOrganization() {
+            const container = document.getElementById('organizationInfo');
+            
+            if (!currentUser || !currentUser.organization_id) {
+                container.innerHTML = '<div style="color: #666;">No organization assigned</div>';
+                return;
+            }
+            
+            try {
+                container.innerHTML = '<div class="loading">Loading organization...</div>';
+                const orgData = await apiCall(`/auth/organization`);
+                
+                const roleNames = { 'user': 'Member', 'admin': 'Admin', 'owner': 'Owner' };
+                
+                container.innerHTML = `
+                    <div class="stat-item">
+                        <span class="stat-label">Organization:</span>
+                        <span class="stat-value">${orgData.name || '-'}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Your Role:</span>
+                        <span class="stat-value">${roleNames[currentUser.role] || currentUser.role}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Slug:</span>
+                        <span class="stat-value">${orgData.slug || '-'}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Members:</span>
+                        <span class="stat-value">${orgData.users_count || 1}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Status:</span>
+                        ${orgData.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>'}
+                    </div>
+                    ${currentUser.role === 'owner' || currentUser.role === 'admin' ? 
+                        '<button onclick="goToOrgSettings()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Manage Organization</button>' : ''}
+                `;
+            } catch (error) {
+                // If org endpoint doesn't exist, still show basic org info
+                const roleNames = { 'user': 'Member', 'admin': 'Admin', 'owner': 'Owner' };
+                container.innerHTML = `
+                    <div class="stat-item">
+                        <span class="stat-label">Your Role:</span>
+                        <span class="stat-value">${roleNames[currentUser.role] || currentUser.role}</span>
+                    </div>
+                    <div style="color: #999; font-size: 0.875rem; margin-top: 1rem;">Organization details: ${error.message}</div>
+                `;
+            }
+        }
+
+        // Load activity log
+        async function loadActivityLog() {
+            const container = document.getElementById('activityLog');
+            const limit = document.getElementById('activityLimit').value || 10;
+            
+            try {
+                container.innerHTML = '<div class="loading">Loading activity...</div>';
+                const data = await apiCall(`/billing/usage-records?limit=${limit}&days=30`);
+                
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div style="color: #666; padding: 1rem;">No activity recorded yet</div>';
+                    return;
+                }
+                
+                let html = '<div style="font-size: 0.875rem;">';
+                data.forEach(record => {
+                    const date = new Date(record.created_at).toLocaleDateString() + ' ' + new Date(record.created_at).toLocaleTimeString();
+                    const method = record.method || 'REQUEST';
+                    const methodColor = method === 'POST' ? '#2196F3' : method === 'GET' ? '#4CAF50' : method === 'DELETE' ? '#f44336' : '#FF9800';
+                    
+                    html += `
+                        <div style="padding: 0.75rem; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+                            <div style="flex: 1;">
+                                <div style="margin-bottom: 0.25rem;">
+                                    <span style="background: ${methodColor}; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem;">${method}</span>
+                                </div>
+                                <div style="margin-top: 0.25rem; color: #333; font-family: monospace; font-size: 0.875rem; word-break: break-all;">${record.endpoint}</div>
+                                <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">${date}</div>
+                                ${record.error_message ? `<div style="font-size: 0.75rem; color: #f44336; margin-top: 0.25rem;">Error: ${record.error_message}</div>` : ''}
+                            </div>
+                            <div style="text-align: right; white-space: nowrap;">
+                                <div style="color: ${record.status_code >= 400 ? '#f44336' : '#4CAF50'}; font-weight: 600;">${record.status_code}</div>
+                                <div style="font-size: 0.75rem; color: #999;">${record.response_time_ms}ms</div>
+                                ${record.total_tokens > 0 ? `<div style="font-size: 0.75rem; color: #666;">Tokens: ${record.total_tokens}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            } catch (error) {
+                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load activity: ${error.message}</div>`;
+            }
+        }
+
+        // Helper function to go to org settings
+        function goToOrgSettings() {
+            alert('Organization settings coming soon');
+        }
+
         // Logout
         function logout() {
             localStorage.removeItem('access_token');
@@ -694,6 +919,8 @@
             await loadAgents();
             await loadUsageMetrics();
             await loadSubscription();
+            await loadOrganization();
+            await loadActivityLog();
         });
     </script>
 </body>
