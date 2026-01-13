@@ -253,12 +253,22 @@
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Max Requests</label>
+                    <label>Max Requests (Paid)</label>
                     <input type="number" id="editPlanMaxRequests" min="1">
                 </div>
                 <div class="form-group">
                     <label>Max Tokens</label>
                     <input type="number" id="editPlanMaxTokens" min="1">
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Free Requests Limit</label>
+                    <input type="number" id="editPlanFreeRequests" min="0" placeholder="0 = no free requests">
+                </div>
+                <div class="form-group">
+                    <label>Free Trial Days</label>
+                    <input type="number" id="editPlanFreeTrial" min="0" placeholder="0 = no trial period">
                 </div>
             </div>
             <div class="form-grid-3">
@@ -459,12 +469,22 @@
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Max Requests</label>
+                    <label>Max Requests (Paid)</label>
                     <input type="number" id="planMaxRequests" placeholder="10000" min="1">
                 </div>
                 <div class="form-group">
                     <label>Max Tokens</label>
                     <input type="number" id="planMaxTokens" placeholder="4000" min="1">
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Free Requests Limit</label>
+                    <input type="number" id="planFreeRequests" min="0" placeholder="0 = no free requests">
+                </div>
+                <div class="form-group">
+                    <label>Free Trial Days</label>
+                    <input type="number" id="planFreeTrial" min="0" placeholder="0 = no trial">
                 </div>
             </div>
             <div class="form-grid-3">
@@ -1296,6 +1316,8 @@
             const interval = document.getElementById('planInterval').value;
             const maxRequests = parseInt(document.getElementById('planMaxRequests').value);
             const maxTokens = parseInt(document.getElementById('planMaxTokens').value);
+            const freeRequests = parseInt(document.getElementById('planFreeRequests').value) || 0;
+            const freeTrial = parseInt(document.getElementById('planFreeTrial').value) || 0;
             
             if (!name || !price || !maxRequests || !maxTokens) {
                 showAlert('Please fill in all required fields', 'error');
@@ -1312,6 +1334,8 @@
                         currency: 'USD',
                         max_requests_per_interval: maxRequests,
                         max_tokens_per_request: maxTokens,
+                        free_requests_limit: freeRequests,
+                        free_trial_days: freeTrial,
                         has_api_access: document.getElementById('planApiAccess').checked,
                         has_priority_support: document.getElementById('planPrioritySupport').checked,
                         has_advanced_analytics: document.getElementById('planAdvancedAnalytics').checked
@@ -1323,6 +1347,8 @@
                 document.getElementById('planPrice').value = '';
                 document.getElementById('planMaxRequests').value = '';
                 document.getElementById('planMaxTokens').value = '';
+                document.getElementById('planFreeRequests').value = '';
+                document.getElementById('planFreeTrial').value = '';
                 document.getElementById('planApiAccess').checked = false;
                 document.getElementById('planPrioritySupport').checked = false;
                 document.getElementById('planAdvancedAnalytics').checked = false;
@@ -1350,6 +1376,8 @@
                 document.getElementById('editPlanInterval').value = plan.interval;
                 document.getElementById('editPlanMaxRequests').value = plan.max_requests_per_interval;
                 document.getElementById('editPlanMaxTokens').value = plan.max_tokens_per_request;
+                document.getElementById('editPlanFreeRequests').value = plan.free_requests_limit || 0;
+                document.getElementById('editPlanFreeTrial').value = plan.free_trial_days || 0;
                 document.getElementById('editPlanApiAccess').checked = plan.has_api_access;
                 document.getElementById('editPlanPrioritySupport').checked = plan.has_priority_support;
                 document.getElementById('editPlanAdvancedAnalytics').checked = plan.has_advanced_analytics;
@@ -1370,6 +1398,8 @@
                         currency: 'USD',
                         max_requests_per_interval: parseInt(document.getElementById('editPlanMaxRequests').value),
                         max_tokens_per_request: parseInt(document.getElementById('editPlanMaxTokens').value),
+                        free_requests_limit: parseInt(document.getElementById('editPlanFreeRequests').value) || 0,
+                        free_trial_days: parseInt(document.getElementById('editPlanFreeTrial').value) || 0,
                         has_api_access: document.getElementById('editPlanApiAccess').checked,
                         has_priority_support: document.getElementById('editPlanPrioritySupport').checked,
                         has_advanced_analytics: document.getElementById('editPlanAdvancedAnalytics').checked
