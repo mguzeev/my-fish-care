@@ -10,7 +10,9 @@ from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_active_user
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.paddle import paddle_client
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
@@ -66,6 +68,7 @@ class BillingAccountResponse(BaseModel):
 	free_requests_used: int
 	free_trial_days: int
 	trial_started_at: Optional[str]
+	checkout_url: Optional[str] = None
 
 
 class UsageSummaryResponse(BaseModel):
@@ -165,13 +168,59 @@ async def subscribe(
 		ba = BillingAccount(organization_id=current_user.organization_id)
 		db.add(ba)
 
+	checkout_url: Optional[str] = None
+
+	if settings.paddle_billing_enabled:
+		if not plan.paddle_price_id:
+			raise HTTPException(status_code=400, detail="Plan is missing paddle_price_id")
+
+		# Create Paddle customer if missing
+		if not ba.paddle_customer_id:
+			customer = await paddle_client.create_customer(
+				email=current_user.email,
+				name=current_user.full_name or current_user.email,
+			)
+			ba.paddle_customer_id = customer.get("id")
+			if not ba.paddle_customer_id:
+				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
+
+		# Create Paddle subscription
+		subscription = await paddle_client.create_subscription(
+			customer_id=ba.paddle_customer_id,
+			price_id=plan.paddle_price_id,
+		)
+		subscription_id = subscription.get("id") if isinstance(subscription, dict) else None
+		if not subscription_id:
+			raise HTTPException(status_code=502, detail="Failed to create Paddle subscription")
+
+		ba.paddle_subscription_id = subscription_id
+		# Capture next billing date if provided
+		next_bill = None
+		for key in ("next_billed_at", "next_billing_date"):
+			next_bill = subscription.get(key) if isinstance(subscription, dict) else None
+			if next_bill:
+				break
+		if next_bill:
+			try:
+				ba.next_billing_date = datetime.fromisoformat(str(next_bill).replace("Z", "+00:00"))
+			except ValueError:
+				pass
+
+		# Some Paddle responses include hosted url; surface if present
+		for key in ("url", "checkout_url", "hosted_page_url"):
+			if isinstance(subscription, dict) and subscription.get(key):
+				checkout_url = subscription.get(key)
+				break
+
+	# Update local subscription state
 	ba.subscription_plan_id = plan.id
 	ba.subscription_status = SubscriptionStatus.ACTIVE
 	ba.subscription_start_date = datetime.utcnow()
 	await db.commit()
 	await db.refresh(ba)
 
-	return await get_billing_account(current_user, db)
+	account = await get_billing_account(current_user, db)
+	return account.model_copy(update={"checkout_url": checkout_url})
 
 
 @router.post("/cancel", response_model=BillingAccountResponse)

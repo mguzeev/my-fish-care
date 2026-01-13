@@ -28,12 +28,8 @@
    - Update __repr__/schema comments if needed.
 
 3) Checkout/subscribe flow
-   - Introduce backend endpoint (e.g., POST /billing/checkout or extend /billing/subscribe) that:
-     a) Validates plan and its paddle_price_id.
-     b) Creates/gets Paddle customer for current user/org and stores paddle_customer_id.
-     c) Creates subscription via Paddle (or creates a hosted checkout link if using "Transactions" checkout) and stores paddle_subscription_id, subscription_plan_id, trial dates.
-     d) Returns checkout_url (hosted link) to the frontend; handle sandbox vs production URLs.
-   - Wire app/core/paddle.PaddleClient into this flow; add dependency injection for testing.
+   - PARTIAL: /billing/subscribe now creates Paddle customer+subscription when paddle_billing_enabled and plan has paddle_price_id, storing paddle IDs and returning checkout_url if Paddle response contains one.
+   - Remaining: support hosted checkout links explicitly (Paddle Transactions), and add dependency-injection/mocking for testing.
 
 4) Webhook verification + handling
    - Verify HMAC signatures using paddle_webhook_secret (timestamp + payload) and enforce a max age window.
