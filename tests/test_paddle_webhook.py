@@ -1,9 +1,15 @@
 """Tests for Paddle webhook handlers."""
+import json
+import hmac
+import hashlib
+from datetime import datetime, timezone
+
 import pytest
 from decimal import Decimal
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.billing import BillingAccount, SubscriptionStatus
 from app.models.organization import Organization
 
@@ -268,4 +274,116 @@ async def test_paddle_webhook_subscription_resumed(
     
     # Verify account remains ACTIVE
     await db_session.refresh(ba)
+    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+
+
+def _sign_payload(raw_body: str, secret: str):
+    timestamp = datetime.now(timezone.utc).isoformat()
+    message = f"{timestamp}:{raw_body}".encode()
+    signature = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    return timestamp, signature
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_signature_valid(client: AsyncClient, monkeypatch):
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+
+    body = {"type": "subscription_updated", "data": {"id": "sub_x", "status": "active"}}
+    raw = json.dumps(body)
+    ts, sig = _sign_payload(raw, secret)
+
+    response = await client.post(
+        "/webhooks/paddle",
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "paddle-signature": sig,
+            "paddle-timestamp": ts,
+        },
+    )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_signature_invalid(client: AsyncClient, monkeypatch):
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+
+    body = {"type": "subscription_updated", "data": {"id": "sub_x", "status": "active"}}
+    raw = json.dumps(body)
+    ts = datetime.now(timezone.utc).isoformat()
+
+    response = await client.post(
+        "/webhooks/paddle",
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "paddle-signature": "bad-signature",
+            "paddle-timestamp": ts,
+        },
+    )
+
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+
+    org = Organization(name="Test Org", slug="test-org")
+    db_session.add(org)
+    await db_session.commit()
+    await db_session.refresh(org)
+
+    ba = BillingAccount(
+        organization_id=org.id,
+        paddle_subscription_id="sub_123",
+        subscription_status=SubscriptionStatus.ACTIVE,
+    )
+    db_session.add(ba)
+    await db_session.commit()
+    await db_session.refresh(ba)
+
+    body = {
+        "type": "subscription_updated",
+        "data": {"id": "sub_123", "status": "paused"},
+        "event_id": "evt_1",
+    }
+    raw = json.dumps(body)
+    ts, sig = _sign_payload(raw, secret)
+
+    # First delivery
+    response = await client.post(
+        "/webhooks/paddle",
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "paddle-signature": sig,
+            "paddle-timestamp": ts,
+        },
+    )
+    assert response.status_code == 200
+
+    await db_session.refresh(ba)
+    # paused maps to ACTIVE; event id stored
+    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    assert ba.last_webhook_event_id == "evt_1"
+
+    # Second delivery with same event id should be ignored
+    response2 = await client.post(
+        "/webhooks/paddle",
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "paddle-signature": sig,
+            "paddle-timestamp": ts,
+        },
+    )
+    assert response2.status_code == 200
+
+    await db_session.refresh(ba)
+    assert ba.last_webhook_event_id == "evt_1"
     assert ba.subscription_status == SubscriptionStatus.ACTIVE

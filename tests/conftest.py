@@ -1,4 +1,6 @@
 import os
+import sys
+import types
 import asyncio
 import pytest
 from httpx import AsyncClient
@@ -9,6 +11,129 @@ from sqlalchemy.pool import StaticPool
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+
+
+def _install_paddle_stub():
+    """Install a lightweight paddle_billing stub if SDK is missing (tests only)."""
+    if "paddle_billing" in sys.modules:
+        return
+    try:
+        import paddle_billing  # type: ignore
+        return  # SDK available
+    except ModuleNotFoundError:
+        pass
+
+    stub = types.ModuleType("paddle_billing")
+
+    class Environment:
+        SANDBOX = "sandbox"
+        PRODUCTION = "production"
+
+    class Options:
+        def __init__(self, environment=None):
+            self.environment = environment
+
+    class _Resource:
+        def __init__(self, name: str):
+            self._name = name
+
+        def create(self, operation):
+            return {"id": f"{self._name}_id", "operation": operation.__dict__, "url": "https://example.com/checkout"}
+
+        def get(self, obj_id):
+            return {"id": obj_id}
+
+        def list(self, *args, **kwargs):
+            return []
+
+        def update(self, obj_id, operation):
+            return {"id": obj_id, "operation": operation.__dict__}
+
+        def cancel(self, obj_id, operation):
+            return {"id": obj_id, "operation": operation.__dict__}
+
+        def pause(self, obj_id, operation):
+            return {"id": obj_id, "operation": operation.__dict__}
+
+        def resume(self, obj_id, operation):
+            return {"id": obj_id, "operation": operation.__dict__}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            self.customers = _Resource("customer")
+            self.subscriptions = _Resource("subscription")
+            self.prices = _Resource("price")
+            self.products = _Resource("product")
+            self.transactions = _Resource("transaction")
+
+    stub.Client = Client
+    stub.Environment = Environment
+    stub.Options = Options
+
+    # Entities.Shared.Money
+    entities_mod = types.ModuleType("paddle_billing.Entities")
+    shared_mod = types.ModuleType("paddle_billing.Entities.Shared")
+
+    class Money:
+        def __init__(self, amount, currency_code):
+            self.amount = amount
+            self.currency_code = currency_code
+
+    shared_mod.Money = Money
+    entities_mod.Shared = shared_mod
+
+    # Resources and Operations
+    resources_mod = types.ModuleType("paddle_billing.Resources")
+
+    def _ops_module(name: str):
+        mod = types.ModuleType(f"paddle_billing.Resources.{name}")
+        ops = types.ModuleType(f"paddle_billing.Resources.{name}.Operations")
+
+        class _BaseOp:
+            def __init__(self, **kwargs):
+                self.__dict__.update(kwargs)
+
+        class Operations:
+            CreateCustomer = _BaseOp
+            CreateSubscription = _BaseOp
+            UpdateSubscription = _BaseOp
+            CancelSubscription = _BaseOp
+            PauseSubscription = _BaseOp
+            ResumeSubscription = _BaseOp
+            ListPrices = _BaseOp
+            CreatePrice = _BaseOp
+            ListProducts = _BaseOp
+            CreateTransaction = _BaseOp
+
+        ops.Operations = Operations
+        mod.Operations = Operations
+        return mod, ops
+
+    customers_mod, customers_ops = _ops_module("Customers")
+    subscriptions_mod, subscriptions_ops = _ops_module("Subscriptions")
+    prices_mod, prices_ops = _ops_module("Prices")
+    products_mod, products_ops = _ops_module("Products")
+    transactions_mod, transactions_ops = _ops_module("Transactions")
+
+    resources_mod.Customers = customers_mod
+    resources_mod.Subscriptions = subscriptions_mod
+    resources_mod.Prices = prices_mod
+    resources_mod.Products = products_mod
+    resources_mod.Transactions = transactions_mod
+
+    # Register modules in sys.modules
+    sys.modules["paddle_billing"] = stub
+    sys.modules["paddle_billing.Entities"] = entities_mod
+    sys.modules["paddle_billing.Entities.Shared"] = shared_mod
+    sys.modules["paddle_billing.Resources"] = resources_mod
+    sys.modules["paddle_billing.Resources.Customers"] = customers_ops
+    sys.modules["paddle_billing.Resources.Subscriptions"] = subscriptions_ops
+    sys.modules["paddle_billing.Resources.Prices"] = prices_ops
+    sys.modules["paddle_billing.Resources.Products"] = products_ops
+    sys.modules["paddle_billing.Resources.Transactions"] = transactions_ops
+
+
+_install_paddle_stub()
 
 from app.core.database import Base, get_db, AsyncSessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
