@@ -100,11 +100,11 @@ class UsageSummaryResponse(BaseModel):
 	cost: Decimal
 
 
-@router.get("/account", response_model=BillingAccountResponse)
-async def get_billing_account(
-	current_user: User = Depends(get_current_active_user),
-	db: AsyncSession = Depends(get_db),
-):
+async def _get_billing_account_response(
+	current_user: User,
+	db: AsyncSession,
+) -> BillingAccountResponse:
+	"""Helper function to get billing account response (without FastAPI dependencies)."""
 	if not current_user.organization_id:
 		raise HTTPException(status_code=404, detail="User has no organization")
 
@@ -138,6 +138,15 @@ async def get_billing_account(
 		free_trial_days=plan.free_trial_days if plan else 0,
 		trial_started_at=ba.trial_started_at.isoformat() if ba.trial_started_at else None,
 	)
+
+
+@router.get("/account", response_model=BillingAccountResponse)
+async def get_billing_account(
+	current_user: User = Depends(get_current_active_user),
+	db: AsyncSession = Depends(get_db),
+):
+	"""Get billing account (FastAPI endpoint)."""
+	return await _get_billing_account_response(current_user, db)
 
 
 @router.get("/usage", response_model=UsageSummaryResponse)
@@ -258,7 +267,7 @@ async def subscribe(
 	await db.commit()
 	await db.refresh(ba)
 
-	account = await get_billing_account(current_user, db)
+	account = await _get_billing_account_response(current_user, db)
 	return account.model_copy(update={"checkout_url": checkout_url})
 
 

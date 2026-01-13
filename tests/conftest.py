@@ -12,6 +12,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
 os.environ.setdefault("PADDLE_WEBHOOK_SECRET", "test-paddle-webhook-secret")
+os.environ.setdefault("PADDLE_BILLING_ENABLED", "false")  # Disable Paddle for tests
 
 
 def _install_paddle_stub():
@@ -136,16 +137,8 @@ def _install_paddle_stub():
 
 _install_paddle_stub()
 
-from app.core.database import Base, get_db, AsyncSessionLocal  # noqa: E402
-from app.main import app  # noqa: E402
-from app.core.security import get_password_hash, create_access_token  # noqa: E402
-from app.models.user import User  # noqa: E402
-from app.models.agent import Agent  # noqa: E402
-from app.models.llm_model import LLMModel  # noqa: E402
-
-
+# Must be created before importing app, so tracker gets the test session maker
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
-
 
 # Async SQLite engine with shared memory for all sessions
 engine = create_async_engine(
@@ -156,12 +149,28 @@ engine = create_async_engine(
     poolclass=StaticPool,
 )
 
-# Session factory bound to the test engine
+# Session factory bound to the test engine - MUST be created BEFORE importing app
 TestingSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+# Override AsyncSessionLocal BEFORE importing app, so tracker middleware uses test sessions
+import app.core.database as db_module
+db_module.AsyncSessionLocal = TestingSessionLocal
+
+from app.core.database import Base, get_db, AsyncSessionLocal  # noqa: E402
+from app.main import app as fastapi_app  # noqa: E402
+from app.usage.tracker import UsageMiddleware  # noqa: E402
+from app.core.security import get_password_hash, create_access_token  # noqa: E402
+from app.models.user import User  # noqa: E402
+from app.models.agent import Agent  # noqa: E402
+from app.models.llm_model import LLMModel  # noqa: E402
+
+# Also override in tracker to make sure it uses the test session maker
+import app.usage.tracker as tracker_module
+tracker_module.AsyncSessionLocal = TestingSessionLocal
 
 
 @pytest.fixture(scope="session")
@@ -211,14 +220,14 @@ async def client(monkeypatch, setup_database):
             finally:
                 await session.rollback()
 
-    app.dependency_overrides[get_db] = override_get_db
+    fastapi_app.dependency_overrides[get_db] = override_get_db
     # Ensure other modules using AsyncSessionLocal pick up the test session maker
     monkeypatch.setattr("app.core.database.AsyncSessionLocal", TestingSessionLocal)
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=fastapi_app, base_url="http://test") as ac:
         yield ac
 
-    app.dependency_overrides.clear()
+    fastapi_app.dependency_overrides.clear()
 
 
 @pytest.fixture()
@@ -329,5 +338,5 @@ async def admin_client(db_session, client: AsyncClient):
     token = create_access_token({"sub": admin_user.id})
     
     # Create a new client with admin headers
-    async with AsyncClient(app=app, base_url="http://test", headers={"Authorization": f"Bearer {token}"}) as ac:
+    async with AsyncClient(app=fastapi_app, base_url="http://test", headers={"Authorization": f"Bearer {token}"}) as ac:
         yield ac
