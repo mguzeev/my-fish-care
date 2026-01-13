@@ -963,7 +963,12 @@ async def validate_paddle_config(
         return {
             "status": "disabled",
             "message": "Paddle billing is disabled",
-            "enabled": False
+            "enabled": False,
+            "environment": None,
+            "vendor_id": None,
+            "api_key_configured": False,
+            "webhook_secret_configured": False,
+            "validation_errors": []
         }
     
     # Check if required settings are present
@@ -978,7 +983,11 @@ async def validate_paddle_config(
             "status": "error",
             "message": f"Missing Paddle settings: {', '.join(missing_settings)}",
             "enabled": True,
-            "missing_settings": missing_settings
+            "environment": settings.paddle_environment,
+            "vendor_id": settings.paddle_vendor_id,
+            "api_key_configured": bool(settings.paddle_api_key),
+            "webhook_secret_configured": bool(settings.paddle_webhook_secret),
+            "validation_errors": missing_settings
         }
     
     # Try to validate by creating a client
@@ -991,14 +1000,21 @@ async def validate_paddle_config(
             "message": "Paddle configuration is valid",
             "enabled": True,
             "environment": settings.paddle_environment,
-            "vendor_id": settings.paddle_vendor_id
+            "vendor_id": settings.paddle_vendor_id,
+            "api_key_configured": bool(settings.paddle_api_key),
+            "webhook_secret_configured": bool(settings.paddle_webhook_secret),
+            "validation_errors": []
         }
     except Exception as e:
         return {
             "status": "error",
             "message": f"Failed to validate Paddle config: {str(e)}",
             "enabled": True,
-            "error": str(e)
+            "environment": settings.paddle_environment,
+            "vendor_id": settings.paddle_vendor_id,
+            "api_key_configured": bool(settings.paddle_api_key),
+            "webhook_secret_configured": bool(settings.paddle_webhook_secret),
+            "validation_errors": [str(e)]
         }
 
 

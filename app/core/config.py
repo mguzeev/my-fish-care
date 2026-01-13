@@ -2,6 +2,7 @@
 import logging
 from functools import lru_cache
 from typing import Optional
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -56,10 +57,10 @@ class Settings(BaseSettings):
     
     # Paddle
     paddle_billing_enabled: bool = False
-    paddle_api_key: Optional[str] = None
-    paddle_webhook_secret: Optional[str] = None
-    paddle_vendor_id: Optional[str] = None
-    paddle_environment: str = "sandbox"  # sandbox or production
+    paddle_api_key: Optional[str] = Field(default=None, alias="PADDLE_API_KEY")
+    paddle_webhook_secret: Optional[str] = Field(default=None, alias="PADDLE_WEBHOOK_SECRET")
+    paddle_vendor_id: Optional[str] = Field(default=None, alias="PADDLE_VENDOR_ID")
+    paddle_environment: str = Field(default="sandbox", alias="PADDLE_ENVIRONMENT")  # sandbox or production
     
     # Rate Limiting
     rate_limit_per_minute: int = 60
@@ -73,6 +74,7 @@ class Settings(BaseSettings):
         import os as _os
         env_file = ".env.local" if _os.path.exists(".env.local") else ".env"
         case_sensitive = False
+        populate_by_name = True  # Allow both field name and alias
 
 
 @lru_cache()
