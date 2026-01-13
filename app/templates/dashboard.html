@@ -5,202 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=2.0">
-    <style>
-        .dashboard-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
-        
-        .dashboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        
-        .dashboard-header h1 {
-            color: var(--primary-color);
-            margin: 0;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .user-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: var(--gradient);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 1.2rem;
-        }
-        
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin-bottom: 2rem;
-        }
-        
-        .dashboard-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .dashboard-card h2 {
-            color: var(--primary-color);
-            margin-top: 0;
-            margin-bottom: 1rem;
-            font-size: 1.25rem;
-        }
-        
-        .stat-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .stat-item:last-child {
-            border-bottom: none;
-        }
-        
-        .stat-label {
-            color: #666;
-        }
-        
-        .stat-value {
-            font-weight: 600;
-            color: var(--text-color);
-        }
-        
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-color);
-            font-weight: 500;
-        }
-        
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-        
-        .form-group input:focus,
-        .form-group select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-        }
-        
-        .btn-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .btn-save {
-            background: var(--gradient);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: transform 0.2s;
-        }
-        
-        .btn-save:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn-cancel {
-            background: #f5f5f5;
-            color: var(--text-color);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-        
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 2rem;
-            color: #666;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.875rem;
-            font-weight: 600;
-        }
-        
-        .badge-active {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-inactive {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .badge-verified {
-            background: #cce5ff;
-            color: #004085;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/dashboard.css?v=1.0">
 </head>
 <body>
     <header>
         <nav>
             <a href="/" class="logo">{{ t('site_name') }}</a>
             <div class="nav-right">
-                <a href="/admin" id="adminLink" class="btn btn-primary" style="display: none; margin-right: 1rem;">Admin Panel</a>
+                <a href="/admin" id="adminLink" class="btn btn-primary admin-link hidden">Admin Panel</a>
                 <select class="lang-selector" id="lang-selector" onchange="changeLanguage(this.value)">
                     <option value="en" {% if language == 'en' %}selected{% endif %}>English</option>
                     <option value="ru" {% if language == 'ru' %}selected{% endif %}>Русский</option>
@@ -219,42 +31,42 @@
             <div class="user-info">
                 <div class="user-avatar" id="userAvatar">U</div>
                 <div>
-                    <div style="font-weight: 600;" id="userName">Loading...</div>
-                    <div style="color: #666; font-size: 0.875rem;" id="userEmail"></div>
+                    <div class="text-strong" id="userName">Loading...</div>
+                    <div class="text-muted" id="userEmail"></div>
                 </div>
             </div>
         </div>
 
         <!-- Agent Query Section -->
-        <div class="dashboard-card" style="margin-bottom: 2rem;">
+        <div class="dashboard-card card-spaced">
             <h2>AI Agent</h2>
             <div class="form-group">
                 <label>Select Agent</label>
-                <select id="agentSelect" class="agent-select">
+                <select id="agentSelect" class="form-control">
                     <option value="">Loading agents...</option>
                 </select>
             </div>
             <div class="form-group">
                 <label>Your Query</label>
-                <textarea id="queryInput" rows="4" placeholder="Enter your query here..." style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; resize: vertical;"></textarea>
+                <textarea id="queryInput" rows="4" placeholder="Enter your query here..." class="form-control textarea-control"></textarea>
             </div>
             <div class="form-group">
-                <button onclick="sendQuery()" class="btn btn-primary" id="sendQueryBtn" style="width: 100%;">Send Query</button>
+                <button onclick="sendQuery()" class="btn btn-primary btn-full" id="sendQueryBtn">Send Query</button>
             </div>
             
-            <div id="queryResponse" class="hidden" style="margin-top: 1.5rem;">
-                <h3 style="color: var(--primary-color); font-size: 1rem; margin-bottom: 0.5rem;">Response:</h3>
-                <div id="responseContent" style="background: #f8f9fa; padding: 1rem; border-radius: 8px; white-space: pre-wrap; color: var(--text-color);"></div>
+            <div id="queryResponse" class="card-section hidden">
+                <h3 class="section-title">Response:</h3>
+                <div id="responseContent" class="response-box"></div>
             </div>
             
             <!-- Usage Info -->
-            <div id="usageInfo" class="hidden" style="margin-top: 1rem; padding: 1rem; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+            <div id="usageInfo" class="info-banner hidden">
+                <div class="info-banner__row">
                     <div>
-                        <strong style="color: #1976D2;">Usage:</strong>
-                        <span id="usageText" style="margin-left: 0.5rem; color: #424242;"></span>
+                        <strong class="info-banner__title">Usage:</strong>
+                        <span id="usageText" class="info-banner__text"></span>
                     </div>
-                    <button id="upgradeBtn" class="hidden" onclick="goToUpgrade()" style="padding: 0.5rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; transition: transform 0.2s;">
+                    <button id="upgradeBtn" class="btn btn-upgrade hidden" type="button" onclick="goToUpgrade()">
                         Upgrade Now 🚀
                     </button>
                 </div>
@@ -302,7 +114,7 @@
                         <span class="stat-label">Language:</span>
                         <span class="stat-value" id="profileLocale">-</span>
                     </div>
-                    <button onclick="editProfile()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Edit Profile</button>
+                    <button onclick="editProfile()" class="btn btn-primary btn-full card-actions">Edit Profile</button>
                 </div>
                 
                 <div id="profileEdit" class="hidden">
@@ -332,9 +144,9 @@
             <!-- Usage Metrics Card -->
             <div class="dashboard-card">
                 <h2>Usage Metrics</h2>
-                <div class="form-group" style="margin-bottom: 1rem;">
+                <div class="form-group compact">
                     <label>Last</label>
-                    <select id="usageRangeDays" onchange="loadUsageMetrics()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+                    <select id="usageRangeDays" class="form-control" onchange="loadUsageMetrics()">
                         <option value="7">7 Days</option>
                         <option value="30" selected>30 Days</option>
                         <option value="60">60 Days</option>
@@ -351,24 +163,24 @@
             </div>
         </div>
 
-        <!-- Organization Card -->
-        <div class="dashboard-card" style="margin-bottom: 2rem;">
-            <h2>Organization</h2>
-            <div id="organizationInfo" class="loading">Loading organization...</div>
-        </div>
-
         <!-- Activity Log Card -->
-        <div class="dashboard-card" style="margin-bottom: 2rem;">
-            <h2>Recent Activity</h2>
-            <div class="form-group" style="margin-bottom: 1rem;">
-                <label>Show Last</label>
-                <select id="activityLimit" onchange="loadActivityLog()" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px;">
+        <div class="dashboard-card card-spaced">
+            <div class="card-header">
+                <h2>Recent Activity</h2>
+                <button id="activityToggleBtn" class="btn btn-secondary" type="button" onclick="toggleActivityLog()">Show Activity Log</button>
+            </div>
+            <div class="form-group inline-group">
+                <label for="activityLimit">Show Last</label>
+                <select id="activityLimit" class="form-control" onchange="handleActivityLimitChange()">
                     <option value="5">5 Activities</option>
                     <option value="10" selected>10 Activities</option>
                     <option value="20">20 Activities</option>
                 </select>
             </div>
-            <div id="activityLog" class="loading">Loading activity...</div>
+            <div id="activityLogSection" class="hidden">
+                <div id="activityLog" class="activity-log loading">Loading activity...</div>
+            </div>
+        </div>
 
         <!-- Security Section -->
         <div class="dashboard-card">
@@ -399,6 +211,7 @@
 
     <script>
         let currentUser = null;
+        let activityLogLoaded = false;
         const API_BASE = '';
 
         // Get auth tokens from URL or localStorage
@@ -489,7 +302,7 @@
 
                 // Show admin link if user is superuser
                 if (user.is_superuser) {
-                    document.getElementById('adminLink').style.display = 'inline-block';
+                    document.getElementById('adminLink').classList.remove('hidden');
                 }
 
                 // Update profile view
@@ -611,13 +424,15 @@
             const days = document.getElementById('usageRangeDays').value || 30;
             
             try {
-                container.innerHTML = '<div class="loading">Loading metrics...</div>';
+                container.className = 'loading';
+                container.textContent = 'Loading metrics...';
                 const data = await apiCall(`/billing/usage?days=${days}`);
                 
                 const requestsPerDay = (data.requests / days).toFixed(1);
                 const tokensPerDay = (data.tokens / days).toFixed(0);
                 const costPerDay = (data.cost / days).toFixed(4);
                 
+                container.className = '';
                 container.innerHTML = `
                     <div class="stat-item">
                         <span class="stat-label">Total Requests:</span>
@@ -643,12 +458,13 @@
                         <span class="stat-label">Avg Cost/Day:</span>
                         <span class="stat-value">$${costPerDay}</span>
                     </div>
-                    <div style="color: #666; font-size: 0.875rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0;">
+                    <div class="meta-note">
                         Period: ${new Date(data.from_date).toLocaleDateString()} - ${new Date(data.to_date).toLocaleDateString()}
                     </div>
                 `;
             } catch (error) {
-                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load metrics: ${error.message}</div>`;
+                container.className = '';
+                container.innerHTML = `<div class="text-error padded">Failed to load metrics: ${error.message}</div>`;
             }
         }
 
@@ -657,14 +473,15 @@
             const container = document.getElementById('subscriptionInfo');
             
             try {
-                container.innerHTML = '<div class="loading">Loading subscription...</div>';
+                container.className = 'loading';
+                container.textContent = 'Loading subscription...';
                 const data = await apiCall('/billing/account');
                 
                 let statusBadge = '';
                 if (data.status === 'active') {
                     statusBadge = '<span class="badge badge-active">Active</span>';
                 } else if (data.status === 'trialing') {
-                    statusBadge = '<span class="badge" style="background: #fff3cd; color: #856404;">Trial Period</span>';
+                    statusBadge = '<span class="badge badge-trial">Trial Period</span>';
                 } else if (data.status === 'canceled') {
                     statusBadge = '<span class="badge badge-inactive">Canceled</span>';
                 } else if (data.status === 'past_due') {
@@ -695,6 +512,7 @@
                     </div>`;
                 }
 
+                container.className = '';
                 container.innerHTML = `
                     <div class="stat-item">
                         <span class="stat-label">Plan:</span>
@@ -714,10 +532,13 @@
                         <span class="stat-label">Total Spent:</span>
                         <span class="stat-value">$${data.total_spent}</span>
                     </div>
-                    <button onclick="goToUpgrade()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">View Plans & Upgrade</button>
+                    <div class="card-actions">
+                        <button onclick="goToUpgrade()" class="btn btn-primary btn-full">View Plans & Upgrade</button>
+                    </div>
                 `;
             } catch (error) {
-                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load subscription: ${error.message}</div>`;
+                container.className = '';
+                container.innerHTML = `<div class="text-error padded">Failed to load subscription: ${error.message}</div>`;
             }
         }
 
@@ -828,106 +649,80 @@
             window.location.href = '/billing/upgrade';
         }
 
-        // Load organization info
-        async function loadOrganization() {
-            const container = document.getElementById('organizationInfo');
-            
-            if (!currentUser || !currentUser.organization_id) {
-                container.innerHTML = '<div style="color: #666;">No organization assigned</div>';
-                return;
-            }
-            
-            try {
-                container.innerHTML = '<div class="loading">Loading organization...</div>';
-                const orgData = await apiCall(`/auth/organization`);
-                
-                const roleNames = { 'user': 'Member', 'admin': 'Admin', 'owner': 'Owner' };
-                
-                container.innerHTML = `
-                    <div class="stat-item">
-                        <span class="stat-label">Organization:</span>
-                        <span class="stat-value">${orgData.name || '-'}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Your Role:</span>
-                        <span class="stat-value">${roleNames[currentUser.role] || currentUser.role}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Slug:</span>
-                        <span class="stat-value">${orgData.slug || '-'}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Members:</span>
-                        <span class="stat-value">${orgData.users_count || 1}</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Status:</span>
-                        ${orgData.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>'}
-                    </div>
-                    ${currentUser.role === 'owner' || currentUser.role === 'admin' ? 
-                        '<button onclick="goToOrgSettings()" class="btn btn-primary" style="margin-top: 1rem; width: 100%;">Manage Organization</button>' : ''}
-                `;
-            } catch (error) {
-                // If org endpoint doesn't exist, still show basic org info
-                const roleNames = { 'user': 'Member', 'admin': 'Admin', 'owner': 'Owner' };
-                container.innerHTML = `
-                    <div class="stat-item">
-                        <span class="stat-label">Your Role:</span>
-                        <span class="stat-value">${roleNames[currentUser.role] || currentUser.role}</span>
-                    </div>
-                    <div style="color: #999; font-size: 0.875rem; margin-top: 1rem;">Organization details: ${error.message}</div>
-                `;
-            }
-        }
-
         // Load activity log
         async function loadActivityLog() {
             const container = document.getElementById('activityLog');
             const limit = document.getElementById('activityLimit').value || 10;
             
             try {
-                container.innerHTML = '<div class="loading">Loading activity...</div>';
+                container.className = 'activity-log loading';
+                container.textContent = 'Loading activity...';
                 const data = await apiCall(`/billing/usage-records?limit=${limit}&days=30`);
                 
                 if (!data || data.length === 0) {
-                    container.innerHTML = '<div style="color: #666; padding: 1rem;">No activity recorded yet</div>';
+                    container.className = 'activity-log';
+                    container.innerHTML = '<div class="empty-state">No activity recorded yet</div>';
                     return;
                 }
                 
-                let html = '<div style="font-size: 0.875rem;">';
+                let html = '<div class="activity-log">';
                 data.forEach(record => {
                     const date = new Date(record.created_at).toLocaleDateString() + ' ' + new Date(record.created_at).toLocaleTimeString();
                     const method = record.method || 'REQUEST';
-                    const methodColor = method === 'POST' ? '#2196F3' : method === 'GET' ? '#4CAF50' : method === 'DELETE' ? '#f44336' : '#FF9800';
+                    const methodClass = `method-${method.toLowerCase()}`;
+                    const statusClass = record.status_code >= 400 ? 'status-error' : 'status-ok';
                     
                     html += `
-                        <div style="padding: 0.75rem; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-                            <div style="flex: 1;">
-                                <div style="margin-bottom: 0.25rem;">
-                                    <span style="background: ${methodColor}; color: white; padding: 0.25rem 0.5rem; border-radius: 4px; font-weight: 600; font-size: 0.75rem;">${method}</span>
-                                </div>
-                                <div style="margin-top: 0.25rem; color: #333; font-family: monospace; font-size: 0.875rem; word-break: break-all;">${record.endpoint}</div>
-                                <div style="font-size: 0.75rem; color: #999; margin-top: 0.25rem;">${date}</div>
-                                ${record.error_message ? `<div style="font-size: 0.75rem; color: #f44336; margin-top: 0.25rem;">Error: ${record.error_message}</div>` : ''}
+                        <div class="activity-entry">
+                            <div class="activity-entry__left">
+                                <div class="activity-method ${methodClass}">${method}</div>
+                                <div class="activity-endpoint">${record.endpoint}</div>
+                                <div class="activity-meta">${date}</div>
+                                ${record.error_message ? `<div class="activity-error">Error: ${record.error_message}</div>` : ''}
                             </div>
-                            <div style="text-align: right; white-space: nowrap;">
-                                <div style="color: ${record.status_code >= 400 ? '#f44336' : '#4CAF50'}; font-weight: 600;">${record.status_code}</div>
-                                <div style="font-size: 0.75rem; color: #999;">${record.response_time_ms}ms</div>
-                                ${record.total_tokens > 0 ? `<div style="font-size: 0.75rem; color: #666;">Tokens: ${record.total_tokens}</div>` : ''}
+                            <div class="activity-entry__right">
+                                <div class="activity-status ${statusClass}">${record.status_code}</div>
+                                <div class="activity-meta">${record.response_time_ms}ms</div>
+                                ${record.total_tokens > 0 ? `<div class="activity-meta">Tokens: ${record.total_tokens}</div>` : ''}
                             </div>
                         </div>
                     `;
                 });
                 html += '</div>';
+                container.className = '';
                 container.innerHTML = html;
             } catch (error) {
-                container.innerHTML = `<div style="color: #d32f2f; padding: 1rem;">Failed to load activity: ${error.message}</div>`;
+                container.className = '';
+                container.innerHTML = `<div class="text-error padded">Failed to load activity: ${error.message}</div>`;
+            }
+        }
+        
+        function toggleActivityLog() {
+            const section = document.getElementById('activityLogSection');
+            const button = document.getElementById('activityToggleBtn');
+            const isHidden = section.classList.contains('hidden');
+            
+            if (isHidden) {
+                section.classList.remove('hidden');
+                button.textContent = 'Hide Activity Log';
+                if (!activityLogLoaded) {
+                    loadActivityLog();
+                    activityLogLoaded = true;
+                }
+            } else {
+                section.classList.add('hidden');
+                button.textContent = 'Show Activity Log';
             }
         }
 
-        // Helper function to go to org settings
-        function goToOrgSettings() {
-            alert('Organization settings coming soon');
+        function handleActivityLimitChange() {
+            const section = document.getElementById('activityLogSection');
+            if (!section.classList.contains('hidden')) {
+                loadActivityLog();
+                activityLogLoaded = true;
+            } else {
+                activityLogLoaded = false;
+            }
         }
 
         // Logout
@@ -943,8 +738,6 @@
             await loadAgents();
             await loadUsageMetrics();
             await loadSubscription();
-            await loadOrganization();
-            await loadActivityLog();
         });
     </script>
 </body>
