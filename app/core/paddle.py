@@ -165,6 +165,25 @@ class PaddleClient:
         """Get transaction details."""
         transaction = self.client.transactions.get(transaction_id)
         return transaction.dict() if hasattr(transaction, 'dict') else transaction.__dict__
+
+    async def create_transaction_checkout(
+        self,
+        customer_id: str,
+        price_id: str,
+        quantity: int = 1,
+    ) -> Dict[str, Any]:
+        """Create a hosted checkout transaction as a fallback to surface checkout_url."""
+        operation = TransactionOperations.CreateTransaction(
+            customer_id=customer_id,
+            items=[
+                {
+                    "price_id": price_id,
+                    "quantity": quantity,
+                }
+            ],
+        )
+        transaction = self.client.transactions.create(operation)
+        return transaction.dict() if hasattr(transaction, 'dict') else transaction.__dict__
     
     def verify_webhook_signature(
         self,

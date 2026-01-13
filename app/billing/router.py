@@ -213,6 +213,17 @@ async def subscribe(
 				checkout_url = subscription.get(key)
 				break
 
+		# Fallback: create hosted checkout transaction if no checkout_url returned
+		if not checkout_url:
+			transaction = await paddle.create_transaction_checkout(
+				customer_id=ba.paddle_customer_id,
+				price_id=plan.paddle_price_id,
+			)
+			for key in ("url", "checkout_url", "hosted_page_url"):
+				if isinstance(transaction, dict) and transaction.get(key):
+					checkout_url = transaction.get(key)
+					break
+
 	# Update local subscription state
 	ba.subscription_plan_id = plan.id
 	ba.subscription_status = SubscriptionStatus.ACTIVE
