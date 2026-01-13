@@ -2488,7 +2488,7 @@
             
             try {
                 const response = await fetch('/admin/paddle/validate-config', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) {
@@ -2528,7 +2528,7 @@
             
             try {
                 const response = await fetch('/admin/plans/missing-price-ids', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to check price IDs');
@@ -2610,7 +2610,7 @@
                 const response = await fetch('/admin/plans/link-paddle', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Authorization': `Bearer ${getAuthToken()}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(payload)
@@ -2639,7 +2639,7 @@
             try {
                 const response = await fetch('/admin/plans/sync-paddle', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to sync plans');
@@ -2675,7 +2675,7 @@
             
             try {
                 const response = await fetch(url, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load billing accounts');
@@ -2714,7 +2714,7 @@
         async function viewBillingAccountDetails(accountId) {
             try {
                 const response = await fetch(`/admin/subscriptions/${accountId}/details`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load account details');
@@ -2778,7 +2778,7 @@
             
             try {
                 const response = await fetch('/admin/subscriptions/drift-detection', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to detect drift');
@@ -2818,7 +2818,7 @@
             try {
                 const response = await fetch('/admin/subscriptions/sync-paddle', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to sync accounts');
@@ -2844,7 +2844,7 @@
             try {
                 const response = await fetch('/admin/paddle/reconcile', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to reconcile');
@@ -2878,7 +2878,7 @@
             
             try {
                 const response = await fetch('/admin/paddle/billing-status', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to check status');
@@ -2910,7 +2910,7 @@
             try {
                 const response = await fetch('/admin/paddle/auto-backfill', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to backfill');
@@ -2952,7 +2952,7 @@
             
             try {
                 const response = await fetch(`/admin/webhooks/events?${params}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load webhook events');
@@ -2996,7 +2996,7 @@
         async function viewWebhookDetails(eventId) {
             try {
                 const response = await fetch(`/admin/webhooks/events/${eventId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load webhook details');
@@ -3052,7 +3052,7 @@
             try {
                 const response = await fetch(`/admin/webhooks/events/${eventId}/reprocess`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) {
@@ -3074,7 +3074,7 @@
             
             try {
                 const response = await fetch('/admin/webhooks/stats', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
                 if (!response.ok) throw new Error('Failed to load stats');
