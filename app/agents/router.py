@@ -1,5 +1,7 @@
 """Agent API endpoints."""
 from typing import AsyncGenerator, Optional
+from decimal import Decimal
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +15,12 @@ from app.models.agent import Agent
 from app.models.prompt import PromptVersion
 from app.models.user import User
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
+from app.models.usage import UsageRecord
 from app.policy.engine import engine as policy_engine
 
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
+logger = logging.getLogger(__name__)
 
 
 class AgentListResponse(BaseModel):
@@ -155,18 +159,55 @@ async def invoke_agent(
 
         return StreamingResponse(streamer(), media_type="text/plain")
 
-    output = await agent_runtime.run(agent, variables, prompt_version=prompt_version, stream=False)
+    output, usage_tokens = await agent_runtime.run(agent, variables, prompt_version=prompt_version, stream=False)
     
     # Increment usage counter after successful invocation
     await policy_engine.increment_usage(db, current_user)
+
+    # Persist detailed usage record with token counts
+    prompt_tokens = int(usage_tokens.get("prompt_tokens", 0)) if usage_tokens else 0
+    completion_tokens = int(usage_tokens.get("completion_tokens", 0)) if usage_tokens else 0
+    total_tokens = int(usage_tokens.get("total_tokens", 0)) if usage_tokens else 0
+
+    model_name = agent.llm_model.name if agent.llm_model else agent.model_name
+    cost_in = agent.llm_model.cost_per_1k_input_tokens if agent.llm_model else None
+    cost_out = agent.llm_model.cost_per_1k_output_tokens if agent.llm_model else None
+    cost_value = Decimal("0")
+    if cost_in is not None:
+        cost_value += Decimal(cost_in) * Decimal(prompt_tokens) / Decimal(1000)
+    if cost_out is not None:
+        cost_value += Decimal(cost_out) * Decimal(completion_tokens) / Decimal(1000)
+
+    try:
+        record = UsageRecord(
+            user_id=current_user.id,
+            endpoint=f"/agents/{agent_id}/invoke",
+            method="POST",
+            channel="api",
+            model_name=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            response_time_ms=0,
+            status_code=200,
+            cost=cost_value,
+            error_message=None,
+            meta=None,
+        )
+        db.add(record)
+        await db.commit()
+    except Exception as log_err:
+        await db.rollback()
+        logger.warning(f"Failed to persist usage record for agent {agent_id}: {log_err}")
     
     return AgentResponse(
         agent_id=agent_id,
         output=output,
-        model=agent.model_name,
+        model=model_name,
         usage=UsageInfo(
             free_remaining=usage_info["free_remaining"],
             paid_remaining=usage_info["paid_remaining"],
             should_upgrade=usage_info["should_upgrade"]
-        )
+        ),
+        usage_tokens=total_tokens
     )

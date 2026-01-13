@@ -135,8 +135,8 @@ class AgentRuntime:
 		model: str,
 		temperature: float,
 		max_tokens: int
-	) -> str:
-		"""Non-streaming completion."""
+	) -> tuple[str, dict]:
+		"""Non-streaming completion with usage metadata."""
 		logger.debug(f"Sending completion request to {model}")
 		response = await client.chat.completions.create(
 			model=model,
@@ -144,7 +144,13 @@ class AgentRuntime:
 			max_tokens=max_tokens,
 			messages=prompt.to_messages(),
 		)
-		return response.choices[0].message.content or ""
+		usage = response.usage or None
+		usage_info = {
+			"prompt_tokens": usage.prompt_tokens if usage else 0,
+			"completion_tokens": usage.completion_tokens if usage else 0,
+			"total_tokens": usage.total_tokens if usage else 0,
+		}
+		return (response.choices[0].message.content or "", usage_info)
 
 	async def _stream_completion(
 		self, 
