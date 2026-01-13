@@ -97,6 +97,8 @@ class BillingAccount(Base):
     # Paddle
     paddle_customer_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
     paddle_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
+    last_webhook_event_id: Mapped[Optional[str]] = mapped_column(String(150), index=True)
+    last_transaction_id: Mapped[Optional[str]] = mapped_column(String(150))
     
     # Current subscription
     subscription_plan_id: Mapped[Optional[int]] = mapped_column(
@@ -110,6 +112,8 @@ class BillingAccount(Base):
     subscription_start_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     subscription_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     trial_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    next_billing_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Balance and usage
     balance: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)

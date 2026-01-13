@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from typing import Optional
 from pathlib import Path
-from app.core.config import settings
+from app.core.config import settings, validate_paddle_settings
 from app.core.database import init_db, close_db
 from app.auth.router import router as auth_router
 from app.agents.router import router as agents_router
@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Startup
     logger.info("Starting application...")
+    validate_paddle_settings(settings)
     await init_db()
     
     # Start Telegram bot

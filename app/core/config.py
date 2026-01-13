@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     supported_locales: list[str] = ["en", "uk", "ru"]
     
     # Paddle
+    paddle_billing_enabled: bool = False
     paddle_api_key: Optional[str] = None
     paddle_webhook_secret: Optional[str] = None
     paddle_vendor_id: Optional[str] = None
@@ -79,3 +80,29 @@ def get_settings() -> Settings:
 
 # Global settings instance
 settings = get_settings()
+
+
+def validate_paddle_settings(current_settings: Settings) -> None:
+    """Fail fast if Paddle billing is enabled but required settings are missing."""
+    if not current_settings.paddle_billing_enabled:
+        return
+
+    missing = [
+        name
+        for name in (
+            "paddle_api_key",
+            "paddle_webhook_secret",
+        )
+        if not getattr(current_settings, name)
+    ]
+
+    if current_settings.paddle_environment not in {"sandbox", "production"}:
+        raise RuntimeError(
+            "Invalid paddle_environment; expected 'sandbox' or 'production'"
+        )
+
+    if missing:
+        missing_list = ", ".join(missing)
+        raise RuntimeError(
+            f"Paddle billing enabled but missing settings: {missing_list}"
+        )
