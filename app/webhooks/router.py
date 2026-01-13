@@ -30,16 +30,29 @@ PADDLE_STATUS_MAP = {
 
 
 # Event types that Paddle sends
-PADDLE_EVENTS = {
-    "subscription_created": "New subscription created",
-    "subscription_updated": "Subscription updated",
-    "subscription_cancelled": "Subscription cancelled",
-    "subscription_paused": "Subscription paused",
-    "subscription_resumed": "Subscription resumed",
-    "transaction_completed": "Transaction completed",
-    "transaction_billed": "Transaction billed",
-    "transaction_failed": "Transaction failed",
-    "transaction_cancelled": "Transaction cancelled",
+PADDLE_SUBSCRIPTION_EVENTS = {
+    "subscription.created",
+    "subscription.updated",
+    "subscription.cancelled",
+    "subscription.paused",
+    "subscription.resumed",
+    "transaction.completed",
+    "transaction.billed",
+    "transaction.failed",
+    "transaction.cancelled",
+}
+
+# Events to ignore (informational, no action needed)
+PADDLE_IGNORED_EVENTS = {
+    "product.created",
+    "product.updated",
+    "product.imported",
+    "price.created",
+    "price.updated",
+    "price.imported",
+    "customer.created",
+    "customer.updated",
+    "customer.imported",
 }
 
 
@@ -63,9 +76,29 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
         # Signature verification (optional if secret not set)
         if settings.paddle_webhook_secret:
-            signature = request.headers.get("paddle-signature") or request.headers.get("paddle-signature-hash")
-            timestamp_header = request.headers.get("paddle-timestamp") or request.headers.get("paddle-event-time")
+            # Try different header names for signature and timestamp (Paddle uses various formats)
+            signature = (
+                request.headers.get("paddle-signature")
+                or request.headers.get("paddle-signature-hash")
+                or request.headers.get("x-paddle-signature")
+            )
+            timestamp_header = (
+                request.headers.get("paddle-timestamp")
+                or request.headers.get("paddle-event-time")
+                or request.headers.get("x-paddle-timestamp")
+            )
+            
+            # If signature still not found, try case-insensitive lookup
             if not signature or not timestamp_header:
+                logger.debug(f"Available headers: {dict(request.headers)}")
+                for header_name, header_value in request.headers.items():
+                    if "signature" in header_name.lower():
+                        signature = header_value
+                    if "timestamp" in header_name.lower():
+                        timestamp_header = header_value
+            
+            if not signature or not timestamp_header:
+                logger.warning(f"Missing webhook signature or timestamp. Headers: {list(request.headers.keys())}")
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing webhook signature")
 
             if not verify_timestamp(timestamp_header):
@@ -84,7 +117,8 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
                 detail="Invalid JSON"
             )
         
-        event_type = body.get("type")
+        # Paddle uses both "type" and "event_type" depending on API version
+        event_type = body.get("event_type") or body.get("type")
         data = body.get("data", {})
         event_id = (
             body.get("event_id")
@@ -93,21 +127,29 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         )
         
         logger.info(f"Received Paddle webhook: {event_type} event_id={event_id}")
+        logger.debug(f"Webhook headers: {dict(request.headers)}")
         
-        # Handle different event types
-        if event_type == "subscription_created":
+        # Ignore events that don't require action
+        if event_type in PADDLE_IGNORED_EVENTS:
+            logger.info(f"Ignoring Paddle event: {event_type} (no action needed)")
+            return {"message": "Event acknowledged"}
+        
+        # Handle different event types (support both underscore and dot notation)
+        event_normalized = event_type.replace(".", "_") if event_type else ""
+        
+        if event_normalized in ("subscription_created", "subscription_activated"):
             return await handle_subscription_created(data, db, event_id)
-        elif event_type == "subscription_updated":
+        elif event_normalized == "subscription_updated":
             return await handle_subscription_updated(data, db, event_id)
-        elif event_type == "subscription_cancelled":
+        elif event_normalized in ("subscription_cancelled", "subscription_canceled"):
             return await handle_subscription_cancelled(data, db, event_id)
-        elif event_type == "subscription_paused":
+        elif event_normalized == "subscription_paused":
             return await handle_subscription_paused(data, db, event_id)
-        elif event_type == "subscription_resumed":
+        elif event_normalized == "subscription_resumed":
             return await handle_subscription_resumed(data, db, event_id)
-        elif event_type == "transaction_completed":
+        elif event_normalized in ("transaction_completed", "transaction_paid"):
             return await handle_transaction_completed(data, db, event_id)
-        elif event_type == "transaction_failed":
+        elif event_normalized == "transaction_failed":
             return await handle_transaction_failed(data, db, event_id)
         else:
             logger.warning(f"Unhandled webhook event: {event_type}")
