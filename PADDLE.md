@@ -56,37 +56,113 @@ The Paddle billing integration is now functional with configuration validation, 
 
 ## Remaining Tasks (Optional Enhancements)
 
-### Admin Panel for Paddle Management
-Extend [app/admin/router.py](app/admin/router.py) and admin UI to provide comprehensive Paddle billing management tools:
+### Admin Panel for Paddle Management ✅ **COMPLETED**
+Extended [app/admin/router.py](app/admin/router.py) and admin UI with comprehensive Paddle billing management tools:
 
-**Subscription Plans Management**
-- CRUD interface for SubscriptionPlan: create/edit plans with name, price, limits, currency
-- Paddle integration: sync available Paddle products/prices via API, link plan to `paddle_price_id` via dropdown
-- Bulk operations: import multiple plans from Paddle, archive unused plans
-- Validation: warn if paddle_price_id missing for plans, show Paddle price details (billing cycle, currency)
+#### Step 1: Subscription Plans Management ✅
+**Backend API** ([app/admin/router.py](app/admin/router.py)):
+- `POST /admin/plans/link-paddle` - Link SubscriptionPlan to Paddle Price ID
+- `GET /admin/plans/missing-price-ids` - List plans without Paddle Price IDs
+- `POST /admin/plans/sync-paddle` - Sync all plans with Paddle (validate prices, update metadata)
+- `GET /admin/paddle/validate-config` - Validate Paddle API configuration
 
-**Billing Accounts Dashboard**
-- List all BillingAccounts with filters: status (active/canceled/trialing), plan, organization
-- Account details view:
-  - User/organization info, current plan, subscription status
-  - Paddle IDs: customer_id, subscription_id, transaction history
-  - Dates: subscription_start, next_billing_date, cancelled_at, trial_started_at
-  - Usage stats: free_requests_used, total_spent, balance
-- Search by email, organization name, Paddle customer_id/subscription_id
+**Frontend UI** ([app/templates/admin.html](app/templates/admin.html)):
+- Paddle Configuration section with validation status display
+- Check Missing Price IDs button with table of plans needing linking
+- Link Paddle Price modal for mapping plans to Paddle prices
+- Sync All Plans button with progress feedback
 
-**Paddle Sync & Reconciliation**
-- Manual sync button: pull current subscription state from Paddle API for selected account(s)
-- Bulk reconciliation: scan all accounts with paddle_subscription_id, detect drift (local ACTIVE but Paddle canceled)
-- Sync Products/Prices: fetch all Paddle products and prices, show mapping status, auto-create missing SubscriptionPlans
-- Status indicators: last_sync_time, sync_status (success/failed/pending)
+#### Step 2: Billing Accounts Dashboard ✅
+**Backend API**:
+- `GET /admin/subscriptions/filter?status=...` - Filter billing accounts by status
+- `GET /admin/subscriptions/{id}/details` - Detailed account view with Paddle API comparison
+- `POST /admin/subscriptions/sync-paddle` - Bulk sync all accounts with Paddle
+- `GET /admin/subscriptions/drift-detection` - Detect discrepancies between local DB and Paddle
 
-**Webhook Management**
-- Webhook events log: display recent webhooks with event_id, type, subscription_id, timestamp, processing status
-- Event details modal: full payload, signature verification result, changes applied to BillingAccount
-- Re-process failed events: button to retry webhook processing for specific event_id
-- Idempotency check: show duplicate events that were skipped
+**Frontend UI**:
+- Billing Accounts table with filters (status, search)
+- View Details modal showing local DB vs Paddle API data side-by-side
+- Drift detection with highlighted discrepancies
+- Sync All button for bulk reconciliation
 
-**Actions & Overrides**
+#### Step 3: Paddle Sync & Reconciliation ✅
+**Backend API**:
+- `POST /admin/paddle/reconcile` - Reconcile all subscriptions with Paddle API
+- `GET /admin/paddle/billing-status` - Overview of billing status (total active, with/without Paddle IDs)
+- `POST /admin/paddle/auto-backfill` - Auto-fill missing paddle_subscription_id from Paddle API
+
+**Frontend UI**:
+- Reconciliation section with status overview
+- Reconcile Now button with detailed results
+- Check Status button for quick overview
+- Auto Backfill button for missing Paddle IDs
+
+#### Step 4: Webhook Management Log ✅
+**Backend API**:
+- `GET /admin/webhooks/events?event_type=...&status=...&limit=50` - List webhook events with filters
+- `GET /admin/webhooks/events/{id}` - Detailed webhook event view (payload, signature, processing status)
+- `GET /admin/webhooks/stats` - Webhook processing statistics (by status, by type)
+- `POST /admin/webhooks/events/{id}/reprocess` - Retry failed webhook processing
+
+**Frontend UI**:
+- Webhook Events table with filters (event type, status, limit)
+- View Details modal with full payload and processing info
+- Retry button for failed events
+- Stats dashboard with counts by status and event type
+
+**Database Model** ([app/models/billing.py](app/models/billing.py)):
+- New `PaddleWebhookEvent` model tracking all webhook events:
+  - `paddle_event_id`, `event_type`, `payload`, `signature_valid`
+  - `status` (RECEIVED, PROCESSED, FAILED, SKIPPED)
+  - `billing_account_id` (optional FK)
+  - `received_at`, `processed_at`, `error_message`
+  - Indexes on `paddle_event_id`, `event_type`, `billing_account_id`
+
+#### Step 9: Admin UI Components ✅
+**Frontend Implementation** ([app/templates/admin.html](app/templates/admin.html)):
+- New "Paddle" tab in admin navigation (7th tab after Plans)
+- 5 main sections with comprehensive UI:
+  1. **Paddle Configuration** - API key validation, environment display
+  2. **Paddle Plans Sync** - missing price IDs check, link modal, sync button
+  3. **Billing Accounts Dashboard** - table with filters, details modal, drift detection
+  4. **Paddle Reconciliation** - reconcile button, status check, auto-backfill
+  5. **Webhook Events Log** - events table with filters, details modal, stats, retry
+
+**JavaScript Functions** (15+ functions):
+- `loadPaddleTab()` - orchestrates loading all Paddle data
+- `validatePaddleConfig()` - displays config status with color-coded badges
+- `checkMissingPriceIds()` - shows plans needing Paddle price linkage
+- `showLinkPaddlePriceModal()` / `linkPaddlePrice()` - modal form for linking
+- `syncPaddlePlans()` - syncs all plans with confirmation
+- `loadBillingAccounts()` - loads accounts table with status filters
+- `viewBillingAccountDetails()` - modal with DB vs Paddle comparison
+- `detectDrift()` - runs drift detection and displays results
+- `syncAllBillingAccounts()` - bulk sync with progress
+- `reconcileSubscriptions()` - full reconciliation with details
+- `checkBillingStatus()` - quick status overview
+- `autoBackfill()` - auto-fills missing Paddle IDs
+- `loadWebhookEvents()` - loads events table with filters
+- `viewWebhookDetails()` - modal with full payload and metadata
+- `reprocessWebhook()` - retries failed event processing
+- `loadWebhookStats()` - displays webhook statistics dashboard
+
+**CSS Styling** ([app/static/css/admin.css](app/static/css/admin.css)):
+- `.info-box`, `.success-box`, `.warning-box`, `.error-box` - color-coded status boxes
+- `.badge`, `.badge-success`, `.badge-error`, `.badge-warning`, `.badge-info` - status badges
+- Enhanced `.section-header` with flex layout for multiple action buttons
+- `.loading` with animated dots
+
+**Commits**:
+- `97c3cc3` - Step 1: Subscription Plans Management API
+- `4f29800` - Step 2: Billing Accounts Dashboard API
+- `dea98ff` - Step 3: Paddle Sync & Reconciliation
+- `92e7dab` - Step 4: Webhook Management Log
+- `721aac6` - Step 9: Admin UI Components (frontend)
+- `2d1f61b` - CSS styles for Paddle Management UI
+
+### Remaining Tasks (Optional Enhancements)
+
+**Step 5: Admin Actions & Overrides** (Not yet implemented)
 - Manual subscription actions via Paddle API:
   - Cancel subscription (immediate or end of billing period)
   - Pause/Resume subscription
@@ -98,7 +174,7 @@ Extend [app/admin/router.py](app/admin/router.py) and admin UI to provide compre
   - Adjust balance (with reason field)
   - Reset free_requests_used counter
 
-**Reporting & Analytics**
+**Step 6: Revenue Reports & Analytics** (Not yet implemented)
 - Revenue dashboard:
   - MRR (Monthly Recurring Revenue), ARR
   - Revenue by plan, currency conversion
@@ -111,56 +187,80 @@ Extend [app/admin/router.py](app/admin/router.py) and admin UI to provide compre
 - Charts: time-series graphs for revenue, subscriptions, churn
 - Export: CSV/Excel export for billing reports
 
-**Configuration Management**
+**Step 7: Configuration Management** (Partially implemented via validate-config endpoint)
 - Paddle settings page:
-  - Display current config (environment, vendor_id, masked API key)
-  - Test connection button: verify Paddle API key validity
+  - Display current config (environment, vendor_id, masked API key) ✅
+  - Test connection button: verify Paddle API key validity ✅
   - Webhook secret rotation: generate new secret, update in Paddle dashboard instructions
   - Toggle billing features: enable/disable Paddle integration without code deployment
 
-**Audit & Security**
+**Step 8: Audit & Security** (Not yet implemented)
 - Audit log for all admin actions: who changed what subscription, when
 - Permission checks: require superuser role for sensitive actions (refunds, manual status changes)
 - Activity notifications: alert on suspicious patterns (mass cancellations, manual overrides)
 
-**UI/UX Considerations**
-- Extend existing admin panel HTML/CSS ([app/templates/admin.html](app/templates/admin.html), [app/static/css/admin.css](app/static/css/admin.css))
-- Use DataTables or similar for sortable/filterable lists
-- Add tabbed interface: Plans | Accounts | Webhooks | Reports | Settings
-- Status badges: color-coded for subscription statuses (green=active, red=canceled, yellow=trialing)
-- Real-time updates: WebSocket or polling for webhook events dashboard
+### Other Future Enhancements
 
-**Technical Implementation**
-- New API endpoints in [app/admin/router.py](app/admin/router.py):
-  - `GET /admin/billing/plans` - list subscription plans with Paddle sync status
-  - `POST /admin/billing/plans/{id}/sync-paddle` - link plan to Paddle price
-  - `GET /admin/billing/accounts` - list accounts with filters
-  - `GET /admin/billing/accounts/{id}` - detailed account view
-  - `POST /admin/billing/accounts/{id}/sync` - fetch current state from Paddle
-  - `POST /admin/billing/accounts/{id}/cancel` - cancel subscription via Paddle
-  - `GET /admin/billing/webhooks` - webhook events log
-  - `POST /admin/billing/webhooks/{id}/reprocess` - retry failed webhook
-  - `GET /admin/billing/products/sync` - sync Paddle products/prices
-  - `GET /admin/billing/reports/revenue` - revenue analytics
-- Background jobs (optional): periodic reconciliation cron, webhook cleanup (archive old events)
-- Permissions: extend [app/auth/dependencies.py](app/auth/dependencies.py) with `get_admin_user` dependency for all admin endpoints
-
-### Plan/Price Management (CLI Alternative)
+**Plan/Price Management (CLI Alternative)** (Not yet implemented)
 - Admin/CLI script to sync Paddle products/prices into SubscriptionPlan (populate `paddle_price_id`)
 - Expose read-only API endpoint for available Paddle prices
 
-### Reconciliation & Background Jobs
+**Reconciliation & Background Jobs** (Manual endpoints available, automation not yet implemented)
 - Scheduled task to poll Paddle for subscription state changes (past_due, canceled) and sync local BillingAccount
 - Backfill job for accounts missing `paddle_subscription_id`
 
-### Frontend Improvements
+**Frontend Improvements** (Not yet implemented)
 - Surface errors when Paddle config absent (disable subscribe buttons or show message in upgrade.html)
 - Refine upgrade.html plan title selector for subscribeToPlan lookup
 
-### Monitoring & Observability
+**Monitoring & Observability** (Not yet implemented)
 - Structured logs for webhook events with Paddle event_id/subscription_id
 - Sentry breadcrumbs for webhook failures and reconciliation
 - Metrics for checkout creation success/failure rates
+
+## Usage
+
+### Accessing the Paddle Admin Panel
+
+1. Log in as an admin user
+2. Navigate to Admin Panel
+3. Click on the "Paddle" tab (7th tab in navigation)
+4. Available sections:
+   - **Paddle Configuration**: Check API connection status
+   - **Paddle Plans Sync**: Link plans to Paddle Price IDs
+   - **Billing Accounts**: View and manage customer subscriptions
+   - **Paddle Reconciliation**: Sync subscription states with Paddle
+   - **Webhook Events Log**: Monitor and debug webhook processing
+
+### Common Admin Tasks
+
+**Linking a Plan to Paddle Price ID:**
+1. Go to Paddle tab → Paddle Plans Sync section
+2. Click "Check Missing Price IDs"
+3. Click "Link" button next to a plan
+4. Enter Paddle Price ID (format: pri_01...)
+5. Submit
+
+**Checking Subscription Status:**
+1. Go to Paddle tab → Billing Accounts section
+2. Use status filter or search
+3. Click "View" to see detailed account info including Paddle API comparison
+
+**Reconciling Subscriptions:**
+1. Go to Paddle tab → Paddle Reconciliation section
+2. Click "Reconcile Now" to sync all subscriptions with Paddle
+3. View detailed results showing updated/processed/error counts
+
+**Investigating Webhook Issues:**
+1. Go to Paddle tab → Webhook Events Log section
+2. Filter by event type or status (FAILED, PROCESSED, etc.)
+3. Click "View" to see full webhook payload and processing details
+4. Click "Retry" on failed events to reprocess
+
+**Detecting Drift:**
+1. Go to Paddle tab → Billing Accounts section
+2. Click "Detect Drift"
+3. Review accounts with discrepancies between local DB and Paddle
 
 ## Configuration Example
 
