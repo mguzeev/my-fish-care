@@ -78,6 +78,14 @@ class PolicyEngine:
         
         # Check user's subscription and plan
         if not user.organization_id:
+            if is_superuser:
+                return {
+                    "allowed": True,
+                    "reason": "Superuser access",
+                    "free_remaining": 999999,
+                    "paid_remaining": 999999,
+                    "should_upgrade": False,
+                }
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No organization. Subscribe to a plan to access agents."
@@ -91,6 +99,14 @@ class PolicyEngine:
         row = billing_result.one_or_none()
         
         if not row:
+            if is_superuser:
+                return {
+                    "allowed": True,
+                    "reason": "Superuser access",
+                    "free_remaining": 999999,
+                    "paid_remaining": 999999,
+                    "should_upgrade": False,
+                }
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="No active subscription. Subscribe to a plan to access agents."
@@ -139,15 +155,8 @@ class PolicyEngine:
                 "should_upgrade": bool
             }
         """
-        # Superusers bypass all limits
-        if user.is_superuser:
-            return {
-                "allowed": True,
-                "reason": "Superuser access",
-                "free_remaining": 999999,
-                "paid_remaining": 999999,
-                "should_upgrade": False
-            }
+        # Superusers: still show real counters if a plan exists, but never block access
+        is_superuser = user.is_superuser
         
         # First check agent access (plan-agent relationship)
         await self.check_agent_access(db, user, agent_id)
@@ -174,52 +183,61 @@ class PolicyEngine:
         
         billing_account, plan = row
         
+        # Helper to keep superusers allowed but still show real counters
+        def _result(payload: Dict[str, Any]) -> Dict[str, Any]:
+            if is_superuser:
+                payload = dict(payload)
+                payload["allowed"] = True
+                payload["should_upgrade"] = False
+                payload["reason"] = "Superuser access"
+            return payload
+
         # Reset period if needed
         await self.reset_period_if_needed(billing_account, plan)
-        
+
         # 1. Check free requests
         free_remaining = plan.free_requests_limit - billing_account.free_requests_used
         if free_remaining > 0:
-            return {
+            return _result({
                 "allowed": True,
                 "reason": f"Free requests available: {free_remaining} remaining",
                 "free_remaining": free_remaining,
                 "paid_remaining": plan.max_requests_per_interval - billing_account.requests_used_current_period,
                 "should_upgrade": False
-            }
-        
+            })
+
         # 2. Check trial period (by days)
         if plan.free_trial_days > 0 and billing_account.trial_started_at:
             trial_end = billing_account.trial_started_at + timedelta(days=plan.free_trial_days)
             if datetime.utcnow() < trial_end:
                 days_remaining = (trial_end - datetime.utcnow()).days
-                return {
+                return _result({
                     "allowed": True,
                     "reason": f"Trial active: {days_remaining} days remaining",
                     "free_remaining": 0,
                     "paid_remaining": plan.max_requests_per_interval - billing_account.requests_used_current_period,
                     "should_upgrade": True  # Suggest upgrade during trial
-                }
-        
+                })
+
         # 3. Check paid limits
         paid_remaining = plan.max_requests_per_interval - billing_account.requests_used_current_period
         if paid_remaining > 0:
-            return {
+            return _result({
                 "allowed": True,
                 "reason": f"Paid requests available: {paid_remaining} remaining",
                 "free_remaining": 0,
                 "paid_remaining": paid_remaining,
                 "should_upgrade": False
-            }
+            })
         
         # 4. All limits exhausted
-        return {
+        return _result({
             "allowed": False,
             "reason": f"Request limit exceeded for {plan.interval.value} plan. Please upgrade or wait for period reset.",
             "free_remaining": 0,
             "paid_remaining": 0,
             "should_upgrade": True
-        }
+        })
 
     async def increment_usage(
         self,

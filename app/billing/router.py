@@ -62,6 +62,10 @@ class BillingAccountResponse(BaseModel):
 	status: str
 	balance: Decimal
 	total_spent: Decimal
+	free_requests_limit: int
+	free_requests_used: int
+	free_trial_days: int
+	trial_started_at: Optional[str]
 
 
 class UsageSummaryResponse(BaseModel):
@@ -105,6 +109,10 @@ async def get_billing_account(
 		status=ba.subscription_status.value,
 		balance=ba.balance,
 		total_spent=ba.total_spent,
+		free_requests_limit=plan.free_requests_limit if plan else 0,
+		free_requests_used=ba.free_requests_used,
+		free_trial_days=plan.free_trial_days if plan else 0,
+		trial_started_at=ba.trial_started_at.isoformat() if ba.trial_started_at else None,
 	)
 
 
