@@ -35,6 +35,7 @@
             <button class="admin-tab" onclick="switchTab('users')" role="tab" aria-selected="false" aria-controls="users">Users</button>
             <button class="admin-tab" onclick="switchTab('subscriptions')" role="tab" aria-selected="false" aria-controls="subscriptions">Subscriptions</button>
             <button class="admin-tab" onclick="switchTab('plans')" role="tab" aria-selected="false" aria-controls="plans">Plans</button>
+            <button class="admin-tab" onclick="switchTab('paddle')" role="tab" aria-selected="false" aria-controls="paddle">Paddle</button>
             <button class="admin-tab" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
             <button class="admin-tab" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
             <button class="admin-tab" onclick="switchTab('llm-models')" role="tab" aria-selected="false" aria-controls="llm-models">LLM Models</button>
@@ -133,6 +134,90 @@
                     <button class="btn-primary" onclick="showCreateLLMModelModal()">+ Add Model</button>
                 </div>
                 <div id="llmModelsTable" class="loading">Loading LLM models</div>
+            </div>
+        </div>
+
+        <!-- Paddle Management Tab -->
+        <div id="paddle" class="tab-content" role="tabpanel" aria-labelledby="paddle-tab">
+            <!-- Paddle Configuration -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Paddle Configuration</h2>
+                    <button class="btn-primary" onclick="validatePaddleConfig()">🔍 Validate Config</button>
+                </div>
+                <div id="paddleConfigStatus" class="info-box"></div>
+            </div>
+
+            <!-- Paddle Plans Management -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Paddle Plans Sync</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" onclick="checkMissingPriceIds()">🔗 Check Missing Price IDs</button>
+                        <button class="btn-primary" onclick="showLinkPaddlePriceModal()">➕ Link Paddle Price</button>
+                        <button class="btn-secondary" onclick="syncPaddlePlans()">🔄 Sync All Plans</button>
+                    </div>
+                </div>
+                <div id="paddlePlansStatus"></div>
+                <div id="missingPriceIdsTable"></div>
+            </div>
+
+            <!-- Billing Accounts Dashboard -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Billing Accounts</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="billingStatusFilter" placeholder="Filter by status..." style="padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button class="btn-secondary" onclick="loadBillingAccounts()">🔍 Filter</button>
+                        <button class="btn-primary" onclick="detectDrift()">⚠️ Detect Drift</button>
+                        <button class="btn-secondary" onclick="syncAllBillingAccounts()">🔄 Sync All</button>
+                    </div>
+                </div>
+                <div id="billingAccountsTable" class="loading">Loading billing accounts...</div>
+            </div>
+
+            <!-- Paddle Reconciliation -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Paddle Reconciliation</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-primary" onclick="reconcileSubscriptions()">🔄 Reconcile Now</button>
+                        <button class="btn-secondary" onclick="checkBillingStatus()">📊 Check Status</button>
+                        <button class="btn-secondary" onclick="autoBackfill()">⚡ Auto Backfill</button>
+                    </div>
+                </div>
+                <div id="reconciliationResults"></div>
+            </div>
+
+            <!-- Webhook Events Log -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Paddle Webhook Events</h2>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="webhookEventType" onchange="loadWebhookEvents()">
+                            <option value="">All Event Types</option>
+                            <option value="subscription.activated">subscription.activated</option>
+                            <option value="subscription.updated">subscription.updated</option>
+                            <option value="subscription.canceled">subscription.canceled</option>
+                            <option value="subscription.paused">subscription.paused</option>
+                            <option value="subscription.resumed">subscription.resumed</option>
+                            <option value="transaction.completed">transaction.completed</option>
+                            <option value="transaction.paid">transaction.paid</option>
+                        </select>
+                        <select id="webhookStatus" onchange="loadWebhookEvents()">
+                            <option value="">All Statuses</option>
+                            <option value="RECEIVED">Received</option>
+                            <option value="PROCESSED">Processed</option>
+                            <option value="FAILED">Failed</option>
+                            <option value="SKIPPED">Skipped</option>
+                        </select>
+                        <input type="number" id="webhookLimit" value="50" min="10" max="500" style="width: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                        <button class="btn-secondary" onclick="loadWebhookEvents()">🔍 Filter</button>
+                        <button class="btn-primary" onclick="loadWebhookStats()">📊 Stats</button>
+                    </div>
+                </div>
+                <div id="webhookStatsBox"></div>
+                <div id="webhookEventsTable" class="loading">Loading webhook events...</div>
             </div>
         </div>
 
@@ -850,6 +935,9 @@
                     break;
                 case 'plans':
                     await loadPlans();
+                    break;
+                case 'paddle':
+                    await loadPaddleTab();
                     break;
                 case 'policies':
                     await loadPolicies();
@@ -2380,6 +2468,655 @@
 
             displayLogs(filtered);
         }
+
+        // ============================================
+        // PADDLE MANAGEMENT FUNCTIONS
+        // ============================================
+
+        async function loadPaddleTab() {
+            await Promise.all([
+                validatePaddleConfig(),
+                loadBillingAccounts(),
+                loadWebhookEvents()
+            ]);
+        }
+
+        // Paddle Configuration
+        async function validatePaddleConfig() {
+            const statusDiv = document.getElementById('paddleConfigStatus');
+            statusDiv.innerHTML = '<div class="loading">Validating Paddle configuration...</div>';
+            
+            try {
+                const response = await fetch('/admin/paddle/validate-config', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to validate configuration');
+                }
+                
+                const data = await response.json();
+                
+                let html = '<div style="padding: 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px;">';
+                html += '<h3 style="margin: 0 0 10px 0; color: #1e40af;">Paddle Configuration Status</h3>';
+                html += `<p><strong>Environment:</strong> ${data.environment || 'N/A'}</p>`;
+                html += `<p><strong>Vendor ID:</strong> ${data.vendor_id || 'Not set'}</p>`;
+                html += `<p><strong>API Key:</strong> ${data.api_key_configured ? '✅ Configured' : '❌ Not configured'}</p>`;
+                html += `<p><strong>Webhook Secret:</strong> ${data.webhook_secret_configured ? '✅ Configured' : '❌ Not configured'}</p>`;
+                
+                if (data.validation_errors && data.validation_errors.length > 0) {
+                    html += '<div style="margin-top: 10px; padding: 10px; background: #fee; border-left: 3px solid #dc2626;">';
+                    html += '<strong>⚠️ Validation Errors:</strong><ul style="margin: 5px 0;">';
+                    data.validation_errors.forEach(err => {
+                        html += `<li>${err}</li>`;
+                    });
+                    html += '</ul></div>';
+                }
+                
+                html += '</div>';
+                statusDiv.innerHTML = html;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Paddle Plans Management
+        async function checkMissingPriceIds() {
+            const tableDiv = document.getElementById('missingPriceIdsTable');
+            tableDiv.innerHTML = '<div class="loading">Checking for missing Price IDs...</div>';
+            
+            try {
+                const response = await fetch('/admin/plans/missing-price-ids', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to check price IDs');
+                
+                const data = await response.json();
+                
+                if (data.plans_without_price_ids.length === 0) {
+                    tableDiv.innerHTML = '<div class="success-box">✅ All plans have Paddle Price IDs configured!</div>';
+                    return;
+                }
+                
+                let html = '<div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+                html += `<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ ${data.plans_without_price_ids.length} Plans Missing Price IDs</h4>`;
+                html += '<table style="width: 100%; border-collapse: collapse;">';
+                html += '<thead><tr style="background: #f8f9fa; text-align: left;">';
+                html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Plan ID</th>';
+                html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Name</th>';
+                html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Price</th>';
+                html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Actions</th>';
+                html += '</tr></thead><tbody>';
+                
+                data.plans_without_price_ids.forEach(plan => {
+                    html += '<tr style="border-bottom: 1px solid #e9ecef;">';
+                    html += `<td style="padding: 8px;">${plan.id}</td>`;
+                    html += `<td style="padding: 8px;">${plan.name}</td>`;
+                    html += `<td style="padding: 8px;">$${plan.price}/${plan.interval}</td>`;
+                    html += `<td style="padding: 8px;"><button class="btn-secondary" onclick="showLinkPaddlePriceModal(${plan.id}, '${plan.name}')">🔗 Link</button></td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table></div>';
+                tableDiv.innerHTML = html;
+            } catch (error) {
+                tableDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        function showLinkPaddlePriceModal(planId = null, planName = '') {
+            const html = `
+                <div class="modal-backdrop" onclick="closeModal()"></div>
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2>🔗 Link Paddle Price ID</h2>
+                        <button class="modal-close" onclick="closeModal()">×</button>
+                    </div>
+                    <div class="modal-body">
+                        ${planId ? `<p><strong>Plan:</strong> ${planName} (ID: ${planId})</p>` : ''}
+                        <form id="linkPaddleForm" onsubmit="linkPaddlePrice(event, ${planId})">
+                            ${!planId ? '<div class="form-group"><label>Plan ID *</label><input type="number" name="plan_id" required></div>' : ''}
+                            <div class="form-group">
+                                <label>Paddle Price ID *</label>
+                                <input type="text" name="paddle_price_id" placeholder="pri_01..." required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" onclick="closeModal()" class="btn-secondary">Cancel</button>
+                                <button type="submit" class="btn-primary">Link Price ID</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            
+            const container = document.createElement('div');
+            container.className = 'modal-container';
+            container.innerHTML = html;
+            document.body.appendChild(container);
+        }
+
+        async function linkPaddlePrice(event, planId = null) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            
+            const payload = {
+                plan_id: planId || parseInt(formData.get('plan_id')),
+                paddle_price_id: formData.get('paddle_price_id')
+            };
+            
+            try {
+                const response = await fetch('/admin/plans/link-paddle', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to link price');
+                }
+                
+                const data = await response.json();
+                showAlert(`✅ ${data.message}`, 'success');
+                closeModal();
+                checkMissingPriceIds();
+            } catch (error) {
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function syncPaddlePlans() {
+            if (!confirm('This will sync all plans with Paddle. Continue?')) return;
+            
+            const statusDiv = document.getElementById('paddlePlansStatus');
+            statusDiv.innerHTML = '<div class="loading">Syncing plans with Paddle...</div>';
+            
+            try {
+                const response = await fetch('/admin/plans/sync-paddle', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to sync plans');
+                
+                const data = await response.json();
+                
+                let html = '<div style="margin-top: 15px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">';
+                html += `<h4 style="margin: 0 0 10px 0;">✅ ${data.message}</h4>`;
+                html += `<p><strong>Synced:</strong> ${data.synced_count} plans</p>`;
+                
+                if (data.errors && data.errors.length > 0) {
+                    html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">⚠️ Errors</summary><ul>';
+                    data.errors.forEach(err => html += `<li>${err}</li>`);
+                    html += '</ul></details>';
+                }
+                
+                html += '</div>';
+                statusDiv.innerHTML = html;
+                
+                setTimeout(() => statusDiv.innerHTML = '', 10000);
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Billing Accounts Dashboard
+        async function loadBillingAccounts() {
+            const tableDiv = document.getElementById('billingAccountsTable');
+            tableDiv.innerHTML = '<div class="loading">Loading billing accounts...</div>';
+            
+            const statusFilter = document.getElementById('billingStatusFilter')?.value || '';
+            const url = statusFilter ? `/admin/subscriptions/filter?status=${encodeURIComponent(statusFilter)}` : '/admin/subscriptions/filter';
+            
+            try {
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load billing accounts');
+                
+                const accounts = await response.json();
+                
+                if (accounts.length === 0) {
+                    tableDiv.innerHTML = '<div class="info-box">No billing accounts found.</div>';
+                    return;
+                }
+                
+                let html = '<table class="data-table"><thead><tr>';
+                html += '<th>ID</th><th>User</th><th>Plan</th><th>Status</th><th>Paddle Sub ID</th><th>Current Period</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                
+                accounts.forEach(acc => {
+                    const statusClass = acc.status === 'active' ? 'badge-success' : acc.status === 'canceled' ? 'badge-error' : 'badge-warning';
+                    html += '<tr>';
+                    html += `<td>${acc.id}</td>`;
+                    html += `<td>${acc.user_email || acc.user_id}</td>`;
+                    html += `<td>${acc.plan_name || 'N/A'}</td>`;
+                    html += `<td><span class="badge ${statusClass}">${acc.status || 'unknown'}</span></td>`;
+                    html += `<td>${acc.paddle_subscription_id || 'N/A'}</td>`;
+                    html += `<td>${acc.current_period_start ? new Date(acc.current_period_start).toLocaleDateString() : 'N/A'} - ${acc.current_period_end ? new Date(acc.current_period_end).toLocaleDateString() : 'N/A'}</td>`;
+                    html += `<td><button class="btn-secondary" onclick="viewBillingAccountDetails(${acc.id})">👁️ View</button></td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                tableDiv.innerHTML = html;
+            } catch (error) {
+                tableDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewBillingAccountDetails(accountId) {
+            try {
+                const response = await fetch(`/admin/subscriptions/${accountId}/details`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load account details');
+                
+                const data = await response.json();
+                
+                let html = `
+                    <div class="modal-backdrop" onclick="closeModal()"></div>
+                    <div class="modal" style="max-width: 800px;">
+                        <div class="modal-header">
+                            <h2>💳 Billing Account Details</h2>
+                            <button class="modal-close" onclick="closeModal()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <h3>Local Database</h3>
+                            <table style="width: 100%; margin-bottom: 20px;">
+                                <tr><td><strong>ID:</strong></td><td>${data.database.id}</td></tr>
+                                <tr><td><strong>User:</strong></td><td>${data.database.user_email} (${data.database.user_id})</td></tr>
+                                <tr><td><strong>Plan:</strong></td><td>${data.database.plan_name}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge">${data.database.status}</span></td></tr>
+                                <tr><td><strong>Paddle Subscription ID:</strong></td><td>${data.database.paddle_subscription_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Current Period:</strong></td><td>${data.database.current_period_start} - ${data.database.current_period_end}</td></tr>
+                            </table>
+                            
+                            ${data.paddle ? `
+                                <h3>Paddle API</h3>
+                                <table style="width: 100%;">
+                                    <tr><td><strong>Status:</strong></td><td><span class="badge">${data.paddle.status}</span></td></tr>
+                                    <tr><td><strong>Next Billed:</strong></td><td>${data.paddle.next_billed_at || 'N/A'}</td></tr>
+                                    <tr><td><strong>Billing Cycle:</strong></td><td>${data.paddle.billing_cycle || 'N/A'}</td></tr>
+                                    <tr><td><strong>Paused At:</strong></td><td>${data.paddle.paused_at || 'N/A'}</td></tr>
+                                    <tr><td><strong>Canceled At:</strong></td><td>${data.paddle.canceled_at || 'N/A'}</td></tr>
+                                </table>
+                            ` : '<p class="warning-box">⚠️ No data from Paddle API</p>'}
+                            
+                            ${data.discrepancies && data.discrepancies.length > 0 ? `
+                                <div class="error-box" style="margin-top: 15px;">
+                                    <h4>⚠️ Discrepancies Found:</h4>
+                                    <ul>${data.discrepancies.map(d => `<li>${d}</li>`).join('')}</ul>
+                                </div>
+                            ` : '<div class="success-box" style="margin-top: 15px;">✅ No discrepancies detected</div>'}
+                        </div>
+                    </div>
+                `;
+                
+                const container = document.createElement('div');
+                container.className = 'modal-container';
+                container.innerHTML = html;
+                document.body.appendChild(container);
+            } catch (error) {
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function detectDrift() {
+            if (!confirm('This will check all billing accounts for discrepancies with Paddle. Continue?')) return;
+            
+            const tableDiv = document.getElementById('billingAccountsTable');
+            const originalContent = tableDiv.innerHTML;
+            tableDiv.innerHTML = '<div class="loading">Detecting drift in billing accounts...</div>';
+            
+            try {
+                const response = await fetch('/admin/subscriptions/drift-detection', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to detect drift');
+                
+                const data = await response.json();
+                
+                let html = '<div style="margin-bottom: 20px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
+                html += `<h4>📊 Drift Detection Results</h4>`;
+                html += `<p><strong>Total Checked:</strong> ${data.total_checked}</p>`;
+                html += `<p><strong>Accounts with Drift:</strong> ${data.accounts_with_drift.length}</p>`;
+                
+                if (data.accounts_with_drift.length > 0) {
+                    html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">View Details</summary>';
+                    html += '<ul style="margin-top: 10px;">';
+                    data.accounts_with_drift.forEach(acc => {
+                        html += `<li><strong>Account ${acc.account_id}:</strong> ${acc.discrepancies.join(', ')}</li>`;
+                    });
+                    html += '</ul></details>';
+                }
+                
+                html += '</div>';
+                
+                tableDiv.innerHTML = html + originalContent;
+            } catch (error) {
+                tableDiv.innerHTML = originalContent;
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function syncAllBillingAccounts() {
+            if (!confirm('This will sync all billing accounts with Paddle. This may take a while. Continue?')) return;
+            
+            const tableDiv = document.getElementById('billingAccountsTable');
+            const originalContent = tableDiv.innerHTML;
+            tableDiv.innerHTML = '<div class="loading">Syncing all billing accounts...</div>';
+            
+            try {
+                const response = await fetch('/admin/subscriptions/sync-paddle', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to sync accounts');
+                
+                const data = await response.json();
+                
+                showAlert(`✅ ${data.message}. Synced: ${data.synced_count}, Errors: ${data.errors.length}`, 'success');
+                
+                await loadBillingAccounts();
+            } catch (error) {
+                tableDiv.innerHTML = originalContent;
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Paddle Reconciliation
+        async function reconcileSubscriptions() {
+            if (!confirm('This will reconcile all subscriptions with Paddle. Continue?')) return;
+            
+            const resultsDiv = document.getElementById('reconciliationResults');
+            resultsDiv.innerHTML = '<div class="loading">Reconciling subscriptions...</div>';
+            
+            try {
+                const response = await fetch('/admin/paddle/reconcile', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to reconcile');
+                
+                const data = await response.json();
+                
+                let html = '<div style="padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; margin-top: 15px;">';
+                html += `<h4>✅ Reconciliation Complete</h4>`;
+                html += `<p><strong>Processed:</strong> ${data.processed}</p>`;
+                html += `<p><strong>Updated:</strong> ${data.updated}</p>`;
+                html += `<p><strong>Errors:</strong> ${data.errors}</p>`;
+                
+                if (data.details && data.details.length > 0) {
+                    html += '<details><summary style="cursor: pointer; margin-top: 10px;">View Details</summary><ul>';
+                    data.details.forEach(detail => html += `<li>${detail}</li>`);
+                    html += '</ul></details>';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+                setTimeout(() => resultsDiv.innerHTML = '', 15000);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function checkBillingStatus() {
+            const resultsDiv = document.getElementById('reconciliationResults');
+            resultsDiv.innerHTML = '<div class="loading">Checking billing status...</div>';
+            
+            try {
+                const response = await fetch('/admin/paddle/billing-status', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to check status');
+                
+                const data = await response.json();
+                
+                let html = '<div style="padding: 15px; background: #f0f9ff; border-left: 4px solid #3b82f6; border-radius: 4px; margin-top: 15px;">';
+                html += '<h4>📊 Billing Status Overview</h4>';
+                html += `<p><strong>Total Active Subscriptions:</strong> ${data.total_active}</p>`;
+                html += `<p><strong>Subscriptions with Paddle ID:</strong> ${data.with_paddle_id}</p>`;
+                html += `<p><strong>Subscriptions without Paddle ID:</strong> ${data.without_paddle_id}</p>`;
+                html += `<p><strong>Recently Updated:</strong> ${data.recently_synced} (last 24h)</p>`;
+                html += '</div>';
+                
+                resultsDiv.innerHTML = html;
+                
+                setTimeout(() => resultsDiv.innerHTML = '', 10000);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function autoBackfill() {
+            if (!confirm('This will automatically backfill missing Paddle subscription IDs. Continue?')) return;
+            
+            const resultsDiv = document.getElementById('reconciliationResults');
+            resultsDiv.innerHTML = '<div class="loading">Running auto-backfill...</div>';
+            
+            try {
+                const response = await fetch('/admin/paddle/auto-backfill', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to backfill');
+                
+                const data = await response.json();
+                
+                let html = '<div style="padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; margin-top: 15px;">';
+                html += `<h4>✅ ${data.message}</h4>`;
+                html += `<p><strong>Backfilled:</strong> ${data.backfilled_count}</p>`;
+                
+                if (data.errors && data.errors.length > 0) {
+                    html += '<details><summary style="cursor: pointer; margin-top: 10px;">⚠️ Errors</summary><ul>';
+                    data.errors.forEach(err => html += `<li>${err}</li>`);
+                    html += '</ul></details>';
+                }
+                
+                html += '</div>';
+                resultsDiv.innerHTML = html;
+                
+                setTimeout(() => resultsDiv.innerHTML = '', 15000);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Webhook Events
+        async function loadWebhookEvents() {
+            const tableDiv = document.getElementById('webhookEventsTable');
+            tableDiv.innerHTML = '<div class="loading">Loading webhook events...</div>';
+            
+            const eventType = document.getElementById('webhookEventType')?.value || '';
+            const status = document.getElementById('webhookStatus')?.value || '';
+            const limit = document.getElementById('webhookLimit')?.value || '50';
+            
+            const params = new URLSearchParams();
+            if (eventType) params.append('event_type', eventType);
+            if (status) params.append('status', status);
+            params.append('limit', limit);
+            
+            try {
+                const response = await fetch(`/admin/webhooks/events?${params}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load webhook events');
+                
+                const events = await response.json();
+                
+                if (events.length === 0) {
+                    tableDiv.innerHTML = '<div class="info-box">No webhook events found.</div>';
+                    return;
+                }
+                
+                let html = '<table class="data-table"><thead><tr>';
+                html += '<th>ID</th><th>Event Type</th><th>Status</th><th>Billing Account</th><th>Received At</th><th>Processed At</th><th>Actions</th>';
+                html += '</tr></thead><tbody>';
+                
+                events.forEach(evt => {
+                    const statusClass = evt.status === 'PROCESSED' ? 'badge-success' : 
+                                       evt.status === 'FAILED' ? 'badge-error' : 
+                                       evt.status === 'SKIPPED' ? 'badge-warning' : 'badge-info';
+                    html += '<tr>';
+                    html += `<td>${evt.id}</td>`;
+                    html += `<td>${evt.event_type}</td>`;
+                    html += `<td><span class="badge ${statusClass}">${evt.status}</span></td>`;
+                    html += `<td>${evt.billing_account_id || 'N/A'}</td>`;
+                    html += `<td>${new Date(evt.received_at).toLocaleString()}</td>`;
+                    html += `<td>${evt.processed_at ? new Date(evt.processed_at).toLocaleString() : 'N/A'}</td>`;
+                    html += `<td><button class="btn-secondary" onclick="viewWebhookDetails(${evt.id})">👁️ View</button> `;
+                    if (evt.status === 'FAILED') {
+                        html += `<button class="btn-primary" onclick="reprocessWebhook(${evt.id})">🔄 Retry</button>`;
+                    }
+                    html += '</td></tr>';
+                });
+                
+                html += '</tbody></table>';
+                tableDiv.innerHTML = html;
+            } catch (error) {
+                tableDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewWebhookDetails(eventId) {
+            try {
+                const response = await fetch(`/admin/webhooks/events/${eventId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load webhook details');
+                
+                const event = await response.json();
+                
+                const html = `
+                    <div class="modal-backdrop" onclick="closeModal()"></div>
+                    <div class="modal" style="max-width: 900px;">
+                        <div class="modal-header">
+                            <h2>📨 Webhook Event Details</h2>
+                            <button class="modal-close" onclick="closeModal()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <table style="width: 100%; margin-bottom: 20px;">
+                                <tr><td><strong>ID:</strong></td><td>${event.id}</td></tr>
+                                <tr><td><strong>Paddle Event ID:</strong></td><td>${event.paddle_event_id}</td></tr>
+                                <tr><td><strong>Event Type:</strong></td><td>${event.event_type}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge">${event.status}</span></td></tr>
+                                <tr><td><strong>Billing Account ID:</strong></td><td>${event.billing_account_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Received At:</strong></td><td>${new Date(event.received_at).toLocaleString()}</td></tr>
+                                <tr><td><strong>Processed At:</strong></td><td>${event.processed_at ? new Date(event.processed_at).toLocaleString() : 'N/A'}</td></tr>
+                                <tr><td><strong>Signature Valid:</strong></td><td>${event.signature_valid ? '✅ Yes' : '❌ No'}</td></tr>
+                            </table>
+                            
+                            ${event.error_message ? `
+                                <div class="error-box">
+                                    <h4>❌ Error Message:</h4>
+                                    <pre style="white-space: pre-wrap; word-wrap: break-word;">${event.error_message}</pre>
+                                </div>
+                            ` : ''}
+                            
+                            <details style="margin-top: 15px;">
+                                <summary style="cursor: pointer; font-weight: bold;">📦 Event Payload</summary>
+                                <pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin-top: 10px;">${JSON.stringify(event.payload, null, 2)}</pre>
+                            </details>
+                        </div>
+                    </div>
+                `;
+                
+                const container = document.createElement('div');
+                container.className = 'modal-container';
+                container.innerHTML = html;
+                document.body.appendChild(container);
+            } catch (error) {
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function reprocessWebhook(eventId) {
+            if (!confirm('Reprocess this webhook event?')) return;
+            
+            try {
+                const response = await fetch(`/admin/webhooks/events/${eventId}/reprocess`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to reprocess');
+                }
+                
+                const data = await response.json();
+                showAlert(`✅ ${data.message}`, 'success');
+                await loadWebhookEvents();
+            } catch (error) {
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadWebhookStats() {
+            const statsBox = document.getElementById('webhookStatsBox');
+            statsBox.innerHTML = '<div class="loading">Loading webhook statistics...</div>';
+            
+            try {
+                const response = await fetch('/admin/webhooks/stats', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load stats');
+                
+                const stats = await response.json();
+                
+                let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 15px 0;">';
+                
+                Object.entries(stats.by_status).forEach(([status, count]) => {
+                    const colorMap = {
+                        'RECEIVED': '#17a2b8',
+                        'PROCESSED': '#28a745',
+                        'FAILED': '#dc3545',
+                        'SKIPPED': '#ffc107'
+                    };
+                    const color = colorMap[status] || '#6c757d';
+                    
+                    html += `<div style="padding: 15px; background: ${color}22; border-left: 4px solid ${color}; border-radius: 4px;">`;
+                    html += `<div style="font-size: 24px; font-weight: bold; color: ${color};">${count}</div>`;
+                    html += `<div style="color: #666; text-transform: capitalize;">${status}</div>`;
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+                
+                html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">📊 By Event Type</summary>';
+                html += '<table style="width: 100%; margin-top: 10px;"><thead><tr><th>Event Type</th><th>Count</th></tr></thead><tbody>';
+                
+                Object.entries(stats.by_event_type).forEach(([type, count]) => {
+                    html += `<tr><td>${type}</td><td>${count}</td></tr>`;
+                });
+                
+                html += '</tbody></table></details>';
+                
+                statsBox.innerHTML = html;
+                
+                setTimeout(() => statsBox.innerHTML = '', 15000);
+            } catch (error) {
+                statsBox.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
     </script>
 </body>
 </html>
