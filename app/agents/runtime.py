@@ -27,7 +27,7 @@ class AgentRuntime:
 		self.default_max_tokens = settings.openai_max_tokens
 	
 	def _get_client_for_agent(self, agent: Agent) -> AsyncOpenAI:
-		"""Get OpenAI client configured for the agent's LLM model."""
+		"""Get OpenAI-compatible client configured for the agent's LLM model."""
 		if not agent.llm_model:
 			logger.warning(f"Agent {agent.id} has no LLM model, using default client")
 			return self.default_client
@@ -37,14 +37,20 @@ class AgentRuntime:
 		if not llm_model.is_active:
 			raise ValueError(f"LLM model '{llm_model.name}' is not active")
 		
-		if llm_model.provider != "openai":
-			raise ValueError(f"Provider '{llm_model.provider}' is not supported yet. Only 'openai' is supported.")
-		
-		# Create client with model's API key
-		return AsyncOpenAI(
-			api_key=llm_model.api_key,
-			base_url=llm_model.api_base_url if llm_model.api_base_url else None
-		)
+		# Support multiple providers
+		if llm_model.provider == "openai":
+			return AsyncOpenAI(
+				api_key=llm_model.api_key,
+				base_url=llm_model.api_base_url if llm_model.api_base_url else None
+			)
+		elif llm_model.provider == "google":
+			# Google Gemini uses OpenAI-compatible API
+			return AsyncOpenAI(
+				api_key=llm_model.api_key,
+				base_url=llm_model.api_base_url or "https://generativelanguage.googleapis.com/v1beta/openai/"
+			)
+		else:
+			raise ValueError(f"Provider '{llm_model.provider}' is not supported yet. Supported: openai, google")
 
 	async def _build_prompt(
 		self,
