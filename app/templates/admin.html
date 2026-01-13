@@ -667,9 +667,16 @@
                 <input type="text" id="editSubsOrg" readonly style="background: #f5f5f5;">
             </div>
             <div class="form-group">
+                <label>Plan</label>
+                <select id="editSubsPlan">
+                    <option value="">Loading plans...</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label>Status</label>
                 <select id="editSubsStatus">
                     <option value="active">Active</option>
+                    <option value="trialing">Trialing</option>
                     <option value="canceled">Canceled</option>
                     <option value="pending">Pending</option>
                 </select>
@@ -1660,20 +1667,57 @@
         }
 
         // Subscription functions
-        function editSubscription(subId, orgName, status) {
-            editingSubscriptionId = subId;
-            document.getElementById('editSubsOrg').value = orgName;
-            document.getElementById('editSubsStatus').value = status;
-            openModal('editSubscriptionModal');
+        async function editSubscription(subId, orgName, status) {
+            try {
+                editingSubscriptionId = subId;
+                
+                // Load full subscription details
+                const sub = await apiCall(`/admin/subscriptions/${subId}`);
+                
+                // Load plans into dropdown
+                const plans = await apiCall('/admin/plans');
+                const planSelect = document.getElementById('editSubsPlan');
+                planSelect.innerHTML = '';
+                
+                if (plans && plans.length > 0) {
+                    plans.forEach(plan => {
+                        const option = document.createElement('option');
+                        option.value = plan.id;
+                        option.textContent = `${plan.name} - $${plan.price}/${plan.interval}`;
+                        if (plan.id === sub.plan_id) {
+                            option.selected = true;
+                        }
+                        planSelect.appendChild(option);
+                    });
+                } else {
+                    planSelect.innerHTML = '<option value="">No plans available</option>';
+                }
+                
+                document.getElementById('editSubsOrg').value = orgName;
+                document.getElementById('editSubsStatus').value = status;
+                
+                openModal('editSubscriptionModal');
+            } catch (error) {
+                showAlert('Failed to load subscription details: ' + error.message, 'error');
+            }
         }
 
         async function saveSubscriptionChanges() {
             try {
+                const planId = parseInt(document.getElementById('editSubsPlan').value);
+                const status = document.getElementById('editSubsStatus').value;
+                
+                const updateData = {
+                    subscription_status: status
+                };
+                
+                if (planId) {
+                    updateData.subscription_plan_id = planId;
+                }
+                
                 await apiCall(`/admin/subscriptions/${editingSubscriptionId}`, {
                     method: 'PUT',
-                    body: JSON.stringify({
-                        subscription_status: document.getElementById('editSubsStatus').value
-                    })
+                    body: JSON.stringify(updateData)
                 });
                 
                 showAlert('Subscription updated successfully');

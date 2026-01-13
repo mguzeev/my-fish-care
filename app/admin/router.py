@@ -176,6 +176,7 @@ class SubscriptionResponse(BaseModel):
     organization_name: str
     user_count: int = 0
     plan_name: Optional[str]
+    plan_id: Optional[int] = None  # Added for plan selection in edit
     status: str
     paddle_subscription_id: Optional[str]
     total_spent: Decimal
@@ -218,6 +219,7 @@ async def list_subscriptions(
                 organization_name=org.name,
                 user_count=user_count,
                 plan_name=plan.name if plan else None,
+                plan_id=plan.id if plan else None,
                 status=billing.subscription_status.value,
                 paddle_subscription_id=billing.paddle_subscription_id,
                 total_spent=billing.total_spent,
@@ -1431,7 +1433,8 @@ async def delete_user(
 # ============================================================================
 
 class UpdateSubscriptionRequest(BaseModel):
-    subscription_status: str
+    subscription_status: Optional[str] = None
+    subscription_plan_id: Optional[int] = None
 
 
 @router.get("/subscriptions/{subscription_id}", response_model=SubscriptionResponse)
@@ -1465,6 +1468,7 @@ async def get_subscription(
         organization_name=org.name,
         user_count=user_count,
         plan_name=plan.name if plan else None,
+        plan_id=plan.id if plan else None,
         status=billing.subscription_status.value,
         paddle_subscription_id=billing.paddle_subscription_id,
         total_spent=billing.total_spent,
@@ -1489,7 +1493,24 @@ async def update_subscription(
     if not billing:
         raise HTTPException(status_code=404, detail="Subscription not found")
     
-    billing.subscription_status = SubscriptionStatus(request.subscription_status)
+    # Update status if provided
+    if request.subscription_status:
+        billing.subscription_status = SubscriptionStatus(request.subscription_status)
+    
+    # Update plan if provided
+    if request.subscription_plan_id:
+        # Verify plan exists
+        plan_check = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == request.subscription_plan_id)
+        )
+        if not plan_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        billing.subscription_plan_id = request.subscription_plan_id
+        # Reset period counters when changing plan
+        billing.requests_used_current_period = 0
+        billing.period_started_at = datetime.utcnow()
+    
     await db.commit()
     await db.refresh(billing)
     
@@ -1514,6 +1535,7 @@ async def update_subscription(
         organization_name=org.name,
         user_count=user_count,
         plan_name=plan.name if plan else None,
+        plan_id=plan.id if plan else None,
         status=billing.subscription_status.value,
         paddle_subscription_id=billing.paddle_subscription_id,
         total_spent=billing.total_spent,
