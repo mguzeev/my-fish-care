@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_current_active_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.paddle import paddle_client
+from app.core.paddle import paddle_client, PaddleClient
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
@@ -151,6 +151,7 @@ async def subscribe(
 	payload: SubscribeRequest,
 	current_user: User = Depends(get_current_active_user),
 	db: AsyncSession = Depends(get_db),
+	paddle: PaddleClient = Depends(lambda: get_paddle_client()),
 ):
 	if not current_user.organization_id:
 		raise HTTPException(status_code=400, detail="Organization required")
@@ -176,7 +177,7 @@ async def subscribe(
 
 		# Create Paddle customer if missing
 		if not ba.paddle_customer_id:
-			customer = await paddle_client.create_customer(
+			customer = await paddle.create_customer(
 				email=current_user.email,
 				name=current_user.full_name or current_user.email,
 			)
@@ -185,7 +186,7 @@ async def subscribe(
 				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
 
 		# Create Paddle subscription
-		subscription = await paddle_client.create_subscription(
+		subscription = await paddle.create_subscription(
 			customer_id=ba.paddle_customer_id,
 			price_id=plan.paddle_price_id,
 		)
@@ -221,6 +222,11 @@ async def subscribe(
 
 	account = await get_billing_account(current_user, db)
 	return account.model_copy(update={"checkout_url": checkout_url})
+
+
+def get_paddle_client() -> PaddleClient:
+	"""Dependency wrapper to allow overriding Paddle client in tests."""
+	return paddle_client
 
 
 @router.post("/cancel", response_model=BillingAccountResponse)

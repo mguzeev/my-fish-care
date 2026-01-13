@@ -29,7 +29,8 @@
 
 3) Checkout/subscribe flow
    - PARTIAL: /billing/subscribe now creates Paddle customer+subscription when paddle_billing_enabled and plan has paddle_price_id, storing paddle IDs and returning checkout_url if Paddle response contains one.
-   - Remaining: support hosted checkout links explicitly (Paddle Transactions), and add dependency-injection/mocking for testing.
+   - Added dependency injection for PaddleClient to enable testing/overrides.
+   - TODO: add hosted checkout link creation (Paddle Transactions) so frontend always gets redirectable URL when Paddle API does not return one.
 
 4) Webhook verification + handling
    - Verify HMAC signatures using paddle_webhook_secret (timestamp + payload) and enforce a max age window.
