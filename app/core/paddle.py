@@ -181,20 +181,52 @@ class PaddleClient:
     def verify_webhook_signature(
         self,
         payload: bytes,
-        signature: str,
-        timestamp: str,
+        signature_header: str,
+        webhook_secret: str,
     ) -> bool:
-        """Verify Paddle webhook signature."""
-        secret = settings.paddle_webhook_secret.encode()
+        """
+        Verify Paddle webhook signature.
+        
+        Paddle sends signature in format: ts=<timestamp>;h1=<hash>
+        Signature is calculated as: HMAC-SHA256(secret, "{ts}:{body}")
+        """
+        import time
+        
+        # Parse signature header: ts=1234567890;h1=abcdef123456
+        parts = {}
+        for part in signature_header.split(";"):
+            if "=" in part:
+                key, value = part.split("=", 1)
+                parts[key.strip()] = value.strip()
+        
+        timestamp = parts.get("ts")
+        received_h1 = parts.get("h1")
+        
+        if not timestamp or not received_h1:
+            return False
+        
+        # Verify timestamp is within 5 minutes (prevent replay attacks)
+        try:
+            timestamp_int = int(timestamp)
+            current_time = int(time.time())
+            time_diff = abs(current_time - timestamp_int)
+            if time_diff > 300:  # 5 minutes
+                return False
+        except (ValueError, TypeError):
+            return False
+        
+        # Calculate signature: HMAC-SHA256(secret, "{ts}:{body}")
+        secret = webhook_secret.encode()
         message = f"{timestamp}:{payload.decode()}".encode()
         
-        expected_signature = hmac.new(
+        calculated_h1 = hmac.new(
             secret,
             message,
             hashlib.sha256,
         ).hexdigest()
         
-        return hmac.compare_digest(expected_signature, signature)
+        # Compare signatures using timing-safe comparison
+        return hmac.compare_digest(calculated_h1, received_h1)
 
 
 # Global Paddle client instance (lazy-initialized)

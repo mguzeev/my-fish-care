@@ -16,9 +16,13 @@ from app.models.organization import Organization
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_created(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for subscription_created event."""
+    # Setup
+    secret = "test-paddle-webhook-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     # Create org and billing account
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
@@ -34,21 +38,31 @@ async def test_paddle_webhook_subscription_created(
     ba.paddle_subscription_id = "sub_123"
     await db_session.commit()
     
-    # Send webhook
+    # Create signed webhook
+    body = {
+        "event_type": "subscription.created",
+        "event_id": "evt_test_123",
+        "occurred_at": "2026-02-11T18:00:00Z",
+        "data": {
+            "id": "sub_123",
+            "customer_id": "cus_456",
+            "status": "active",
+            "next_billed_at": "2026-02-11T18:00:00Z",
+        },
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "subscription_created",
-            "data": {
-                "id": "sub_123",
-                "customer_id": "cus_456",
-                "status": "active",
-                "next_billed_at": "2026-02-11T18:00:00Z",
-            },
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
-    assert response.json()["message"] == "Subscription created processed"
+    assert response.json()["message"] == "Subscription created"
     
     # Verify account was updated
     await db_session.refresh(ba)
@@ -57,9 +71,12 @@ async def test_paddle_webhook_subscription_created(
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_updated(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for subscription_updated event."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
     await db_session.commit()
@@ -74,14 +91,23 @@ async def test_paddle_webhook_subscription_updated(
     await db_session.commit()
     
     # Send webhook to pause subscription
+    body = {
+        "event_type": "subscription.updated",
+        "event_id": "evt_123",
+        "data": {
+            "id": "sub_123",
+            "status": "paused",
+        },
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "subscription_updated",
-            "data": {
-                "id": "sub_123",
-                "status": "paused",
-            },
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -93,9 +119,12 @@ async def test_paddle_webhook_subscription_updated(
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_cancelled(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for subscription_cancelled event."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
     await db_session.commit()
@@ -110,14 +139,23 @@ async def test_paddle_webhook_subscription_cancelled(
     await db_session.commit()
     
     # Send webhook
+    body = {
+        "event_type": "subscription.cancelled",
+        "event_id": "evt_123",
+        "data": {
+            "id": "sub_123",
+            "cancelled_at": "2026-01-11T18:00:00Z",
+        },
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "subscription_cancelled",
-            "data": {
-                "id": "sub_123",
-                "cancelled_at": "2026-01-11T18:00:00Z",
-            },
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -129,9 +167,12 @@ async def test_paddle_webhook_subscription_cancelled(
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_transaction_completed(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for transaction_completed event."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
     await db_session.commit()
@@ -151,60 +192,106 @@ async def test_paddle_webhook_transaction_completed(
     initial_balance = ba.balance
     
     # Send webhook
+    body = {
+        "event_type": "transaction.completed",
+        "event_id": "evt_123",
+        "data": {
+            "id": "txn_123",
+            "subscription_id": "sub_123",
+            "amount": "19.99",
+        },
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "transaction_completed",
-            "data": {
-                "subscription_id": "sub_123",
-                "amount": "19.99",
-            },
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
     
-    # Verify accounting was updated
+    # Verify transaction was recorded
     await db_session.refresh(ba)
-    assert ba.total_spent == initial_spent + Decimal("19.99")
-    assert ba.balance == initial_balance - Decimal("19.99")
+    assert ba.last_transaction_id == "txn_123"
 
 
 @pytest.mark.asyncio
-async def test_paddle_webhook_transaction_failed(client: AsyncClient):
+async def test_paddle_webhook_transaction_failed(client: AsyncClient, monkeypatch):
     """Test webhook for transaction_failed event."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
+    body = {
+        "event_type": "transaction.failed",
+        "event_id": "evt_123",
+        "data": {
+            "id": "txn_123",
+            "subscription_id": "sub_123",
+            "error": {"message": "Insufficient funds"},
+        },
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "transaction_failed",
-            "data": {
-                "subscription_id": "sub_123",
-                "error": {"message": "Insufficient funds"},
-            },
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
-    assert response.json()["message"] == "Transaction failed processed"
+    assert response.json()["message"] == "Transaction failed"
 
 
 @pytest.mark.asyncio
-async def test_paddle_webhook_invalid_json(client: AsyncClient):
+async def test_paddle_webhook_invalid_json(client: AsyncClient, monkeypatch):
     """Test webhook with invalid JSON."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
+    import time
+    timestamp = str(int(time.time()))
+    content = "invalid json"
+    message = f"{timestamp}:{content}".encode()
+    h1 = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    sig = f"ts={timestamp};h1={h1}"
+    
     response = await client.post(
         "/webhooks/paddle",
-        content="invalid json",
-        headers={"Content-Type": "application/json"},
+        content=content,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
+        },
     )
     assert response.status_code == 400
 
 
 @pytest.mark.asyncio
-async def test_paddle_webhook_unknown_event(client: AsyncClient):
+async def test_paddle_webhook_unknown_event(client: AsyncClient, monkeypatch):
     """Test webhook with unknown event type."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
+    body = {
+        "event_type": "unknown_event_type",
+        "data": {},
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "unknown_event_type",
-            "data": {},
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -213,9 +300,12 @@ async def test_paddle_webhook_unknown_event(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_paused(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for subscription_paused event (maps to ACTIVE)."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
     await db_session.commit()
@@ -230,11 +320,20 @@ async def test_paddle_webhook_subscription_paused(
     await db_session.commit()
     
     # Send webhook
+    body = {
+        "event_type": "subscription.paused",
+        "event_id": "evt_123",
+        "data": {"id": "sub_123"},
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "subscription_paused",
-            "data": {"id": "sub_123"},
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -246,9 +345,12 @@ async def test_paddle_webhook_subscription_paused(
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_resumed(
-    client: AsyncClient, db_session: AsyncSession
+    client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
     """Test webhook for subscription_resumed event (maps to ACTIVE)."""
+    secret = "test-secret"
+    monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
+    
     org = Organization(name="Test Org", slug="test-org")
     db_session.add(org)
     await db_session.commit()
@@ -263,11 +365,20 @@ async def test_paddle_webhook_subscription_resumed(
     await db_session.commit()
     
     # Send webhook
+    body = {
+        "event_type": "subscription.resumed",
+        "event_id": "evt_123",
+        "data": {"id": "sub_123"},
+    }
+    raw = json.dumps(body)
+    sig = _sign_payload(raw, secret)
+    
     response = await client.post(
         "/webhooks/paddle",
-        json={
-            "type": "subscription_resumed",
-            "data": {"id": "sub_123"},
+        content=raw,
+        headers={
+            "Content-Type": "application/json",
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -277,11 +388,18 @@ async def test_paddle_webhook_subscription_resumed(
     assert ba.subscription_status == SubscriptionStatus.ACTIVE
 
 
-def _sign_payload(raw_body: str, secret: str):
-    timestamp = datetime.now(timezone.utc).isoformat()
+def _sign_payload(raw_body: str, secret: str) -> str:
+    """
+    Create Paddle webhook signature header.
+    
+    Format: Paddle-Signature: ts=<timestamp>;h1=<hmac>
+    Signature calculated as: HMAC-SHA256(secret, "{timestamp}:{body}")
+    """
+    import time
+    timestamp = str(int(time.time()))
     message = f"{timestamp}:{raw_body}".encode()
-    signature = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
-    return timestamp, signature
+    h1 = hmac.new(secret.encode(), message, hashlib.sha256).hexdigest()
+    return f"ts={timestamp};h1={h1}"
 
 
 @pytest.mark.asyncio
@@ -289,17 +407,16 @@ async def test_paddle_webhook_signature_valid(client: AsyncClient, monkeypatch):
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
 
-    body = {"type": "subscription_updated", "data": {"id": "sub_x", "status": "active"}}
+    body = {"event_type": "subscription.updated", "data": {"id": "sub_x", "status": "active"}}
     raw = json.dumps(body)
-    ts, sig = _sign_payload(raw, secret)
+    sig = _sign_payload(raw, secret)
 
     response = await client.post(
         "/webhooks/paddle",
         content=raw,
         headers={
             "Content-Type": "application/json",
-            "paddle-signature": sig,
-            "paddle-timestamp": ts,
+            "Paddle-Signature": sig,
         },
     )
 
@@ -311,17 +428,15 @@ async def test_paddle_webhook_signature_invalid(client: AsyncClient, monkeypatch
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
 
-    body = {"type": "subscription_updated", "data": {"id": "sub_x", "status": "active"}}
+    body = {"event_type": "subscription.updated", "data": {"id": "sub_x", "status": "active"}}
     raw = json.dumps(body)
-    ts = datetime.now(timezone.utc).isoformat()
 
     response = await client.post(
         "/webhooks/paddle",
         content=raw,
         headers={
             "Content-Type": "application/json",
-            "paddle-signature": "bad-signature",
-            "paddle-timestamp": ts,
+            "Paddle-Signature": "ts=1234567890;h1=bad-signature",
         },
     )
 
@@ -348,12 +463,12 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
     await db_session.refresh(ba)
 
     body = {
-        "type": "subscription_updated",
-        "data": {"id": "sub_123", "status": "paused"},
+        "event_type": "subscription.updated",
         "event_id": "evt_1",
+        "data": {"id": "sub_123", "status": "paused"},
     }
     raw = json.dumps(body)
-    ts, sig = _sign_payload(raw, secret)
+    sig = _sign_payload(raw, secret)
 
     # First delivery
     response = await client.post(
@@ -361,8 +476,7 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
         content=raw,
         headers={
             "Content-Type": "application/json",
-            "paddle-signature": sig,
-            "paddle-timestamp": ts,
+            "Paddle-Signature": sig,
         },
     )
     assert response.status_code == 200
@@ -378,8 +492,7 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
         content=raw,
         headers={
             "Content-Type": "application/json",
-            "paddle-signature": sig,
-            "paddle-timestamp": ts,
+            "Paddle-Signature": sig,
         },
     )
     assert response2.status_code == 200

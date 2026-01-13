@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
+os.environ.setdefault("PADDLE_WEBHOOK_SECRET", "test-paddle-webhook-secret")
 
 
 def _install_paddle_stub():
