@@ -248,6 +248,10 @@ class SubscriptionPlanResponse(BaseModel):
     has_api_access: bool
     has_priority_support: bool
     has_advanced_analytics: bool
+    paddle_price_id: Optional[str] = None
+    paddle_product_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class CreateSubscriptionPlanRequest(BaseModel):
@@ -262,6 +266,8 @@ class CreateSubscriptionPlanRequest(BaseModel):
     has_api_access: bool = False
     has_priority_support: bool = False
     has_advanced_analytics: bool = False
+    paddle_price_id: Optional[str] = None
+    paddle_product_id: Optional[str] = None
 
 
 @router.get("/plans", response_model=list[SubscriptionPlanResponse])
@@ -287,6 +293,10 @@ async def list_subscription_plans(
             has_api_access=p.has_api_access,
             has_priority_support=p.has_priority_support,
             has_advanced_analytics=p.has_advanced_analytics,
+            paddle_price_id=p.paddle_price_id,
+            paddle_product_id=p.paddle_product_id,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
         )
         for p in plans
     ]
@@ -314,6 +324,8 @@ async def create_subscription_plan(
         has_api_access=request.has_api_access,
         has_priority_support=request.has_priority_support,
         has_advanced_analytics=request.has_advanced_analytics,
+        paddle_price_id=request.paddle_price_id,
+        paddle_product_id=request.paddle_product_id,
     )
     db.add(plan)
     await db.commit()
@@ -332,6 +344,10 @@ async def create_subscription_plan(
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        paddle_price_id=plan.paddle_price_id,
+        paddle_product_id=plan.paddle_product_id,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
     )
 
 
@@ -363,6 +379,10 @@ async def get_plan(
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        paddle_price_id=plan.paddle_price_id,
+        paddle_product_id=plan.paddle_product_id,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
     )
 
 
@@ -393,6 +413,8 @@ async def update_subscription_plan(
     plan.has_api_access = request.has_api_access
     plan.has_priority_support = request.has_priority_support
     plan.has_advanced_analytics = request.has_advanced_analytics
+    plan.paddle_price_id = request.paddle_price_id
+    plan.paddle_product_id = request.paddle_product_id
     
     await db.commit()
     await db.refresh(plan)
@@ -410,6 +432,10 @@ async def update_subscription_plan(
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        paddle_price_id=plan.paddle_price_id,
+        paddle_product_id=plan.paddle_product_id,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
     )
 
 
@@ -431,7 +457,277 @@ async def delete_subscription_plan(
     return {"detail": "Plan deleted"}
 
 
+# ============================================================================
+# Paddle Plans Management
+# ============================================================================
+
+class PaddlePriceInfo(BaseModel):
+    """Info about a Paddle price."""
+    id: str
+    product_id: str
+    name: str
+    description: Optional[str] = None
+    type: str  # standard, tiered
+    billing_cycle: Optional[dict] = None
+    unit_price: dict  # Contains amount and currency_code
+
+
+class SyncPaddlePlansResponse(BaseModel):
+    """Response from syncing Paddle plans."""
+    synced_count: int
+    created_plans: list[int]
+    updated_plans: list[int]
+    skipped_plans: list[str]  # IDs of plans that couldn't be synced
+
+
+class LinkPaddlePriceRequest(BaseModel):
+    """Link a plan to a Paddle price."""
+    paddle_price_id: str
+    paddle_product_id: Optional[str] = None
+
+
+@router.post("/plans/{plan_id}/link-paddle", response_model=SubscriptionPlanResponse)
+async def link_plan_to_paddle_price(
+    plan_id: int,
+    request: LinkPaddlePriceRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link a subscription plan to a Paddle price."""
+    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # Check if paddle_price_id is already used by another plan
+    existing = await db.execute(
+        select(SubscriptionPlan).where(
+            (SubscriptionPlan.paddle_price_id == request.paddle_price_id) &
+            (SubscriptionPlan.id != plan_id)
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="This Paddle price is already linked to another plan"
+        )
+    
+    plan.paddle_price_id = request.paddle_price_id
+    if request.paddle_product_id:
+        plan.paddle_product_id = request.paddle_product_id
+    
+    await db.commit()
+    await db.refresh(plan)
+    
+    return SubscriptionPlanResponse(
+        id=plan.id,
+        name=plan.name,
+        interval=plan.interval.value,
+        price=plan.price,
+        currency=plan.currency,
+        max_requests_per_interval=plan.max_requests_per_interval,
+        max_tokens_per_request=plan.max_tokens_per_request,
+        free_requests_limit=plan.free_requests_limit,
+        free_trial_days=plan.free_trial_days,
+        has_api_access=plan.has_api_access,
+        has_priority_support=plan.has_priority_support,
+        has_advanced_analytics=plan.has_advanced_analytics,
+        paddle_price_id=plan.paddle_price_id,
+        paddle_product_id=plan.paddle_product_id,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
+
+
+@router.get("/paddle/validate-config")
+async def validate_paddle_config(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+):
+    """Validate Paddle configuration and connection."""
+    from app.core.config import settings
+    
+    if not settings.paddle_billing_enabled:
+        return {
+            "status": "disabled",
+            "message": "Paddle billing is disabled",
+            "enabled": False
+        }
+    
+    # Check if required settings are present
+    missing_settings = []
+    if not settings.paddle_api_key:
+        missing_settings.append("PADDLE_API_KEY")
+    if not settings.paddle_webhook_secret:
+        missing_settings.append("PADDLE_WEBHOOK_SECRET")
+    
+    if missing_settings:
+        return {
+            "status": "error",
+            "message": f"Missing Paddle settings: {', '.join(missing_settings)}",
+            "enabled": True,
+            "missing_settings": missing_settings
+        }
+    
+    # Try to validate by creating a client
+    try:
+        from app.core.paddle import PaddleClient
+        client = PaddleClient()
+        # If we got here, config is valid
+        return {
+            "status": "ok",
+            "message": "Paddle configuration is valid",
+            "enabled": True,
+            "environment": settings.paddle_environment,
+            "vendor_id": settings.paddle_vendor_id
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to validate Paddle config: {str(e)}",
+            "enabled": True,
+            "error": str(e)
+        }
+
+
+@router.get("/plans/paddle/missing-price-ids")
+async def get_plans_missing_paddle_prices(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get list of plans that are missing Paddle price IDs."""
+    result = await db.execute(
+        select(SubscriptionPlan).where(SubscriptionPlan.paddle_price_id == None)
+    )
+    plans = result.scalars().all()
+    
+    return [
+        {
+            "id": p.id,
+            "name": p.name,
+            "interval": p.interval.value,
+            "price": str(p.price),
+            "currency": p.currency,
+        }
+        for p in plans
+    ]
+
+
+@router.post("/plans/sync-paddle")
+async def sync_plans_from_paddle(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sync subscription plans from Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Paddle billing is not enabled"
+        )
+    
+    try:
+        client = PaddleClient()
+        # Get all prices from Paddle
+        prices = client.list_prices()
+        
+        if not prices:
+            return {
+                "synced_count": 0,
+                "created_plans": [],
+                "updated_plans": [],
+                "skipped_plans": [],
+                "message": "No prices found in Paddle"
+            }
+        
+        created = []
+        updated = []
+        skipped = []
+        
+        # Process each price from Paddle
+        for price in prices:
+            price_id = price.get("id")
+            product_id = price.get("product_id")
+            
+            if not price_id:
+                skipped.append({"reason": "No ID", "price": str(price)})
+                continue
+            
+            # Check if plan already exists with this paddle_price_id
+            existing_plan = await db.execute(
+                select(SubscriptionPlan).where(
+                    SubscriptionPlan.paddle_price_id == price_id
+                )
+            )
+            existing = existing_plan.scalar_one_or_none()
+            
+            if existing:
+                # Just update product_id if needed
+                if not existing.paddle_product_id and product_id:
+                    existing.paddle_product_id = product_id
+                    await db.commit()
+                    updated.append(existing.id)
+            else:
+                # Create new plan from Paddle price
+                try:
+                    billing_cycle = price.get("billing_cycle", {})
+                    interval = billing_cycle.get("interval", "monthly").lower()
+                    
+                    # Map Paddle interval to our enum
+                    from app.models.billing import SubscriptionInterval
+                    if interval not in ["daily", "weekly", "monthly", "yearly"]:
+                        interval = "monthly"
+                    
+                    # Get price amount
+                    unit_price = price.get("unit_price", {})
+                    amount = unit_price.get("amount", "0")
+                    # Convert from cents/smallest unit to decimal
+                    if amount:
+                        amount = str(int(amount) / 100)
+                    else:
+                        amount = "0"
+                    
+                    currency = unit_price.get("currency_code", "USD")
+                    product_name = price.get("product", {}).get("name", f"Product {product_id}")
+                    
+                    new_plan = SubscriptionPlan(
+                        name=product_name,
+                        interval=SubscriptionInterval(interval),
+                        price=Decimal(amount),
+                        currency=currency,
+                        max_requests_per_interval=1000,  # Default value
+                        max_tokens_per_request=2000,  # Default value
+                        paddle_price_id=price_id,
+                        paddle_product_id=product_id,
+                    )
+                    db.add(new_plan)
+                    await db.commit()
+                    await db.refresh(new_plan)
+                    created.append(new_plan.id)
+                except Exception as e:
+                    skipped.append({"reason": str(e), "price_id": price_id})
+        
+        return {
+            "synced_count": len(created) + len(updated),
+            "created_plans": created,
+            "updated_plans": updated,
+            "skipped_plans": skipped
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to sync plans from Paddle: {str(e)}"
+        )
+
+
 @router.post("/plans/{plan_id}/agents/{agent_id}")
+
 async def add_agent_to_plan(
     plan_id: int,
     agent_id: int,

@@ -133,6 +133,14 @@ class PaddleClient:
             return [self._response_to_dict(p) for p in response]
         return [self._response_to_dict(response)]
     
+    def list_prices(self, product_id: Optional[str] = None) -> list:
+        """Get available prices (synchronous version)."""
+        response = self.client.list_prices()
+        
+        if isinstance(response, list):
+            return [self._response_to_dict(p) for p in response]
+        return [self._response_to_dict(response)]
+    
     async def get_products(self) -> list:
         """Get available products."""
         response = self.client.list_products()
