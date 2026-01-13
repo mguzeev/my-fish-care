@@ -5,491 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=2.0">
-    <style>
-        :root {
-            --primary-color: #1e40af;
-            --text-color: #1f2937;
-            --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        
-        .admin-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
-        
-        .admin-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-        
-        .admin-header h1 {
-            color: var(--primary-color);
-            margin: 0;
-        }
-        
-        .admin-tabs {
-            display: flex;
-            gap: 1rem;
-            border-bottom: 2px solid #f0f0f0;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-        }
-        
-        .admin-tab {
-            padding: 1rem 1.5rem;
-            cursor: pointer;
-            background: none;
-            border: none;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #666;
-            border-bottom: 3px solid transparent;
-            transition: all 0.3s;
-        }
-        
-        .admin-tab.active {
-            color: var(--primary-color);
-            border-bottom-color: var(--primary-color);
-        }
-        
-        .admin-tab:hover {
-            color: var(--primary-color);
-        }
-        
-        .tab-content {
-            display: none;
-        }
-        
-        .tab-content.active {
-            display: block;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        
-        .stat-card h3 {
-            color: #666;
-            font-size: 0.875rem;
-            margin: 0 0 0.5rem 0;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-        
-        .stat-card .value {
-            font-size: 2rem;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-        
-        .stat-card .trend {
-            font-size: 0.875rem;
-            color: #10b981;
-            margin-top: 0.5rem;
-        }
-        
-        .data-table {
-            background: white;
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            overflow-x: auto;
-        }
-        
-        .data-table h2 {
-            margin-top: 0;
-            color: var(--primary-color);
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        
-        th {
-            text-align: left;
-            padding: 1rem;
-            border-bottom: 2px solid #f0f0f0;
-            color: #666;
-            font-weight: 600;
-        }
-        
-        td {
-            padding: 1rem;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        tr:hover {
-            background: #f9fafb;
-        }
-        
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-        
-        .badge-active {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .badge-inactive {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .badge-pending {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .badge-admin {
-            background: #cce5ff;
-            color: #004085;
-        }
-        
-        .action-buttons {
-            display: flex;
-            gap: 0.5rem;
-        }
-        
-        .btn-small {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.875rem;
-            font-weight: 600;
-            transition: transform 0.2s;
-        }
-        
-        .btn-small:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn-edit {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        
-        .btn-delete {
-            background: #ffebee;
-            color: #c62828;
-        }
-        
-        .btn-view {
-            background: #f3e5f5;
-            color: #7b1fa2;
-        }
-
-        .btn-danger {
-            background: #ffcdd2;
-            color: #b71c1c;
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 3rem;
-            color: #666;
-            font-size: 1.125rem;
-        }
-        
-        .loading::after {
-            content: '...';
-            animation: dots 1.5s infinite;
-        }
-        
-        @keyframes dots {
-            0%, 20% { content: '.'; }
-            40% { content: '..'; }
-            60%, 100% { content: '...'; }
-        }
-        
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .alert-error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .alert-warning {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeeba;
-        }
-        
-        .form-section {
-            background: white;
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-        
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: var(--text-color);
-            font-weight: 600;
-        }
-        
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-        
-        .form-group textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .btn-primary {
-            background: var(--gradient);
-            color: white;
-            border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: transform 0.2s;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-        }
-        
-        .btn-secondary {
-            background: #f5f5f5;
-            color: var(--text-color);
-            border: none;
-            padding: 0.75rem 2rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1rem;
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: #999;
-        }
-        
-        .empty-state svg {
-            width: 64px;
-            height: 64px;
-            margin-bottom: 1rem;
-            opacity: 0.3;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal-content {
-            background-color: white;
-            border-radius: 12px;
-            padding: 2rem;
-            max-width: 500px;
-            width: 90%;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            color: var(--primary-color);
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            font-size: 1.5rem;
-            cursor: pointer;
-            color: #999;
-        }
-
-        .modal-footer {
-            display: flex;
-            gap: 1rem;
-            margin-top: 2rem;
-            justify-content: flex-end;
-        }
-
-        .btn-cancel {
-            background: #f5f5f5;
-            color: var(--text-color);
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-        /* Search and Pagination */
-        .table-controls {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        .search-input {
-            flex: 1;
-            min-width: 250px;
-            padding: 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 1rem;
-        }
-
-        .pagination {
-            display: flex;
-            gap: 0.5rem;
-            margin-top: 1.5rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .pagination button {
-            padding: 0.5rem 0.75rem;
-            border: 1px solid #ddd;
-            background: white;
-            cursor: pointer;
-            border-radius: 4px;
-            font-size: 0.875rem;
-        }
-
-        .pagination button.active {
-            background: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-
-        .pagination button:hover {
-            background: #f5f5f5;
-        }
-
-        .pagination button.active:hover {
-            background: var(--primary-color);
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .admin-container {
-                padding: 1rem 0.5rem;
-            }
-            
-            .admin-tabs {
-                overflow-x: auto;
-                flex-wrap: nowrap;
-                padding-bottom: 0.5rem;
-            }
-            
-            .admin-tab {
-                padding: 0.75rem 1rem;
-                font-size: 0.875rem;
-                white-space: nowrap;
-            }
-            
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .data-table {
-                overflow-x: auto;
-            }
-            
-            table {
-                min-width: 600px;
-            }
-            
-            .modal-content {
-                width: 95%;
-                padding: 1.5rem;
-            }
-            
-            .form-group input,
-            .form-group select,
-            .form-group textarea {
-                font-size: 16px; /* Prevents iOS zoom */
-            }
-            
-            .action-buttons {
-                flex-direction: column;
-            }
-            
-            .btn-small {
-                width: 100%;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="/static/css/admin.css?v=1.0">
 </head>
 <body>
     <header>
@@ -507,7 +23,7 @@
         
         <div class="admin-header">
             <h1>Admin Panel</h1>
-            <div style="color: #666; font-size: 0.875rem;">
+            <div class="section-subtitle">
                 Logged in as <strong id="adminName">Admin</strong>
             </div>
         </div>
@@ -534,8 +50,8 @@
         <!-- Agents Tab -->
         <div id="agents" class="tab-content" role="tabpanel" aria-labelledby="agents-tab">
             <div class="data-table">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 style="margin: 0;">Agent Management</h2>
+                <div class="section-header">
+                    <h2>Agent Management</h2>
                     <button onclick="loadAgentModelsForSelect('agentModel'); openModal('createAgentModal')" class="btn-primary">+ Create New Agent</button>
                 </div>
                 <div id="agentsTable" class="loading">Loading agents...</div>
@@ -552,8 +68,8 @@
                         <option value="">-- Choose an agent --</option>
                     </select>
                 </div>
-                <div id="promptsList" style="display:none;">
-                    <div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                <div id="promptsList" class="hidden">
+                    <div class="section-header">
                         <button onclick="openModal('createPromptModal')" class="btn-primary">+ Create New Prompt Version</button>
                     </div>
                     <div id="promptsTable" class="loading">Loading prompts</div>
@@ -578,8 +94,8 @@
         <!-- Plans Tab -->
         <div id="plans" class="tab-content" role="tabpanel" aria-labelledby="plans-tab">
             <div class="data-table">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 style="margin: 0;">Subscription Plans</h2>
+                <div class="section-header">
+                    <h2>Subscription Plans</h2>
                     <button onclick="openModal('createPlanModal')" class="btn-primary">+ Create New Plan</button>
                 </div>
                 <div id="plansTable" class="loading">Loading plans</div>
@@ -589,8 +105,8 @@
         <!-- Policies Tab -->
         <div id="policies" class="tab-content" role="tabpanel" aria-labelledby="policies-tab">
             <div class="data-table">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 style="margin: 0;">Policies</h2>
+                <div class="section-header">
+                    <h2>Policies</h2>
                     <button onclick="openModal('createPolicyModal')" class="btn-primary">+ Create New Policy</button>
                 </div>
                 <div id="policiesTable" class="loading">Loading policies</div>
@@ -600,8 +116,8 @@
         <!-- Organizations Tab -->
         <div id="organizations" class="tab-content" role="tabpanel" aria-labelledby="organizations-tab">
             <div class="data-table">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
-                    <h2 style="margin: 0;">Organizations</h2>
+                <div class="section-header">
+                    <h2>Organizations</h2>
                     <button onclick="openModal('createOrgModal')" class="btn-primary">+ Create New Organization</button>
                 </div>
                 <div id="organizationsTable" class="loading">Loading organizations</div>
@@ -611,7 +127,7 @@
         <!-- LLM Models Tab -->
         <div id="llm-models" class="tab-content" role="tabpanel" aria-labelledby="llm-models-tab">
             <div class="data-table">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <div class="section-header">
                     <h2>LLM Models</h2>
                     <button class="btn-primary" onclick="showCreateLLMModelModal()">+ Add Model</button>
                 </div>
@@ -637,15 +153,15 @@
             </div>
             <div class="form-group">
                 <label>Email</label>
-                <input type="email" id="editUserEmail" readonly style="background: #f5f5f5;">
+                <input type="email" id="editUserEmail" readonly class="readonly-input">
             </div>
             <div class="form-group">
-                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                <label class="form-checkbox">
                     <input type="checkbox" id="editUserActive"> Active
                 </label>
             </div>
             <div class="form-group">
-                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                <label class="form-checkbox">
                     <input type="checkbox" id="editUserAdmin"> Admin
                 </label>
             </div>
@@ -664,7 +180,7 @@
             </div>
             <div class="form-group">
                 <label>Organization</label>
-                <input type="text" id="editSubsOrg" readonly style="background: #f5f5f5;">
+                <input type="text" id="editSubsOrg" readonly class="readonly-input">
             </div>
             <div class="form-group">
                 <label>Plan</label>
@@ -698,7 +214,7 @@
                 <label>Plan Name</label>
                 <input type="text" id="editPlanName">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Price</label>
                     <input type="number" id="editPlanPrice" step="0.01" min="0">
@@ -713,7 +229,7 @@
                     </select>
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Requests</label>
                     <input type="number" id="editPlanMaxRequests" min="1">
@@ -723,19 +239,19 @@
                     <input type="number" id="editPlanMaxTokens" min="1">
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-3">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editPlanApiAccess"> API Access
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editPlanPrioritySupport"> Priority
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editPlanAdvancedAnalytics"> Advanced
                     </label>
                 </div>
@@ -765,7 +281,7 @@
                 <label>System Prompt</label>
                 <textarea id="editAgentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Model</label>
                     <select id="editAgentModel">
@@ -781,14 +297,14 @@
                 <label>Max Tokens</label>
                 <input type="number" id="editAgentMaxTokens" min="1">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editAgentActive"> Active
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editAgentPublic"> Public
                     </label>
                 </div>
@@ -823,7 +339,7 @@
                 <label>System Prompt</label>
                 <textarea id="agentSystemPrompt" placeholder="You are a helpful assistant..."></textarea>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Model</label>
                     <select id="agentModel">
@@ -839,14 +355,14 @@
                 <label>Max Tokens</label>
                 <input type="number" id="agentMaxTokens" min="1" value="2000">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="agentActive" checked> Active
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="agentPublic"> Public
                     </label>
                 </div>
@@ -881,8 +397,8 @@
                 <label>User Template</label>
                 <textarea id="promptTemplate" placeholder="Hello {name}, how can I help?"></textarea>
             </div>
-            <div class="form-group" style="margin-bottom: 0;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-group">
+                <label class="form-checkbox">
                     <input type="checkbox" id="promptActive"> Set as Active
                 </label>
             </div>
@@ -904,7 +420,7 @@
                 <label>Plan Name</label>
                 <input type="text" id="planName" placeholder="e.g., Professional Plan">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Price</label>
                     <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
@@ -919,7 +435,7 @@
                     </select>
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Requests</label>
                     <input type="number" id="planMaxRequests" placeholder="10000" min="1">
@@ -929,19 +445,19 @@
                     <input type="number" id="planMaxTokens" placeholder="4000" min="1">
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-3">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="planApiAccess"> API Access
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="planPrioritySupport"> Priority
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="planAdvancedAnalytics"> Analytics
                     </label>
                 </div>
@@ -1014,7 +530,7 @@
                 <label>API Base URL (optional)</label>
                 <input type="text" id="llmModelApiBaseUrl" placeholder="https://api.openai.com/v1">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Tokens Limit</label>
                     <input type="number" id="llmModelMaxTokensLimit" min="1" value="4000" placeholder="4000">
@@ -1024,14 +540,14 @@
                     <input type="number" id="llmModelContextWindow" min="1" value="8000" placeholder="8000">
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="llmModelActive" checked> Active
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="llmModelIsDefault"> Set as Default
                     </label>
                 </div>
@@ -1052,7 +568,7 @@
             </div>
             <div class="form-group">
                 <label>Model Name</label>
-                <input type="text" id="editLLMModelName" readonly style="background: #f5f5f5;">
+                <input type="text" id="editLLMModelName" readonly class="readonly-input">
             </div>
             <div class="form-group">
                 <label>Display Name</label>
@@ -1060,7 +576,7 @@
             </div>
             <div class="form-group">
                 <label>Provider</label>
-                <input type="text" id="editLLMModelProvider" readonly style="background: #f5f5f5;">
+                <input type="text" id="editLLMModelProvider" readonly class="readonly-input">
             </div>
             <div class="form-group">
                 <label>API Key (leave empty to keep current)</label>
@@ -1070,7 +586,7 @@
                 <label>API Base URL (optional)</label>
                 <input type="text" id="editLLMModelApiBaseUrl">
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Tokens Limit</label>
                     <input type="number" id="editLLMModelMaxTokensLimit" min="1">
@@ -1080,14 +596,14 @@
                     <input type="number" id="editLLMModelContextWindow" min="1">
                 </div>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editLLMModelActive"> Active
                     </label>
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editLLMModelIsDefault"> Set as Default
                     </label>
                 </div>
@@ -1118,13 +634,13 @@
                 <label>Description</label>
                 <textarea id="orgDescription" placeholder="Organization description"></textarea>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Users</label>
                     <input type="number" id="orgMaxUsers" min="1" value="10">
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="orgActive" checked> Active
                     </label>
                 </div>
@@ -1149,19 +665,19 @@
             </div>
             <div class="form-group">
                 <label>Slug</label>
-                <input type="text" id="editOrgSlug" readonly style="background: #f5f5f5;">
+                <input type="text" id="editOrgSlug" readonly class="readonly-input">
             </div>
             <div class="form-group">
                 <label>Description</label>
                 <textarea id="editOrgDescription"></textarea>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-grid-2">
                 <div class="form-group">
                     <label>Max Users</label>
                     <input type="number" id="editOrgMaxUsers" min="1">
                 </div>
-                <div class="form-group" style="margin-bottom: 0;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0; font-weight: normal;">
+                <div class="form-group">
+                    <label class="form-checkbox">
                         <input type="checkbox" id="editOrgActive"> Active
                     </label>
                 </div>
@@ -1868,18 +1384,18 @@
                 ]);
                 
                 let html = `
-                    <div style="padding: 1.5rem;">
-                        <h3 style="margin-top: 0;">Manage Agents for "${plan.name}"</h3>
-                        <p style="color: #666; margin-bottom: 1rem;">Select which agents are included in this plan:</p>
+                    <div>
+                        <h3>Manage Agents for "${plan.name}"</h3>
+                        <p class="section-subtitle">Select which agents are included in this plan:</p>
                 `;
                 
                 allAgents.forEach(agent => {
                     const isIncluded = planAgentIds.includes(agent.id);
                     html += `
-                        <div style="padding: 0.75rem; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                            <div>
+                        <div class="agent-list-item">
+                            <div class="agent-list-item-info">
                                 <strong>${agent.name}</strong>
-                                <div style="color: #666; font-size: 0.875rem;">${agent.description || 'No description'}</div>
+                                <div class="agent-description">${agent.description || 'No description'}</div>
                             </div>
                             <button 
                                 class="${isIncluded ? 'btn-small btn-delete' : 'btn-small btn-primary'}" 
@@ -1891,7 +1407,7 @@
                 });
                 
                 html += `
-                        <button class="btn-primary" onclick="closeModal('planAgentsModal')" style="margin-top: 1rem; width: 100%;">Done</button>
+                        <button class="btn-primary" onclick="closeModal('planAgentsModal')">Done</button>
                     </div>
                 `;
                 
@@ -2544,7 +2060,7 @@
                             <td>${model.id}</td>
                             <td>${model.display_name || model.name}</td>
                             <td>${model.provider}</td>
-                            <td><code style="font-size: 0.85em;">${model.api_key}</code></td>
+                            <td><code>${model.api_key}</code></td>
                             <td>${model.max_tokens_limit.toLocaleString()}</td>
                             <td>${model.context_window.toLocaleString()}</td>
                             <td>${statusBadge}</td>
