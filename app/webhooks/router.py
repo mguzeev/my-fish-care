@@ -1,7 +1,7 @@
 """Paddle webhook handlers for payment events."""
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request, status, Depends
@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db, AsyncSessionLocal
+from app.core.config import settings
+from app.core.paddle import paddle_client
 from app.models.billing import BillingAccount, SubscriptionStatus
 
 
@@ -41,6 +43,9 @@ PADDLE_EVENTS = {
 }
 
 
+WEBHOOK_TOLERANCE_SECONDS = 300  # 5 minutes
+
+
 @router.post("/paddle")
 async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -54,9 +59,24 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
     - transaction_failed: Payment failed
     """
     try:
+        raw_body = await request.body()
+
+        # Signature verification (optional if secret not set)
+        if settings.paddle_webhook_secret:
+            signature = request.headers.get("paddle-signature") or request.headers.get("paddle-signature-hash")
+            timestamp_header = request.headers.get("paddle-timestamp") or request.headers.get("paddle-event-time")
+            if not signature or not timestamp_header:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing webhook signature")
+
+            if not verify_timestamp(timestamp_header):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stale webhook timestamp")
+
+            if not paddle_client.verify_webhook_signature(raw_body, signature, timestamp_header):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook signature")
+
         # Get request body
         try:
-            body = await request.json()
+            body = json.loads(raw_body)
         except json.JSONDecodeError:
             logger.warning("Invalid JSON in webhook request")
             raise HTTPException(
@@ -66,24 +86,29 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         
         event_type = body.get("type")
         data = body.get("data", {})
+        event_id = (
+            body.get("event_id")
+            or request.headers.get("paddle-event-id")
+            or request.headers.get("paddle-webhook-id")
+        )
         
-        logger.info(f"Received Paddle webhook: {event_type}")
+        logger.info(f"Received Paddle webhook: {event_type} event_id={event_id}")
         
         # Handle different event types
         if event_type == "subscription_created":
-            return await handle_subscription_created(data, db)
+            return await handle_subscription_created(data, db, event_id)
         elif event_type == "subscription_updated":
-            return await handle_subscription_updated(data, db)
+            return await handle_subscription_updated(data, db, event_id)
         elif event_type == "subscription_cancelled":
-            return await handle_subscription_cancelled(data, db)
+            return await handle_subscription_cancelled(data, db, event_id)
         elif event_type == "subscription_paused":
-            return await handle_subscription_paused(data, db)
+            return await handle_subscription_paused(data, db, event_id)
         elif event_type == "subscription_resumed":
-            return await handle_subscription_resumed(data, db)
+            return await handle_subscription_resumed(data, db, event_id)
         elif event_type == "transaction_completed":
-            return await handle_transaction_completed(data, db)
+            return await handle_transaction_completed(data, db, event_id)
         elif event_type == "transaction_failed":
-            return await handle_transaction_failed(data, db)
+            return await handle_transaction_failed(data, db, event_id)
         else:
             logger.warning(f"Unhandled webhook event: {event_type}")
             return {"message": "Event received"}
@@ -98,7 +123,7 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         )
 
 
-async def handle_subscription_created(data: dict, db: AsyncSession) -> dict:
+async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle subscription_created event."""
     paddle_subscription_id = data.get("id")
     customer_id = data.get("customer_id")
@@ -119,6 +144,8 @@ async def handle_subscription_created(data: dict, db: AsyncSession) -> dict:
     billing_account = result.scalar_one_or_none()
     
     if billing_account and subscription_status:
+        if event_id and billing_account.last_webhook_event_id == event_id:
+            return {"message": "Event already processed"}
         # Map Paddle status to our status
         mapped_status = PADDLE_STATUS_MAP.get(subscription_status, SubscriptionStatus.ACTIVE)
         billing_account.subscription_status = mapped_status
@@ -127,6 +154,8 @@ async def handle_subscription_created(data: dict, db: AsyncSession) -> dict:
                 billing_account.next_billing_date = datetime.fromisoformat(next_billed_at.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
                 pass
+        if event_id:
+            billing_account.last_webhook_event_id = event_id
         await db.commit()
         logger.info(f"Updated billing account {billing_account.id} with subscription status")
     else:
@@ -135,7 +164,7 @@ async def handle_subscription_created(data: dict, db: AsyncSession) -> dict:
     return {"message": "Subscription created processed"}
 
 
-async def handle_subscription_updated(data: dict, db: AsyncSession) -> dict:
+async def handle_subscription_updated(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle subscription_updated event."""
     paddle_subscription_id = data.get("id")
     subscription_status = data.get("status")
@@ -148,16 +177,20 @@ async def handle_subscription_updated(data: dict, db: AsyncSession) -> dict:
     billing_account = result.scalar_one_or_none()
     
     if billing_account and subscription_status:
+        if event_id and billing_account.last_webhook_event_id == event_id:
+            return {"message": "Event already processed"}
         # Map Paddle status to our status
         mapped_status = PADDLE_STATUS_MAP.get(subscription_status, SubscriptionStatus.ACTIVE)
         billing_account.subscription_status = mapped_status
+        if event_id:
+            billing_account.last_webhook_event_id = event_id
         await db.commit()
         logger.info(f"Updated subscription status for account {billing_account.id}: {subscription_status} -> {mapped_status}")
     
     return {"message": "Subscription updated processed"}
 
 
-async def handle_subscription_cancelled(data: dict, db: AsyncSession) -> dict:
+async def handle_subscription_cancelled(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle subscription_cancelled event."""
     paddle_subscription_id = data.get("id")
     cancelled_at = data.get("cancelled_at")
@@ -170,19 +203,23 @@ async def handle_subscription_cancelled(data: dict, db: AsyncSession) -> dict:
     billing_account = result.scalar_one_or_none()
     
     if billing_account:
+        if event_id and billing_account.last_webhook_event_id == event_id:
+            return {"message": "Event already processed"}
         billing_account.subscription_status = SubscriptionStatus.CANCELED
         if cancelled_at:
             try:
                 billing_account.cancelled_at = datetime.fromisoformat(cancelled_at.replace('Z', '+00:00'))
             except (ValueError, AttributeError):
                 pass
+        if event_id:
+            billing_account.last_webhook_event_id = event_id
         await db.commit()
         logger.info(f"Cancelled subscription for account {billing_account.id}")
     
     return {"message": "Subscription cancelled processed"}
 
 
-async def handle_subscription_paused(data: dict, db: AsyncSession) -> dict:
+async def handle_subscription_paused(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle subscription_paused event (maps to ACTIVE status)."""
     paddle_subscription_id = data.get("id")
     
@@ -194,15 +231,19 @@ async def handle_subscription_paused(data: dict, db: AsyncSession) -> dict:
     billing_account = result.scalar_one_or_none()
     
     if billing_account:
+        if event_id and billing_account.last_webhook_event_id == event_id:
+            return {"message": "Event already processed"}
         # Paused is treated as ACTIVE but with a note in logs
         billing_account.subscription_status = SubscriptionStatus.ACTIVE
+        if event_id:
+            billing_account.last_webhook_event_id = event_id
         await db.commit()
         logger.info(f"Paused subscription for account {billing_account.id}")
     
     return {"message": "Subscription paused processed"}
 
 
-async def handle_subscription_resumed(data: dict, db: AsyncSession) -> dict:
+async def handle_subscription_resumed(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle subscription_resumed event (maps to ACTIVE status)."""
     paddle_subscription_id = data.get("id")
     
@@ -214,14 +255,18 @@ async def handle_subscription_resumed(data: dict, db: AsyncSession) -> dict:
     billing_account = result.scalar_one_or_none()
     
     if billing_account:
+        if event_id and billing_account.last_webhook_event_id == event_id:
+            return {"message": "Event already processed"}
         billing_account.subscription_status = SubscriptionStatus.ACTIVE
+        if event_id:
+            billing_account.last_webhook_event_id = event_id
         await db.commit()
         logger.info(f"Resumed subscription for account {billing_account.id}")
     
     return {"message": "Subscription resumed processed"}
 
 
-async def handle_transaction_completed(data: dict, db: AsyncSession) -> dict:
+async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle transaction_completed event (payment successful)."""
     subscription_id = data.get("subscription_id")
     amount = data.get("amount")
@@ -235,6 +280,8 @@ async def handle_transaction_completed(data: dict, db: AsyncSession) -> dict:
         billing_account = result.scalar_one_or_none()
         
         if billing_account and amount:
+            if event_id and billing_account.last_webhook_event_id == event_id:
+                return {"message": "Event already processed"}
             # Update balance and spending
             from decimal import Decimal
             amount_decimal = Decimal(str(amount))
@@ -242,18 +289,31 @@ async def handle_transaction_completed(data: dict, db: AsyncSession) -> dict:
             # Deduct from balance if available
             if billing_account.balance > 0:
                 billing_account.balance = max(billing_account.balance - amount_decimal, Decimal("0.0"))
-            
+            billing_account.last_transaction_id = data.get("id") or billing_account.last_transaction_id
+            if event_id:
+                billing_account.last_webhook_event_id = event_id
             await db.commit()
             logger.info(f"Transaction completed for account {billing_account.id}: ${amount}")
     
     return {"message": "Transaction completed processed"}
 
 
-async def handle_transaction_failed(data: dict, db: AsyncSession) -> dict:
+async def handle_transaction_failed(data: dict, db: AsyncSession, event_id: Optional[str] = None) -> dict:
     """Handle transaction_failed event (payment failure)."""
     subscription_id = data.get("subscription_id")
     error_message = data.get("error", {}).get("message", "Unknown error")
     
-    logger.warning(f"Transaction failed for subscription {subscription_id}: {error_message}")
+    logger.warning(f"Transaction failed for subscription {subscription_id}: {error_message} event_id={event_id}")
     
     return {"message": "Transaction failed processed"}
+
+
+def verify_timestamp(timestamp_header: str) -> bool:
+    """Check timestamp is within tolerance window."""
+    try:
+        ts = datetime.fromisoformat(timestamp_header.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    now = datetime.now(timezone.utc)
+    delta = abs((now - ts).total_seconds())
+    return delta <= WEBHOOK_TOLERANCE_SECONDS

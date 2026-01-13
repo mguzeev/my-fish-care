@@ -33,11 +33,8 @@
    - TODO: add hosted checkout link creation (Paddle Transactions) so frontend always gets redirectable URL when Paddle API does not return one.
 
 4) Webhook verification + handling
-   - Verify HMAC signatures using paddle_webhook_secret (timestamp + payload) and enforce a max age window.
-   - Reject if event_id already processed (use last_webhook_event_id or separate table) to ensure idempotency.
-   - Align status mapping: paused -> PAUSED (new enum) or keep ACTIVE with a flag; map past_due, expired consistently.
-   - Persist next_billing_date/cancelled_at when provided; update balance/total_spent with decimal safety.
-   - Handle missing account gracefully but log/alert; optionally enqueue manual review.
+   - PARTIAL: Added HMAC verification with timestamp tolerance, plus idempotency via last_webhook_event_id and last_transaction_id updates.
+   - TODO: add stricter status mapping (paused vs active), alerting for missing accounts, and consider separate idempotency table if multi-subscription per org.
 
 5) Plan/price management tooling
    - Add admin/CLI script to sync Paddle products/prices into SubscriptionPlan (populate paddle_price_id/product_id).
