@@ -184,6 +184,55 @@ class SubscriptionResponse(BaseModel):
     updated_at: datetime
 
 
+class BillingAccountDetailedResponse(BaseModel):
+    """Detailed billing account information including Paddle details."""
+    id: int
+    organization_id: int
+    organization_name: str
+    user_count: int
+    user_email: Optional[str]  # Primary contact email
+    
+    # Subscription info
+    plan_name: Optional[str]
+    plan_id: Optional[int]
+    status: str
+    
+    # Paddle info
+    paddle_customer_id: Optional[str]
+    paddle_subscription_id: Optional[str]
+    last_webhook_event_id: Optional[str]
+    last_transaction_id: Optional[str]
+    
+    # Dates
+    subscription_start_date: Optional[datetime]
+    subscription_end_date: Optional[datetime]
+    trial_end_date: Optional[datetime]
+    next_billing_date: Optional[datetime]
+    cancelled_at: Optional[datetime]
+    trial_started_at: Optional[datetime]
+    
+    # Financial
+    balance: Decimal
+    total_spent: Decimal
+    
+    # Usage tracking
+    free_requests_used: int
+    requests_used_current_period: int
+    period_started_at: Optional[datetime]
+    
+    # Timestamps
+    created_at: datetime
+    updated_at: datetime
+
+
+class BillingAccountFilterRequest(BaseModel):
+    """Filter parameters for billing accounts."""
+    status: Optional[str] = None  # active, canceled, trialing, past_due
+    plan_id: Optional[int] = None
+    organization_id: Optional[int] = None
+    has_paddle: Optional[bool] = None  # True: has paddle_subscription_id, False: doesn't
+
+
 @router.get("/subscriptions", response_model=list[SubscriptionResponse])
 async def list_subscriptions(
     current_user: User = Depends(get_current_active_user),
@@ -205,6 +254,146 @@ async def list_subscriptions(
     rows = result.all()
     
     # Count users for each organization
+    subscriptions = []
+    for billing, org, plan in rows:
+        user_count_result = await db.execute(
+            select(func.count(User.id)).where(User.organization_id == org.id)
+        )
+        user_count = user_count_result.scalar() or 0
+        
+        subscriptions.append(
+            SubscriptionResponse(
+                id=billing.id,
+                organization_id=billing.organization_id,
+                organization_name=org.name,
+                user_count=user_count,
+                plan_name=plan.name if plan else None,
+                plan_id=plan.id if plan else None,
+                status=billing.subscription_status.value,
+                paddle_subscription_id=billing.paddle_subscription_id,
+                total_spent=billing.total_spent,
+                created_at=billing.created_at,
+                updated_at=billing.updated_at,
+            )
+        )
+    
+    return subscriptions
+
+
+@router.get("/subscriptions/{billing_account_id}/details", response_model=BillingAccountDetailedResponse)
+async def get_billing_account_details(
+    billing_account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get detailed information about a billing account including Paddle data."""
+    result = await db.execute(
+        select(BillingAccount, Organization, SubscriptionPlan)
+        .join(Organization, BillingAccount.organization_id == Organization.id)
+        .outerjoin(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+        .where(BillingAccount.id == billing_account_id)
+    )
+    row = result.one_or_none()
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    billing, org, plan = row
+    
+    # Count users in organization
+    user_count_result = await db.execute(
+        select(func.count(User.id)).where(User.organization_id == org.id)
+    )
+    user_count = user_count_result.scalar() or 0
+    
+    # Get primary contact email (first user in org or org creator)
+    user_result = await db.execute(
+        select(User.email)
+        .where(User.organization_id == org.id)
+        .limit(1)
+    )
+    user_email = user_result.scalar()
+    
+    return BillingAccountDetailedResponse(
+        id=billing.id,
+        organization_id=billing.organization_id,
+        organization_name=org.name,
+        user_count=user_count,
+        user_email=user_email,
+        plan_name=plan.name if plan else None,
+        plan_id=plan.id if plan else None,
+        status=billing.subscription_status.value,
+        paddle_customer_id=billing.paddle_customer_id,
+        paddle_subscription_id=billing.paddle_subscription_id,
+        last_webhook_event_id=billing.last_webhook_event_id,
+        last_transaction_id=billing.last_transaction_id,
+        subscription_start_date=billing.subscription_start_date,
+        subscription_end_date=billing.subscription_end_date,
+        trial_end_date=billing.trial_end_date,
+        next_billing_date=billing.next_billing_date,
+        cancelled_at=billing.cancelled_at,
+        trial_started_at=billing.trial_started_at,
+        balance=billing.balance,
+        total_spent=billing.total_spent,
+        free_requests_used=billing.free_requests_used,
+        requests_used_current_period=billing.requests_used_current_period,
+        period_started_at=billing.period_started_at,
+        created_at=billing.created_at,
+        updated_at=billing.updated_at,
+    )
+
+
+@router.get("/subscriptions/filter", response_model=list[SubscriptionResponse])
+async def filter_billing_accounts(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    status: Optional[str] = Query(None),
+    plan_id: Optional[int] = Query(None),
+    organization_id: Optional[int] = Query(None),
+    has_paddle: Optional[bool] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+):
+    """Filter billing accounts by various criteria."""
+    query = select(BillingAccount, Organization, SubscriptionPlan).join(
+        Organization, BillingAccount.organization_id == Organization.id
+    ).outerjoin(
+        SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id
+    )
+    
+    # Apply filters
+    filters = []
+    if status:
+        from app.models.billing import SubscriptionStatus
+        try:
+            status_enum = SubscriptionStatus(status)
+            filters.append(BillingAccount.subscription_status == status_enum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    if plan_id:
+        filters.append(BillingAccount.subscription_plan_id == plan_id)
+    
+    if organization_id:
+        filters.append(BillingAccount.organization_id == organization_id)
+    
+    if has_paddle is not None:
+        if has_paddle:
+            filters.append(BillingAccount.paddle_subscription_id != None)
+        else:
+            filters.append(BillingAccount.paddle_subscription_id == None)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    # Order and pagination
+    query = query.order_by(BillingAccount.created_at.desc()).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
     subscriptions = []
     for billing, org, plan in rows:
         user_count_result = await db.execute(
@@ -723,6 +912,168 @@ async def sync_plans_from_paddle(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to sync plans from Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/sync-paddle")
+async def sync_billing_account_from_paddle(
+    billing_account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sync Paddle subscription data for a specific billing account."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    from app.models.billing import SubscriptionStatus
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Paddle billing is not enabled"
+        )
+    
+    # Get billing account
+    billing_result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = billing_result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        return {
+            "status": "skipped",
+            "message": "Billing account has no Paddle subscription ID",
+            "billing_account_id": billing_account_id
+        }
+    
+    try:
+        client = PaddleClient()
+        # Fetch current subscription state from Paddle
+        subscription_data = await client.get_subscription(billing.paddle_subscription_id)
+        
+        if not subscription_data:
+            return {
+                "status": "error",
+                "message": "Failed to fetch subscription from Paddle",
+                "billing_account_id": billing_account_id
+            }
+        
+        # Update billing account with current Paddle state
+        paddle_status = subscription_data.get("status", "").lower()
+        
+        # Map Paddle status to our enum
+        status_map = {
+            "active": SubscriptionStatus.ACTIVE,
+            "canceled": SubscriptionStatus.CANCELED,
+            "past_due": SubscriptionStatus.PAST_DUE,
+            "trialing": SubscriptionStatus.TRIALING,
+            "paused": SubscriptionStatus.TRIALING,  # Treat paused as trialing
+        }
+        
+        if paddle_status in status_map:
+            billing.subscription_status = status_map[paddle_status]
+        
+        # Update dates if available
+        if subscription_data.get("next_billed_at"):
+            from dateutil.parser import parse as parse_date
+            billing.next_billing_date = parse_date(subscription_data.get("next_billed_at"))
+        
+        if subscription_data.get("cancelled_at"):
+            from dateutil.parser import parse as parse_date
+            billing.cancelled_at = parse_date(subscription_data.get("cancelled_at"))
+        
+        if subscription_data.get("started_at"):
+            from dateutil.parser import parse as parse_date
+            billing.subscription_start_date = parse_date(subscription_data.get("started_at"))
+        
+        if subscription_data.get("trial_ends_at"):
+            from dateutil.parser import parse as parse_date
+            billing.trial_end_date = parse_date(subscription_data.get("trial_ends_at"))
+        
+        await db.commit()
+        await db.refresh(billing)
+        
+        return {
+            "status": "synced",
+            "message": "Successfully synced Paddle subscription data",
+            "billing_account_id": billing_account_id,
+            "subscription_status": billing.subscription_status.value,
+            "next_billing_date": str(billing.next_billing_date) if billing.next_billing_date else None,
+            "paddle_subscription_id": billing.paddle_subscription_id
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to sync from Paddle: {str(e)}",
+            "billing_account_id": billing_account_id
+        }
+
+
+@router.get("/subscriptions/paddle/drift-detection")
+async def detect_paddle_drift(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Detect drift between local and Paddle subscription states."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    from app.models.billing import SubscriptionStatus
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="Paddle billing is not enabled"
+        )
+    
+    try:
+        # Get all billing accounts with Paddle subscriptions
+        result = await db.execute(
+            select(BillingAccount)
+            .where(BillingAccount.paddle_subscription_id != None)
+            .limit(100)  # Limit to 100 to avoid timeout
+        )
+        accounts = result.scalars().all()
+        
+        drift_detected = []
+        client = PaddleClient()
+        
+        for account in accounts:
+            try:
+                subscription_data = await client.get_subscription(account.paddle_subscription_id)
+                paddle_status = subscription_data.get("status", "").lower()
+                
+                # Check if statuses match
+                local_status = account.subscription_status.value.lower()
+                
+                if paddle_status != local_status:
+                    drift_detected.append({
+                        "billing_account_id": account.id,
+                        "local_status": local_status,
+                        "paddle_status": paddle_status,
+                        "paddle_subscription_id": account.paddle_subscription_id,
+                        "organization_id": account.organization_id,
+                    })
+            except Exception as e:
+                drift_detected.append({
+                    "billing_account_id": account.id,
+                    "error": str(e),
+                    "paddle_subscription_id": account.paddle_subscription_id,
+                })
+        
+        return {
+            "checked_count": len(accounts),
+            "drift_count": len(drift_detected),
+            "drifted_accounts": drift_detected
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to detect drift: {str(e)}"
         )
 
 
