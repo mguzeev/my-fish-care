@@ -26,6 +26,27 @@ templates = Jinja2Templates(directory="app/templates")
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
 
+def get_paddle_client() -> PaddleClient:
+	"""Dependency wrapper to allow overriding Paddle client in tests."""
+	return paddle_client
+
+
+def _as_dict(obj: object) -> dict:
+	"""Normalize Paddle SDK objects or fakes to a dict for uniform access."""
+	if obj is None:
+		return {}
+	if isinstance(obj, dict):
+		return obj
+	if hasattr(obj, "dict"):
+		try:
+			return obj.dict()
+		except Exception:
+			pass
+	if hasattr(obj, "__dict__"):
+		return dict(obj.__dict__)
+	return {}
+
+
 @router.get("/upgrade", response_class=HTMLResponse)
 async def upgrade_page(request: Request):
 	"""Render upgrade page."""
@@ -151,7 +172,7 @@ async def subscribe(
 	payload: SubscribeRequest,
 	current_user: User = Depends(get_current_active_user),
 	db: AsyncSession = Depends(get_db),
-	paddle: PaddleClient = Depends(lambda: get_paddle_client()),
+	paddle: PaddleClient = Depends(get_paddle_client),
 ):
 	if not current_user.organization_id:
 		raise HTTPException(status_code=400, detail="Organization required")
@@ -177,20 +198,24 @@ async def subscribe(
 
 		# Create Paddle customer if missing
 		if not ba.paddle_customer_id:
-			customer = await paddle.create_customer(
-				email=current_user.email,
-				name=current_user.full_name or current_user.email,
+			customer = _as_dict(
+				await paddle.create_customer(
+					email=current_user.email,
+					name=current_user.full_name or current_user.email,
+				)
 			)
 			ba.paddle_customer_id = customer.get("id")
 			if not ba.paddle_customer_id:
 				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
 
 		# Create Paddle subscription
-		subscription = await paddle.create_subscription(
-			customer_id=ba.paddle_customer_id,
-			price_id=plan.paddle_price_id,
+		subscription = _as_dict(
+			await paddle.create_subscription(
+				customer_id=ba.paddle_customer_id,
+				price_id=plan.paddle_price_id,
+			)
 		)
-		subscription_id = subscription.get("id") if isinstance(subscription, dict) else None
+		subscription_id = subscription.get("id")
 		if not subscription_id:
 			raise HTTPException(status_code=502, detail="Failed to create Paddle subscription")
 
@@ -198,7 +223,7 @@ async def subscribe(
 		# Capture next billing date if provided
 		next_bill = None
 		for key in ("next_billed_at", "next_billing_date"):
-			next_bill = subscription.get(key) if isinstance(subscription, dict) else None
+			next_bill = subscription.get(key)
 			if next_bill:
 				break
 		if next_bill:
@@ -209,18 +234,20 @@ async def subscribe(
 
 		# Some Paddle responses include hosted url; surface if present
 		for key in ("url", "checkout_url", "hosted_page_url"):
-			if isinstance(subscription, dict) and subscription.get(key):
+			if subscription.get(key):
 				checkout_url = subscription.get(key)
 				break
 
 		# Fallback: create hosted checkout transaction if no checkout_url returned
 		if not checkout_url:
-			transaction = await paddle.create_transaction_checkout(
-				customer_id=ba.paddle_customer_id,
-				price_id=plan.paddle_price_id,
+			transaction = _as_dict(
+				await paddle.create_transaction_checkout(
+					customer_id=ba.paddle_customer_id,
+					price_id=plan.paddle_price_id,
+				)
 			)
 			for key in ("url", "checkout_url", "hosted_page_url"):
-				if isinstance(transaction, dict) and transaction.get(key):
+				if transaction.get(key):
 					checkout_url = transaction.get(key)
 					break
 
@@ -233,11 +260,6 @@ async def subscribe(
 
 	account = await get_billing_account(current_user, db)
 	return account.model_copy(update={"checkout_url": checkout_url})
-
-
-def get_paddle_client() -> PaddleClient:
-	"""Dependency wrapper to allow overriding Paddle client in tests."""
-	return paddle_client
 
 
 @router.post("/cancel", response_model=BillingAccountResponse)
