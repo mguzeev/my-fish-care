@@ -19,7 +19,7 @@ from app.models.user import User
 
 
 logger = logging.getLogger(__name__)
-EXCLUDE_PATHS = {"/health", "/", "/docs", "/openapi.json"}
+EXCLUDE_PATHS = {"/health", "/docs", "/openapi.json"}
 
 
 class UsageMiddleware(BaseHTTPMiddleware):

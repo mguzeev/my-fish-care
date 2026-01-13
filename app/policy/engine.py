@@ -245,9 +245,9 @@ class PolicyEngine:
         user: User
     ) -> None:
         """Increment usage counter after successful agent invocation."""
-        if user.is_superuser:
-            return  # Superusers don't consume limits
-        
+        # Superusers still consume counters for visibility, but are never blocked
+        is_superuser = user.is_superuser
+
         if not user.organization_id:
             return
         
@@ -306,6 +306,7 @@ class PolicyEngine:
         # Reset if period has expired
         if now >= period_end:
             billing_account.requests_used_current_period = 0
+            billing_account.free_requests_used = 0
             billing_account.period_started_at = now
 
     @staticmethod
