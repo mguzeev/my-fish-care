@@ -38,6 +38,7 @@
             <button class="admin-tab" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
             <button class="admin-tab" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
             <button class="admin-tab" onclick="switchTab('llm-models')" role="tab" aria-selected="false" aria-controls="llm-models">LLM Models</button>
+            <button class="admin-tab" onclick="switchTab('logs')" role="tab" aria-selected="false" aria-controls="logs">Usage Logs</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -132,6 +133,27 @@
                     <button class="btn-primary" onclick="showCreateLLMModelModal()">+ Add Model</button>
                 </div>
                 <div id="llmModelsTable" class="loading">Loading LLM models</div>
+            </div>
+        </div>
+
+        <!-- Usage Logs Tab -->
+        <div id="logs" class="tab-content" role="tabpanel" aria-labelledby="logs-tab">
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>Usage Logs</h2>
+                    <div class="logs-filters">
+                        <input type="text" id="logsSearch" placeholder="Search by endpoint or user..." onkeyup="filterLogs()">
+                        <select id="logsDays" onchange="loadLogs()">
+                            <option value="1">Last 24 hours</option>
+                            <option value="7" selected>Last 7 days</option>
+                            <option value="30">Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                        <input type="number" id="logsLimit" min="10" max="500" value="100" placeholder="Limit" onchange="loadLogs()" style="width: 100px;">
+                        <button onclick="loadLogs()" class="btn-secondary">Refresh</button>
+                    </div>
+                </div>
+                <div id="logsTable" class="loading">Loading logs...</div>
             </div>
         </div>
     </div>
@@ -817,6 +839,9 @@
                     break;
                 case 'llm-models':
                     await loadLLMModels();
+                    break;
+                case 'logs':
+                    await loadLogs();
                     break;
             }
         }
@@ -2221,6 +2246,110 @@
             await loadAgents();
             await loadAgentsDropdown();
         });
+
+        // Usage Logs Functions
+        let allLogs = [];
+
+        async function loadLogs() {
+            try {
+                const days = document.getElementById('logsDays').value || 7;
+                const limit = document.getElementById('logsLimit').value || 100;
+                
+                const response = await apiCall(`/billing/usage-records?days=${days}&limit=${limit}`, { method: 'GET' });
+                
+                if (!response || !Array.isArray(response)) {
+                    document.getElementById('logsTable').innerHTML = '<p class="error">No logs found</p>';
+                    return;
+                }
+
+                // Sort by created_at descending (newest first)
+                allLogs = response.sort((a, b) => {
+                    const dateA = new Date(a.created_at);
+                    const dateB = new Date(b.created_at);
+                    return dateB - dateA;
+                });
+
+                displayLogs(allLogs);
+            } catch (error) {
+                document.getElementById('logsTable').innerHTML = `<p class="error">Error loading logs: ${error.message}</p>`;
+            }
+        }
+
+        function displayLogs(logs) {
+            if (!logs || logs.length === 0) {
+                document.getElementById('logsTable').innerHTML = '<p class="no-data">No logs found</p>';
+                return;
+            }
+
+            let html = `
+                <table class="data-grid">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Endpoint</th>
+                            <th>Method</th>
+                            <th>Status</th>
+                            <th>Response Time (ms)</th>
+                            <th>Tokens</th>
+                            <th>Cost</th>
+                            <th>User</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            logs.forEach(log => {
+                const date = new Date(log.created_at);
+                const timeStr = date.toLocaleString();
+                const statusClass = log.status_code >= 400 ? 'error' : log.status_code >= 300 ? 'warning' : 'success';
+                const tokens = log.total_tokens || 0;
+                const cost = log.cost ? parseFloat(log.cost).toFixed(4) : '0.0000';
+                const errorMsg = log.error_message ? `<span title="${log.error_message}">Error</span>` : '-';
+
+                html += `
+                    <tr>
+                        <td><small>${timeStr}</small></td>
+                        <td><code>${log.endpoint || '-'}</code></td>
+                        <td>${log.method || '-'}</td>
+                        <td><span class="status-badge ${statusClass}">${log.status_code}</span></td>
+                        <td>${log.response_time_ms}ms</td>
+                        <td>${tokens}</td>
+                        <td>$${cost}</td>
+                        <td><small>${log.user_id || '-'}</small></td>
+                        <td>${errorMsg}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('logsTable').innerHTML = html;
+        }
+
+        function filterLogs() {
+            const searchText = document.getElementById('logsSearch').value.toLowerCase();
+            
+            if (!searchText) {
+                displayLogs(allLogs);
+                return;
+            }
+
+            const filtered = allLogs.filter(log => {
+                const endpoint = (log.endpoint || '').toLowerCase();
+                const userId = String(log.user_id || '').toLowerCase();
+                const errorMsg = (log.error_message || '').toLowerCase();
+                
+                return endpoint.includes(searchText) || 
+                       userId.includes(searchText) || 
+                       errorMsg.includes(searchText);
+            });
+
+            displayLogs(filtered);
+        }
     </script>
 </body>
 </html>

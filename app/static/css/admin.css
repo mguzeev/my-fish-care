@@ -620,3 +620,109 @@ tr:hover {
         grid-template-columns: 1fr;
     }
 }
+/* Usage Logs Styles */
+.logs-filters {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 1rem 0;
+}
+
+.logs-filters input,
+.logs-filters select {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--admin-border);
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    background-color: var(--admin-bg-card);
+    color: var(--admin-text);
+}
+
+.logs-filters input:focus,
+.logs-filters select:focus {
+    outline: none;
+    border-color: var(--admin-primary);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.logs-filters input::placeholder {
+    color: var(--admin-text-light);
+}
+
+/* Status Badge in Logs */
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.success {
+    background-color: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.warning {
+    background-color: #fed7aa;
+    color: #92400e;
+}
+
+.status-badge.error {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+/* Logs Table */
+.data-grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+.data-grid thead {
+    background-color: var(--admin-bg-secondary);
+    border-bottom: 2px solid var(--admin-border);
+}
+
+.data-grid th {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--admin-text);
+    font-size: 0.875rem;
+}
+
+.data-grid td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--admin-border);
+    color: var(--admin-text);
+    font-size: 0.875rem;
+}
+
+.data-grid tbody tr:hover {
+    background-color: var(--admin-bg-hover);
+}
+
+.data-grid code {
+    background-color: var(--admin-bg-secondary);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
+}
+
+.no-data,
+.error {
+    padding: 2rem;
+    text-align: center;
+    color: var(--admin-text-light);
+    font-size: 1rem;
+}
+
+.error {
+    color: var(--admin-danger);
+}
