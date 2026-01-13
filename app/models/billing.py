@@ -137,3 +137,52 @@ class BillingAccount(Base):
     
     def __repr__(self) -> str:
         return f"<BillingAccount(id={self.id}, organization_id={self.organization_id})>"
+
+class WebhookEventStatus(str, Enum):
+    """Webhook processing status."""
+    RECEIVED = "received"
+    PROCESSED = "processed"
+    FAILED = "failed"
+    SKIPPED = "skipped"  # Duplicate or unsupported
+
+
+class PaddleWebhookEvent(Base):
+    """Log of Paddle webhook events for audit and troubleshooting."""
+    
+    __tablename__ = "paddle_webhook_events"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
+    # Webhook identifiers
+    paddle_event_id: Mapped[str] = mapped_column(String(150), unique=True, index=True, nullable=False)
+    event_type: Mapped[str] = mapped_column(String(100), index=True, nullable=False)  # subscription.created, etc
+    
+    # Related IDs
+    paddle_subscription_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    paddle_customer_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    paddle_transaction_id: Mapped[Optional[str]] = mapped_column(String(100), index=True)
+    
+    # Local reference
+    billing_account_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("billing_accounts.id", ondelete="SET NULL"), index=True
+    )
+    
+    # Processing
+    status: Mapped[WebhookEventStatus] = mapped_column(
+        SQLEnum(WebhookEventStatus, native_enum=False), default=WebhookEventStatus.RECEIVED, nullable=False
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(String(500))
+    
+    # Signature verification
+    signature_valid: Mapped[bool] = mapped_column(default=False, nullable=False)
+    signature_timestamp: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
+    # Payload
+    payload_json: Mapped[str] = mapped_column(String(10000), nullable=False)  # Full webhook payload
+    
+    # Timestamps
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
+    def __repr__(self) -> str:
+        return f"<PaddleWebhookEvent(id={self.id}, event_id={self.paddle_event_id}, type={self.event_type})>"

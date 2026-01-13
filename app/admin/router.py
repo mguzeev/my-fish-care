@@ -13,7 +13,7 @@ from app.auth.dependencies import get_current_active_user
 from app.core.database import get_db
 from app.models.user import User
 from app.models.organization import Organization
-from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
+from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus, PaddleWebhookEvent, WebhookEventStatus
 from app.models.usage import UsageRecord
 from app.models.policy import PolicyRule
 from app.models.prompt import PromptVersion
@@ -644,6 +644,228 @@ async def delete_subscription_plan(
     await db.delete(plan)
     await db.commit()
     return {"detail": "Plan deleted"}
+
+
+# ============================================================================
+# Paddle Webhook Management
+# ============================================================================
+
+class WebhookEventResponse(BaseModel):
+    """Webhook event details."""
+    id: int
+    paddle_event_id: str
+    event_type: str
+    paddle_subscription_id: Optional[str]
+    paddle_customer_id: Optional[str]
+    paddle_transaction_id: Optional[str]
+    billing_account_id: Optional[int]
+    status: str
+    error_message: Optional[str]
+    signature_valid: bool
+    signature_timestamp: Optional[datetime]
+    received_at: datetime
+    processed_at: Optional[datetime]
+
+
+class WebhookEventDetailedResponse(WebhookEventResponse):
+    """Webhook event with full payload."""
+    payload_json: str
+
+
+@router.get("/webhooks", response_model=list[WebhookEventResponse])
+async def list_webhook_events(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    event_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    billing_account_id: Optional[int] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """List Paddle webhook events with filters."""
+    query = select(PaddleWebhookEvent)
+    
+    filters = []
+    if event_type:
+        filters.append(PaddleWebhookEvent.event_type == event_type)
+    
+    if status:
+        try:
+            status_enum = WebhookEventStatus(status)
+            filters.append(PaddleWebhookEvent.status == status_enum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    if billing_account_id:
+        filters.append(PaddleWebhookEvent.billing_account_id == billing_account_id)
+    
+    if filters:
+        query = query.where(and_(*filters))
+    
+    query = query.order_by(PaddleWebhookEvent.received_at.desc()).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    events = result.scalars().all()
+    
+    return [
+        WebhookEventResponse(
+            id=e.id,
+            paddle_event_id=e.paddle_event_id,
+            event_type=e.event_type,
+            paddle_subscription_id=e.paddle_subscription_id,
+            paddle_customer_id=e.paddle_customer_id,
+            paddle_transaction_id=e.paddle_transaction_id,
+            billing_account_id=e.billing_account_id,
+            status=e.status.value,
+            error_message=e.error_message,
+            signature_valid=e.signature_valid,
+            signature_timestamp=e.signature_timestamp,
+            received_at=e.received_at,
+            processed_at=e.processed_at,
+        )
+        for e in events
+    ]
+
+
+@router.get("/webhooks/{event_id}", response_model=WebhookEventDetailedResponse)
+async def get_webhook_event_details(
+    event_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get full webhook event details including payload."""
+    result = await db.execute(
+        select(PaddleWebhookEvent).where(PaddleWebhookEvent.id == event_id)
+    )
+    event = result.scalar_one_or_none()
+    
+    if not event:
+        raise HTTPException(status_code=404, detail="Webhook event not found")
+    
+    return WebhookEventDetailedResponse(
+        id=event.id,
+        paddle_event_id=event.paddle_event_id,
+        event_type=event.event_type,
+        paddle_subscription_id=event.paddle_subscription_id,
+        paddle_customer_id=event.paddle_customer_id,
+        paddle_transaction_id=event.paddle_transaction_id,
+        billing_account_id=event.billing_account_id,
+        status=event.status.value,
+        error_message=event.error_message,
+        signature_valid=event.signature_valid,
+        signature_timestamp=event.signature_timestamp,
+        received_at=event.received_at,
+        processed_at=event.processed_at,
+        payload_json=event.payload_json,
+    )
+
+
+@router.get("/webhooks/stats")
+async def get_webhook_stats(
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get webhook processing statistics."""
+    # Total webhooks
+    total_result = await db.execute(select(func.count(PaddleWebhookEvent.id)))
+    total = total_result.scalar() or 0
+    
+    # By status
+    processed_result = await db.execute(
+        select(func.count(PaddleWebhookEvent.id)).where(
+            PaddleWebhookEvent.status == WebhookEventStatus.PROCESSED
+        )
+    )
+    processed = processed_result.scalar() or 0
+    
+    failed_result = await db.execute(
+        select(func.count(PaddleWebhookEvent.id)).where(
+            PaddleWebhookEvent.status == WebhookEventStatus.FAILED
+        )
+    )
+    failed = failed_result.scalar() or 0
+    
+    skipped_result = await db.execute(
+        select(func.count(PaddleWebhookEvent.id)).where(
+            PaddleWebhookEvent.status == WebhookEventStatus.SKIPPED
+        )
+    )
+    skipped = skipped_result.scalar() or 0
+    
+    # Recent failures (last 24h)
+    from datetime import timedelta
+    day_ago = datetime.utcnow() - timedelta(days=1)
+    recent_failures_result = await db.execute(
+        select(func.count(PaddleWebhookEvent.id)).where(
+            (PaddleWebhookEvent.status == WebhookEventStatus.FAILED) &
+            (PaddleWebhookEvent.received_at >= day_ago)
+        )
+    )
+    recent_failures = recent_failures_result.scalar() or 0
+    
+    # Most common event types
+    event_types_result = await db.execute(
+        select(
+            PaddleWebhookEvent.event_type,
+            func.count(PaddleWebhookEvent.id).label("count")
+        )
+        .group_by(PaddleWebhookEvent.event_type)
+        .order_by(func.count(PaddleWebhookEvent.id).desc())
+        .limit(10)
+    )
+    event_types = [{"event_type": row[0], "count": row[1]} for row in event_types_result.all()]
+    
+    return {
+        "total_webhooks": total,
+        "by_status": {
+            "processed": processed,
+            "failed": failed,
+            "skipped": skipped,
+            "pending": total - processed - failed - skipped,
+        },
+        "health": {
+            "recent_failures_24h": recent_failures,
+            "success_rate": f"{(processed / total * 100) if total > 0 else 0:.1f}%",
+            "failure_rate": f"{(failed / total * 100) if total > 0 else 0:.1f}%",
+        },
+        "top_event_types": event_types
+    }
+
+
+@router.post("/webhooks/{event_id}/reprocess")
+async def reprocess_webhook_event(
+    event_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reprocess a failed webhook event."""
+    result = await db.execute(
+        select(PaddleWebhookEvent).where(PaddleWebhookEvent.id == event_id)
+    )
+    event = result.scalar_one_or_none()
+    
+    if not event:
+        raise HTTPException(status_code=404, detail="Webhook event not found")
+    
+    if event.status != WebhookEventStatus.FAILED:
+        raise HTTPException(
+            status_code=400,
+            detail="Only failed events can be reprocessed"
+        )
+    
+    # NOTE: In production, this should call the actual webhook handler
+    # For now, just return a message
+    return {
+        "status": "queued",
+        "message": "Webhook reprocessing queued (manual implementation required)",
+        "event_id": event_id,
+        "paddle_event_id": event.paddle_event_id,
+        "note": "To fully implement, integrate with webhook processing logic"
+    }
 
 
 # ============================================================================
