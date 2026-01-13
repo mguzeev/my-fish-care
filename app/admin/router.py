@@ -325,6 +325,35 @@ async def create_subscription_plan(
     )
 
 
+@router.get("/plans/{plan_id}", response_model=SubscriptionPlanResponse)
+async def get_plan(
+    plan_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single subscription plan by ID"""
+    stmt = select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id)
+    result = await db.execute(stmt)
+    plan = result.scalar_one_or_none()
+    
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    return SubscriptionPlanResponse(
+        id=plan.id,
+        name=plan.name,
+        interval=plan.interval.value,
+        price=plan.price,
+        currency=plan.currency,
+        max_requests_per_interval=plan.max_requests_per_interval,
+        max_tokens_per_request=plan.max_tokens_per_request,
+        has_api_access=plan.has_api_access,
+        has_priority_support=plan.has_priority_support,
+        has_advanced_analytics=plan.has_advanced_analytics,
+    )
+
+
 @router.put("/plans/{plan_id}", response_model=SubscriptionPlanResponse)
 async def update_subscription_plan(
     plan_id: int,
