@@ -243,6 +243,8 @@ class SubscriptionPlanResponse(BaseModel):
     currency: str
     max_requests_per_interval: int
     max_tokens_per_request: int
+    free_requests_limit: int
+    free_trial_days: int
     has_api_access: bool
     has_priority_support: bool
     has_advanced_analytics: bool
@@ -255,6 +257,8 @@ class CreateSubscriptionPlanRequest(BaseModel):
     currency: str = "USD"
     max_requests_per_interval: int
     max_tokens_per_request: int
+    free_requests_limit: int = 0
+    free_trial_days: int = 0
     has_api_access: bool = False
     has_priority_support: bool = False
     has_advanced_analytics: bool = False
@@ -278,6 +282,8 @@ async def list_subscription_plans(
             currency=p.currency,
             max_requests_per_interval=p.max_requests_per_interval,
             max_tokens_per_request=p.max_tokens_per_request,
+            free_requests_limit=p.free_requests_limit,
+            free_trial_days=p.free_trial_days,
             has_api_access=p.has_api_access,
             has_priority_support=p.has_priority_support,
             has_advanced_analytics=p.has_advanced_analytics,
@@ -303,6 +309,8 @@ async def create_subscription_plan(
         currency=request.currency,
         max_requests_per_interval=request.max_requests_per_interval,
         max_tokens_per_request=request.max_tokens_per_request,
+        free_requests_limit=request.free_requests_limit,
+        free_trial_days=request.free_trial_days,
         has_api_access=request.has_api_access,
         has_priority_support=request.has_priority_support,
         has_advanced_analytics=request.has_advanced_analytics,
@@ -319,6 +327,8 @@ async def create_subscription_plan(
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
+        free_requests_limit=plan.free_requests_limit,
+        free_trial_days=plan.free_trial_days,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
@@ -348,6 +358,8 @@ async def get_plan(
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
+        free_requests_limit=plan.free_requests_limit,
+        free_trial_days=plan.free_trial_days,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
@@ -376,6 +388,8 @@ async def update_subscription_plan(
     plan.currency = request.currency
     plan.max_requests_per_interval = request.max_requests_per_interval
     plan.max_tokens_per_request = request.max_tokens_per_request
+    plan.free_requests_limit = request.free_requests_limit
+    plan.free_trial_days = request.free_trial_days
     plan.has_api_access = request.has_api_access
     plan.has_priority_support = request.has_priority_support
     plan.has_advanced_analytics = request.has_advanced_analytics
@@ -391,6 +405,8 @@ async def update_subscription_plan(
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
+        free_requests_limit=plan.free_requests_limit,
+        free_trial_days=plan.free_trial_days,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
