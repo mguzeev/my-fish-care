@@ -4,12 +4,15 @@
 
 The Paddle billing integration is now functional with configuration validation, checkout flow, webhook security, and comprehensive test coverage.
 
+**📘 For subscription management (add/remove items, upgrades, downgrades, proration), see [PADDLE_SUBSCRIPTION_MANAGEMENT.md](PADDLE_SUBSCRIPTION_MANAGEMENT.md)**
+
 ## Current State
 - **Configuration**: Paddle config validated on startup when billing enabled; environment toggles between sandbox/production.
 - **Checkout Flow**: `/billing/subscribe` creates Paddle customer+subscription, returns checkout_url for hosted payment; fallback transaction creation when subscription lacks URL.
 - **Webhook Security**: HMAC signature verification with timestamp tolerance (5min), idempotency via last_webhook_event_id and last_transaction_id tracking.
 - **Data Model**: BillingAccount tracks paddle_customer_id, paddle_subscription_id, next_billing_date, cancelled_at; webhook events update local state.
 - **Testing**: Comprehensive test coverage for webhook signature verification, idempotency, billing subscribe flow with Paddle client mocks.
+- **Subscription Management**: Full support for adding/removing items, proration modes, scheduled changes per Paddle API spec (see [PADDLE_SUBSCRIPTION_MANAGEMENT.md](PADDLE_SUBSCRIPTION_MANAGEMENT.md))
 
 ## Implementation Completed
 
@@ -32,6 +35,12 @@ The Paddle billing integration is now functional with configuration validation, 
   - Dependency injection via `get_paddle_client()` for test overrides
   - `_as_dict()` helper normalizes Paddle SDK objects and test fakes to uniform dict access
 - Paddle client wrapper: [app/core/paddle.py](app/core/paddle.py) with customer, subscription, transaction operations
+- **Subscription Updates**: [PaddleClient.update_subscription()](app/core/paddle.py#L95-L143) supports full Paddle API:
+  - Items management (add/remove prices/addons)
+  - Proration modes: `prorated_immediately`, `prorated_next_billing_period`, `full_immediately`, `full_next_billing_period`, `do_not_bill`
+  - Scheduled changes for future updates
+  - Helper methods: `add_subscription_items()`, `remove_subscription_items()`
+  - See [PADDLE_SUBSCRIPTION_MANAGEMENT.md](PADDLE_SUBSCRIPTION_MANAGEMENT.md) for usage guide
 
 ### 4. Webhook Security & Handling ✅
 - [app/webhooks/router.py](app/webhooks/router.py#L13-L140) `/webhooks/paddle`:

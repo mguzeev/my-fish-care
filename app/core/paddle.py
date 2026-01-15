@@ -95,34 +95,224 @@ class PaddleClient:
     async def update_subscription(
         self,
         subscription_id: str,
-        price_id: Optional[str] = None,
-        quantity: Optional[int] = None,
+        items: Optional[list] = None,
+        proration_billing_mode: str = "prorated_immediately",
+        scheduled_change: Optional[Dict[str, Any]] = None,
+        **kwargs
     ) -> Dict[str, Any]:
-        """Update a subscription."""
-        items = None
-        if price_id:
-            items = [{"price_id": price_id, "quantity": quantity or 1}]
+        """
+        Update a subscription with new items/prices.
         
-        response = self.client.update_subscription(subscription_id, items=items)
+        Args:
+            subscription_id: Paddle subscription ID
+            items: List of subscription items with price_id and quantity.
+                   Pass full list of items you want subscription to have.
+                   To remove an item, don't include it in the list.
+                   Example: [{"price_id": "pri_01...", "quantity": 1}]
+            proration_billing_mode: How to bill for proration:
+                - "prorated_immediately" (default): Bill prorated amount immediately
+                - "prorated_next_billing_period": Add prorated amount to next bill
+                - "full_immediately": Bill full amount immediately
+                - "full_next_billing_period": Add full amount to next bill
+                - "do_not_bill": Don't bill for changes
+            scheduled_change: Schedule change for later. Dict with:
+                - "action": "pause", "cancel", or "resume"
+                - "effective_at": ISO timestamp when to apply
+            **kwargs: Additional parameters supported by Paddle API
+        
+        Returns:
+            Updated subscription data
+        
+        Reference: https://developer.paddle.com/api-reference/subscriptions/update-subscription
+        """
+        update_params = {}
+        
+        if items is not None:
+            update_params["items"] = items
+        
+        if proration_billing_mode:
+            update_params["proration_billing_mode"] = proration_billing_mode
+        
+        if scheduled_change:
+            update_params["scheduled_change"] = scheduled_change
+        
+        # Merge any additional kwargs
+        update_params.update(kwargs)
+        
+        response = self.client.update_subscription(subscription_id, **update_params)
         return self._response_to_dict(response)
+    
+    async def add_subscription_items(
+        self,
+        subscription_id: str,
+        new_items: list,
+        proration_billing_mode: str = "prorated_immediately"
+    ) -> Dict[str, Any]:
+        """
+        Add items (prices/addons) to an existing subscription.
+        
+        Args:
+            subscription_id: Paddle subscription ID
+            new_items: List of items to add: [{"price_id": "pri_01...", "quantity": 1}]
+            proration_billing_mode: How to bill for added items
+        
+        Returns:
+            Updated subscription data
+        
+        Note: This fetches current items, merges with new items, and updates.
+        For better performance, call update_subscription() directly with full items list.
+        """
+        # Get current subscription to retrieve existing items
+        current_sub = await self.get_subscription(subscription_id)
+        existing_items = current_sub.get("items", [])
+        
+        # Build map of existing items by price_id
+        items_map = {}
+        for item in existing_items:
+            price_id = item.get("price", {}).get("id") if isinstance(item.get("price"), dict) else item.get("price_id")
+            if price_id:
+                items_map[price_id] = {
+                    "price_id": price_id,
+                    "quantity": item.get("quantity", 1)
+                }
+        
+        # Add or update with new items
+        for new_item in new_items:
+            price_id = new_item.get("price_id")
+            if price_id:
+                if price_id in items_map:
+                    # Update quantity (add to existing)
+                    items_map[price_id]["quantity"] += new_item.get("quantity", 1)
+                else:
+                    # Add new item
+                    items_map[price_id] = new_item
+        
+        # Convert back to list
+        all_items = list(items_map.values())
+        
+        return await self.update_subscription(
+            subscription_id=subscription_id,
+            items=all_items,
+            proration_billing_mode=proration_billing_mode
+        )
+    
+    async def remove_subscription_items(
+        self,
+        subscription_id: str,
+        price_ids_to_remove: list,
+        proration_billing_mode: str = "prorated_immediately"
+    ) -> Dict[str, Any]:
+        """
+        Remove items (prices/addons) from an existing subscription.
+        
+        Args:
+            subscription_id: Paddle subscription ID
+            price_ids_to_remove: List of price IDs to remove: ["pri_01...", "pri_02..."]
+            proration_billing_mode: How to bill for removed items
+        
+        Returns:
+            Updated subscription data
+        """
+        # Get current subscription
+        current_sub = await self.get_subscription(subscription_id)
+        existing_items = current_sub.get("items", [])
+        
+        # Filter out items to remove
+        remaining_items = []
+        for item in existing_items:
+            price_id = item.get("price", {}).get("id") if isinstance(item.get("price"), dict) else item.get("price_id")
+            if price_id and price_id not in price_ids_to_remove:
+                remaining_items.append({
+                    "price_id": price_id,
+                    "quantity": item.get("quantity", 1)
+                })
+        
+        if not remaining_items:
+            raise ValueError("Cannot remove all items from subscription. Consider canceling instead.")
+        
+        return await self.update_subscription(
+            subscription_id=subscription_id,
+            items=remaining_items,
+            proration_billing_mode=proration_billing_mode
+        )
     
     async def cancel_subscription(
         self,
         subscription_id: str,
         effective_from: str = "next_billing_period",
     ) -> Dict[str, Any]:
-        """Cancel a subscription."""
-        response = self.client.cancel_subscription(subscription_id)
+        """
+        Cancel a subscription.
+        
+        Args:
+            subscription_id: Paddle subscription ID
+            effective_from: When to cancel:
+                - "next_billing_period" (default): Cancel at end of current billing period
+                - "immediately": Cancel immediately and stop billing
+        
+        Returns:
+            Canceled subscription data
+        
+        Reference: https://developer.paddle.com/api-reference/subscriptions/cancel-subscription
+        """
+        # Paddle API accepts effective_from parameter
+        response = self.client.cancel_subscription(
+            subscription_id,
+            effective_from=effective_from
+        )
         return self._response_to_dict(response)
     
-    async def pause_subscription(self, subscription_id: str) -> Dict[str, Any]:
-        """Pause a subscription."""
-        response = self.client.pause_subscription(subscription_id)
+    async def pause_subscription(
+        self,
+        subscription_id: str,
+        effective_from: str = "next_billing_period",
+        resume_at: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Pause a subscription.
+        
+        Args:
+            subscription_id: Paddle subscription ID
+            effective_from: When to pause:
+                - "next_billing_period" (default): Pause at end of current period
+                - "immediately": Pause immediately
+            resume_at: ISO timestamp when to automatically resume (optional)
+        
+        Returns:
+            Paused subscription data
+        
+        Reference: https://developer.paddle.com/api-reference/subscriptions/pause-subscription
+        """
+        params = {"effective_from": effective_from}
+        if resume_at:
+            params["resume_at"] = resume_at
+        
+        response = self.client.pause_subscription(subscription_id, **params)
         return self._response_to_dict(response)
     
-    async def resume_subscription(self, subscription_id: str) -> Dict[str, Any]:
-        """Resume a paused subscription."""
-        response = self.client.resume_subscription(subscription_id)
+    async def resume_subscription(
+        self,
+        subscription_id: str,
+        effective_from: str = "immediately"
+    ) -> Dict[str, Any]:
+        """
+        Resume a paused subscription.
+        
+        Args:
+            subscription_id: Paddle subscription ID
+            effective_from: When to resume:
+                - "immediately" (default): Resume immediately
+                - "next_billing_period": Resume at next billing period
+        
+        Returns:
+            Resumed subscription data
+        
+        Reference: https://developer.paddle.com/api-reference/subscriptions/resume-subscription
+        """
+        response = self.client.resume_subscription(
+            subscription_id,
+            effective_from=effective_from
+        )
         return self._response_to_dict(response)
     
     async def get_prices(self, product_id: Optional[str] = None) -> list:

@@ -1628,6 +1628,423 @@ async def get_paddle_billing_status(
     }
 
 
+# ============================================================================
+# Paddle Subscription Management (Sandbox Testing)
+# ============================================================================
+
+class SubscriptionItemRequest(BaseModel):
+    """Subscription item (price + quantity)."""
+    price_id: str
+    quantity: int = 1
+
+
+class UpdateSubscriptionItemsRequest(BaseModel):
+    """Request to update subscription items."""
+    items: list[SubscriptionItemRequest]
+    proration_billing_mode: str = "prorated_immediately"
+
+
+class AddSubscriptionItemsRequest(BaseModel):
+    """Request to add items to subscription."""
+    items: list[SubscriptionItemRequest]
+    proration_billing_mode: str = "prorated_immediately"
+
+
+class RemoveSubscriptionItemsRequest(BaseModel):
+    """Request to remove items from subscription."""
+    price_ids: list[str]
+    proration_billing_mode: str = "prorated_immediately"
+
+
+class CancelSubscriptionRequest(BaseModel):
+    """Request to cancel subscription."""
+    effective_from: str = "next_billing_period"  # or "immediately"
+
+
+class PauseSubscriptionRequest(BaseModel):
+    """Request to pause subscription."""
+    effective_from: str = "next_billing_period"
+    resume_at: Optional[str] = None  # ISO timestamp
+
+
+class ResumeSubscriptionRequest(BaseModel):
+    """Request to resume subscription."""
+    effective_from: str = "immediately"
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/update-items")
+async def paddle_update_subscription_items(
+    billing_account_id: int,
+    request: UpdateSubscriptionItemsRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update subscription items via Paddle API (replace all items)."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    # Get billing account
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        items = [{"price_id": item.price_id, "quantity": item.quantity} for item in request.items]
+        
+        updated_sub = await client.update_subscription(
+            subscription_id=billing.paddle_subscription_id,
+            items=items,
+            proration_billing_mode=request.proration_billing_mode
+        )
+        
+        return {
+            "status": "success",
+            "message": "Subscription items updated successfully",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": updated_sub.get("status"),
+            "items_count": len(items)
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to update subscription in Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/add-items")
+async def paddle_add_subscription_items(
+    billing_account_id: int,
+    request: AddSubscriptionItemsRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add items to subscription via Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        items = [{"price_id": item.price_id, "quantity": item.quantity} for item in request.items]
+        
+        updated_sub = await client.add_subscription_items(
+            subscription_id=billing.paddle_subscription_id,
+            new_items=items,
+            proration_billing_mode=request.proration_billing_mode
+        )
+        
+        return {
+            "status": "success",
+            "message": "Items added to subscription successfully",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": updated_sub.get("status")
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to add items in Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/remove-items")
+async def paddle_remove_subscription_items(
+    billing_account_id: int,
+    request: RemoveSubscriptionItemsRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove items from subscription via Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        
+        updated_sub = await client.remove_subscription_items(
+            subscription_id=billing.paddle_subscription_id,
+            price_ids_to_remove=request.price_ids,
+            proration_billing_mode=request.proration_billing_mode
+        )
+        
+        return {
+            "status": "success",
+            "message": "Items removed from subscription successfully",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": updated_sub.get("status")
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to remove items in Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/cancel")
+async def paddle_cancel_subscription(
+    billing_account_id: int,
+    request: CancelSubscriptionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Cancel subscription via Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    from app.models.billing import SubscriptionStatus
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        
+        canceled_sub = await client.cancel_subscription(
+            subscription_id=billing.paddle_subscription_id,
+            effective_from=request.effective_from
+        )
+        
+        # Update local status if canceled immediately
+        if request.effective_from == "immediately":
+            billing.subscription_status = SubscriptionStatus.CANCELED
+            billing.cancelled_at = datetime.utcnow()
+            await db.commit()
+        
+        return {
+            "status": "success",
+            "message": f"Subscription canceled ({request.effective_from})",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": canceled_sub.get("status"),
+            "effective_from": request.effective_from
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to cancel subscription in Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/pause")
+async def paddle_pause_subscription(
+    billing_account_id: int,
+    request: PauseSubscriptionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pause subscription via Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        
+        paused_sub = await client.pause_subscription(
+            subscription_id=billing.paddle_subscription_id,
+            effective_from=request.effective_from,
+            resume_at=request.resume_at
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Subscription paused ({request.effective_from})",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": paused_sub.get("status"),
+            "resume_at": request.resume_at or "Manual resume required"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to pause subscription in Paddle: {str(e)}"
+        )
+
+
+@router.post("/subscriptions/{billing_account_id}/paddle/resume")
+async def paddle_resume_subscription(
+    billing_account_id: int,
+    request: ResumeSubscriptionRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resume paused subscription via Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        
+        resumed_sub = await client.resume_subscription(
+            subscription_id=billing.paddle_subscription_id,
+            effective_from=request.effective_from
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Subscription resumed ({request.effective_from})",
+            "subscription_id": billing.paddle_subscription_id,
+            "paddle_status": resumed_sub.get("status")
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to resume subscription in Paddle: {str(e)}"
+        )
+
+
+@router.get("/subscriptions/{billing_account_id}/paddle/items")
+async def get_paddle_subscription_items(
+    billing_account_id: int,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get current subscription items from Paddle API."""
+    from app.core.config import settings
+    from app.core.paddle import PaddleClient
+    
+    if not settings.paddle_billing_enabled:
+        raise HTTPException(status_code=400, detail="Paddle billing is not enabled")
+    
+    result = await db.execute(
+        select(BillingAccount).where(BillingAccount.id == billing_account_id)
+    )
+    billing = result.scalar_one_or_none()
+    if not billing:
+        raise HTTPException(status_code=404, detail="Billing account not found")
+    
+    if not billing.paddle_subscription_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No Paddle subscription linked to this account"
+        )
+    
+    try:
+        client = PaddleClient()
+        subscription = await client.get_subscription(billing.paddle_subscription_id)
+        
+        items = subscription.get("items", [])
+        formatted_items = []
+        
+        for item in items:
+            price = item.get("price", {})
+            price_id = price.get("id") if isinstance(price, dict) else item.get("price_id")
+            
+            formatted_items.append({
+                "price_id": price_id,
+                "quantity": item.get("quantity", 1),
+                "status": item.get("status"),
+                "product_name": price.get("product", {}).get("name") if isinstance(price, dict) else None,
+                "unit_price": price.get("unit_price") if isinstance(price, dict) else None
+            })
+        
+        return {
+            "subscription_id": billing.paddle_subscription_id,
+            "status": subscription.get("status"),
+            "items": formatted_items,
+            "billing_cycle": subscription.get("billing_cycle"),
+            "next_billed_at": subscription.get("next_billed_at")
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to fetch subscription from Paddle: {str(e)}"
+        )
+
+
 @router.post("/plans/{plan_id}/agents/{agent_id}")
 
 async def add_agent_to_plan(

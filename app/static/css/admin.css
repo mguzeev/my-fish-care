@@ -320,6 +320,63 @@ tr:hover {
     60%, 100% { content: '...'; }
 }
 
+/* Paddle Subscription Management Forms */
+.action-form {
+    padding: 20px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.action-form h3 {
+    margin-top: 0;
+    color: var(--admin-text);
+    font-size: 1.25rem;
+}
+
+.action-form .form-group {
+    margin-bottom: 15px;
+}
+
+.action-form label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: var(--admin-text);
+}
+
+.action-form input[type="text"],
+.action-form input[type="datetime-local"],
+.action-form select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.action-form small {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 12px;
+}
+
+.action-form button {
+    margin-top: 10px;
+}
+
+#subscriptionManagementPanel {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* Empty States */
 .empty-state {
     text-align: center;

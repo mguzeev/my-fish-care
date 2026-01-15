@@ -189,6 +189,154 @@
                 <div id="reconciliationResults"></div>
             </div>
 
+            <!-- Paddle Subscription Management (Sandbox Testing) -->
+            <div class="data-table">
+                <div class="section-header">
+                    <h2>🧪 Paddle Subscription Management (Sandbox)</h2>
+                    <p style="color: #666; font-size: 14px; margin-top: 5px;">
+                        Test Paddle API operations: add/remove items, upgrade/downgrade, pause/resume, cancel
+                    </p>
+                </div>
+                <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <label style="font-weight: bold; display: block; margin-bottom: 10px;">Select Billing Account:</label>
+                    <select id="testSubscriptionSelect" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;">
+                        <option value="">Loading accounts...</option>
+                    </select>
+                    <button class="btn-secondary" onclick="loadTestSubscriptionAccounts()" style="margin-top: 10px;">🔄 Refresh List</button>
+                </div>
+                
+                <div id="subscriptionManagementPanel" style="display: none;">
+                    <!-- Current Items Display -->
+                    <div style="margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #ddd; border-radius: 8px;">
+                        <h3 style="margin-top: 0;">Current Subscription Items</h3>
+                        <div id="currentSubscriptionItems" class="loading">Select account to view items</div>
+                        <button class="btn-secondary" onclick="refreshCurrentItems()" style="margin-top: 10px;">🔄 Refresh Items</button>
+                    </div>
+
+                    <!-- Action Tabs -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+                        <button class="btn-secondary" onclick="showSubscriptionAction('addItems')">➕ Add Items</button>
+                        <button class="btn-secondary" onclick="showSubscriptionAction('removeItems')">➖ Remove Items</button>
+                        <button class="btn-secondary" onclick="showSubscriptionAction('replaceItems')">🔄 Replace Items</button>
+                        <button class="btn-secondary" onclick="showSubscriptionAction('pause')">⏸️ Pause</button>
+                        <button class="btn-secondary" onclick="showSubscriptionAction('resume')">▶️ Resume</button>
+                        <button class="btn-secondary" onclick="showSubscriptionAction('cancel')">❌ Cancel</button>
+                    </div>
+
+                    <!-- Add Items Form -->
+                    <div id="addItemsForm" class="action-form" style="display: none;">
+                        <h3>Add Items to Subscription</h3>
+                        <div class="form-group">
+                            <label>Price IDs (comma-separated):</label>
+                            <input type="text" id="addItemsPriceIds" placeholder="pri_01abc123,pri_02def456">
+                            <small>Example: pri_01abc123,pri_02def456</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Proration Mode:</label>
+                            <select id="addItemsProration">
+                                <option value="prorated_immediately">Prorated Immediately (charge now)</option>
+                                <option value="prorated_next_billing_period">Prorated Next Period</option>
+                                <option value="full_immediately">Full Immediately</option>
+                                <option value="full_next_billing_period">Full Next Period</option>
+                                <option value="do_not_bill">Do Not Bill</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="executeAddItems()">➕ Add Items</button>
+                    </div>
+
+                    <!-- Remove Items Form -->
+                    <div id="removeItemsForm" class="action-form" style="display: none;">
+                        <h3>Remove Items from Subscription</h3>
+                        <div class="form-group">
+                            <label>Price IDs to Remove (comma-separated):</label>
+                            <input type="text" id="removeItemsPriceIds" placeholder="pri_01abc123,pri_02def456">
+                        </div>
+                        <div class="form-group">
+                            <label>Proration Mode:</label>
+                            <select id="removeItemsProration">
+                                <option value="prorated_immediately">Prorated Immediately (credit now)</option>
+                                <option value="prorated_next_billing_period">Prorated Next Period</option>
+                                <option value="full_immediately">Full Immediately</option>
+                                <option value="full_next_billing_period">Full Next Period</option>
+                                <option value="do_not_bill">Do Not Bill</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="executeRemoveItems()">➖ Remove Items</button>
+                    </div>
+
+                    <!-- Replace Items Form -->
+                    <div id="replaceItemsForm" class="action-form" style="display: none;">
+                        <h3>Replace All Subscription Items</h3>
+                        <div class="form-group">
+                            <label>New Price IDs (comma-separated):</label>
+                            <input type="text" id="replaceItemsPriceIds" placeholder="pri_01abc123,pri_02def456">
+                            <small>⚠️ This will replace ALL current items with these new ones</small>
+                        </div>
+                        <div class="form-group">
+                            <label>Proration Mode:</label>
+                            <select id="replaceItemsProration">
+                                <option value="prorated_immediately">Prorated Immediately</option>
+                                <option value="prorated_next_billing_period">Prorated Next Period</option>
+                                <option value="full_immediately">Full Immediately</option>
+                                <option value="full_next_billing_period">Full Next Period</option>
+                                <option value="do_not_bill">Do Not Bill</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="executeReplaceItems()">🔄 Replace Items</button>
+                    </div>
+
+                    <!-- Pause Form -->
+                    <div id="pauseForm" class="action-form" style="display: none;">
+                        <h3>Pause Subscription</h3>
+                        <div class="form-group">
+                            <label>Effective From:</label>
+                            <select id="pauseEffectiveFrom">
+                                <option value="next_billing_period">Next Billing Period</option>
+                                <option value="immediately">Immediately</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Auto Resume At (optional):</label>
+                            <input type="datetime-local" id="pauseResumeAt">
+                            <small>Leave empty for manual resume</small>
+                        </div>
+                        <button class="btn-primary" onclick="executePause()">⏸️ Pause Subscription</button>
+                    </div>
+
+                    <!-- Resume Form -->
+                    <div id="resumeForm" class="action-form" style="display: none;">
+                        <h3>Resume Subscription</h3>
+                        <div class="form-group">
+                            <label>Effective From:</label>
+                            <select id="resumeEffectiveFrom">
+                                <option value="immediately">Immediately</option>
+                                <option value="next_billing_period">Next Billing Period</option>
+                            </select>
+                        </div>
+                        <button class="btn-primary" onclick="executeResume()">▶️ Resume Subscription</button>
+                    </div>
+
+                    <!-- Cancel Form -->
+                    <div id="cancelForm" class="action-form" style="display: none;">
+                        <h3>Cancel Subscription</h3>
+                        <div class="form-group">
+                            <label>Effective From:</label>
+                            <select id="cancelEffectiveFrom">
+                                <option value="next_billing_period">Next Billing Period (access continues)</option>
+                                <option value="immediately">Immediately (access stops now)</option>
+                            </select>
+                        </div>
+                        <div style="padding: 15px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-bottom: 15px;">
+                            ⚠️ <strong>Warning:</strong> This action cannot be undone. The subscription will be canceled.
+                        </div>
+                        <button class="btn-primary" onclick="executeCancel()" style="background: #dc3545;">❌ Cancel Subscription</button>
+                    </div>
+
+                    <!-- Results Display -->
+                    <div id="subscriptionActionResults" style="margin-top: 20px;"></div>
+                </div>
+            </div>
+
             <!-- Webhook Events Log -->
             <div class="data-table">
                 <div class="section-header">
@@ -2477,7 +2625,8 @@
             await Promise.all([
                 validatePaddleConfig(),
                 loadBillingAccounts(),
-                loadWebhookEvents()
+                loadWebhookEvents(),
+                loadTestSubscriptionAccounts()
             ]);
         }
 
@@ -2948,6 +3097,402 @@
                 resultsDiv.innerHTML = html;
                 
                 setTimeout(() => resultsDiv.innerHTML = '', 15000);
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // ============================================================================
+        // Paddle Subscription Management (Sandbox Testing)
+        // ============================================================================
+        
+        let selectedBillingAccountId = null;
+        
+        async function loadTestSubscriptionAccounts() {
+            const select = document.getElementById('testSubscriptionSelect');
+            select.innerHTML = '<option value="">Loading...</option>';
+            
+            try {
+                const response = await fetch('/admin/subscriptions?limit=100', {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load accounts');
+                
+                const data = await response.json();
+                const accounts = data.subscriptions || [];
+                
+                // Filter only accounts with Paddle subscription
+                const paddleAccounts = accounts.filter(acc => acc.paddle_subscription_id);
+                
+                if (paddleAccounts.length === 0) {
+                    select.innerHTML = '<option value="">No accounts with Paddle subscriptions found</option>';
+                    return;
+                }
+                
+                select.innerHTML = '<option value="">-- Select an account --</option>';
+                paddleAccounts.forEach(acc => {
+                    const option = document.createElement('option');
+                    option.value = acc.id;
+                    option.textContent = `${acc.organization_name} (${acc.status}) - ${acc.paddle_subscription_id}`;
+                    select.appendChild(option);
+                });
+                
+                select.onchange = () => {
+                    selectedBillingAccountId = select.value;
+                    if (selectedBillingAccountId) {
+                        document.getElementById('subscriptionManagementPanel').style.display = 'block';
+                        refreshCurrentItems();
+                    } else {
+                        document.getElementById('subscriptionManagementPanel').style.display = 'none';
+                    }
+                };
+                
+            } catch (error) {
+                select.innerHTML = '<option value="">Error loading accounts</option>';
+                showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function refreshCurrentItems() {
+            if (!selectedBillingAccountId) return;
+            
+            const itemsDiv = document.getElementById('currentSubscriptionItems');
+            itemsDiv.innerHTML = '<div class="loading">Loading current items...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/items`, {
+                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load items');
+                
+                const data = await response.json();
+                const items = data.items || [];
+                
+                if (items.length === 0) {
+                    itemsDiv.innerHTML = '<p>No items found</p>';
+                    return;
+                }
+                
+                let html = '<table style="width: 100%; border-collapse: collapse;">';
+                html += '<thead><tr style="background: #f8f9fa; border-bottom: 2px solid #ddd;">';
+                html += '<th style="padding: 10px; text-align: left;">Price ID</th>';
+                html += '<th style="padding: 10px; text-align: left;">Product</th>';
+                html += '<th style="padding: 10px; text-align: right;">Quantity</th>';
+                html += '<th style="padding: 10px; text-align: left;">Status</th>';
+                html += '</tr></thead><tbody>';
+                
+                items.forEach(item => {
+                    html += '<tr style="border-bottom: 1px solid #eee;">';
+                    html += `<td style="padding: 10px;"><code>${item.price_id}</code></td>`;
+                    html += `<td style="padding: 10px;">${item.product_name || 'N/A'}</td>`;
+                    html += `<td style="padding: 10px; text-align: right;">${item.quantity}</td>`;
+                    html += `<td style="padding: 10px;"><span class="badge">${item.status || 'active'}</span></td>`;
+                    html += '</tr>';
+                });
+                
+                html += '</tbody></table>';
+                html += `<div style="margin-top: 10px; font-size: 14px; color: #666;">`;
+                html += `<strong>Subscription Status:</strong> ${data.status} | `;
+                html += `<strong>Next Billing:</strong> ${data.next_billed_at || 'N/A'}`;
+                html += `</div>`;
+                
+                itemsDiv.innerHTML = html;
+                
+            } catch (error) {
+                itemsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function showSubscriptionAction(action) {
+            // Hide all forms
+            document.querySelectorAll('.action-form').forEach(form => form.style.display = 'none');
+            document.getElementById('subscriptionActionResults').innerHTML = '';
+            
+            // Show selected form
+            const formMap = {
+                'addItems': 'addItemsForm',
+                'removeItems': 'removeItemsForm',
+                'replaceItems': 'replaceItemsForm',
+                'pause': 'pauseForm',
+                'resume': 'resumeForm',
+                'cancel': 'cancelForm'
+            };
+            
+            const formId = formMap[action];
+            if (formId) {
+                document.getElementById(formId).style.display = 'block';
+            }
+        }
+        
+        async function executeAddItems() {
+            if (!selectedBillingAccountId) return;
+            
+            const priceIds = document.getElementById('addItemsPriceIds').value.trim();
+            const proration = document.getElementById('addItemsProration').value;
+            
+            if (!priceIds) {
+                showAlert('❌ Please enter price IDs', 'error');
+                return;
+            }
+            
+            const items = priceIds.split(',').map(id => ({
+                price_id: id.trim(),
+                quantity: 1
+            }));
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Adding items...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/add-items`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ items, proration_billing_mode: proration })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to add items');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                    </div>
+                `;
+                
+                // Refresh items list
+                setTimeout(() => refreshCurrentItems(), 1000);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function executeRemoveItems() {
+            if (!selectedBillingAccountId) return;
+            
+            const priceIds = document.getElementById('removeItemsPriceIds').value.trim();
+            const proration = document.getElementById('removeItemsProration').value;
+            
+            if (!priceIds) {
+                showAlert('❌ Please enter price IDs to remove', 'error');
+                return;
+            }
+            
+            const price_ids = priceIds.split(',').map(id => id.trim());
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Removing items...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/remove-items`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ price_ids, proration_billing_mode: proration })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to remove items');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                    </div>
+                `;
+                
+                setTimeout(() => refreshCurrentItems(), 1000);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function executeReplaceItems() {
+            if (!selectedBillingAccountId) return;
+            
+            const priceIds = document.getElementById('replaceItemsPriceIds').value.trim();
+            const proration = document.getElementById('replaceItemsProration').value;
+            
+            if (!priceIds) {
+                showAlert('❌ Please enter price IDs', 'error');
+                return;
+            }
+            
+            if (!confirm('⚠️ This will replace ALL current items. Continue?')) return;
+            
+            const items = priceIds.split(',').map(id => ({
+                price_id: id.trim(),
+                quantity: 1
+            }));
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Replacing items...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/update-items`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ items, proration_billing_mode: proration })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to update items');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                        <p><strong>Items Count:</strong> ${data.items_count}</p>
+                    </div>
+                `;
+                
+                setTimeout(() => refreshCurrentItems(), 1000);
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function executePause() {
+            if (!selectedBillingAccountId) return;
+            
+            const effectiveFrom = document.getElementById('pauseEffectiveFrom').value;
+            const resumeAtInput = document.getElementById('pauseResumeAt').value;
+            
+            const body = { effective_from: effectiveFrom };
+            if (resumeAtInput) {
+                body.resume_at = new Date(resumeAtInput).toISOString();
+            }
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Pausing subscription...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/pause`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to pause');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                        <p><strong>Resume At:</strong> ${data.resume_at}</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function executeResume() {
+            if (!selectedBillingAccountId) return;
+            
+            const effectiveFrom = document.getElementById('resumeEffectiveFrom').value;
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Resuming subscription...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/resume`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ effective_from: effectiveFrom })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to resume');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        async function executeCancel() {
+            if (!selectedBillingAccountId) return;
+            
+            const effectiveFrom = document.getElementById('cancelEffectiveFrom').value;
+            
+            if (!confirm(`⚠️ Cancel subscription (${effectiveFrom})? This cannot be undone!`)) return;
+            
+            const resultsDiv = document.getElementById('subscriptionActionResults');
+            resultsDiv.innerHTML = '<div class="loading">Canceling subscription...</div>';
+            
+            try {
+                const response = await fetch(`/admin/subscriptions/${selectedBillingAccountId}/paddle/cancel`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ effective_from: effectiveFrom })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to cancel');
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="success-box" style="margin-top: 15px;">
+                        <h4>✅ ${data.message}</h4>
+                        <p><strong>Status:</strong> ${data.paddle_status}</p>
+                        <p><strong>Effective:</strong> ${data.effective_from}</p>
+                    </div>
+                `;
+                
             } catch (error) {
                 resultsDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
             }
