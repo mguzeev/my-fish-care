@@ -1157,16 +1157,25 @@ async def sync_plans_from_paddle(
             else:
                 # Create new plan from Paddle price
                 try:
-                    billing_cycle = price.get("billing_cycle", {})
-                    interval = billing_cycle.get("interval", "monthly").lower()
+                    billing_cycle = price.get("billing_cycle") or {}
+                    interval = billing_cycle.get("interval", "monthly") if billing_cycle else "monthly"
+                    interval = interval.lower() if interval else "monthly"
                     
                     # Map Paddle interval to our enum
                     from app.models.billing import SubscriptionInterval
+                    # Paddle uses 'month', 'year', 'week', 'day' - map to our values
+                    interval_map = {
+                        "month": "monthly",
+                        "year": "yearly",
+                        "week": "weekly",
+                        "day": "daily",
+                    }
+                    interval = interval_map.get(interval, interval)
                     if interval not in ["daily", "weekly", "monthly", "yearly"]:
                         interval = "monthly"
                     
                     # Get price amount
-                    unit_price = price.get("unit_price", {})
+                    unit_price = price.get("unit_price") or {}
                     amount = unit_price.get("amount", "0")
                     # Convert from cents/smallest unit to decimal
                     if amount:
@@ -1175,10 +1184,11 @@ async def sync_plans_from_paddle(
                         amount = "0"
                     
                     currency = unit_price.get("currency_code", "USD")
-                    product_name = price.get("product", {}).get("name", f"Product {product_id}")
+                    # Use price name or product name
+                    price_name = price.get("name") or price.get("description") or f"Plan {price_id}"
                     
                     new_plan = SubscriptionPlan(
-                        name=product_name,
+                        name=price_name,
                         interval=SubscriptionInterval(interval),
                         price=Decimal(amount),
                         currency=currency,
