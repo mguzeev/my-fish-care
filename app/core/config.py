@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     # Paddle
     paddle_billing_enabled: bool = False
     paddle_api_key: Optional[str] = Field(default=None, alias="PADDLE_API_KEY")
+    paddle_client_token: Optional[str] = Field(default=None, alias="PADDLE_CLIENT_TOKEN")
     paddle_webhook_secret: Optional[str] = Field(default=None, alias="PADDLE_WEBHOOK_SECRET")
     paddle_vendor_id: Optional[str] = Field(default=None, alias="PADDLE_VENDOR_ID")
     paddle_environment: str = Field(default="sandbox", alias="PADDLE_ENVIRONMENT")  # sandbox or production

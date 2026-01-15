@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Upgrade - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=3.0">
+    <!-- Paddle.js SDK -->
+    <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
 </head>
 <body>
     <div class="upgrade-container">
@@ -49,6 +51,14 @@
     
     <script>
         const API_BASE = '';
+        
+        // Initialize Paddle
+        {% if paddle_environment == 'sandbox' %}
+        Paddle.Environment.set('sandbox');
+        {% endif %}
+        Paddle.Initialize({
+            token: '{{ paddle_client_token }}' // Client-side token from Paddle Dashboard
+        });
         
         async function apiCall(endpoint, options = {}) {
             const token = localStorage.getItem('access_token');
@@ -135,7 +145,17 @@
                     body: JSON.stringify({ plan_id: planId })
                 });
                 
-                if (result.checkout_url) {
+                if (result.transaction_id) {
+                    // Open Paddle checkout overlay using transaction ID
+                    Paddle.Checkout.open({
+                        transactionId: result.transaction_id,
+                        settings: {
+                            successUrl: window.location.origin + '/billing/success',
+                            displayMode: 'overlay'
+                        }
+                    });
+                } else if (result.checkout_url) {
+                    // Fallback to direct redirect
                     window.location.href = result.checkout_url;
                 } else {
                     alert('Subscription successful!');

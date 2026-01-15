@@ -54,7 +54,13 @@ async def upgrade_page(request: Request):
 	t = lambda key, **params: i18n.t(key, locale=lang, **params)
 	return templates.TemplateResponse(
 		"upgrade.html",
-		{"request": request, "language": lang, "t": t}
+		{
+			"request": request,
+			"language": lang,
+			"t": t,
+			"paddle_client_token": settings.paddle_client_token or "",
+			"paddle_environment": settings.paddle_environment or "sandbox",
+		}
 	)
 
 
@@ -110,6 +116,7 @@ class BillingAccountResponse(BaseModel):
 	free_trial_days: int
 	trial_started_at: Optional[str]
 	checkout_url: Optional[str] = None
+	transaction_id: Optional[str] = None
 
 
 class UsageSummaryResponse(BaseModel):
@@ -220,6 +227,7 @@ async def subscribe(
 		db.add(ba)
 
 	checkout_url: Optional[str] = None
+	transaction_id: Optional[str] = None
 
 	if settings.paddle_billing_enabled:
 		if not plan.paddle_price_id:
@@ -290,7 +298,7 @@ async def subscribe(
 	await db.refresh(ba)
 
 	account = await _get_billing_account_response(current_user, db)
-	return account.model_copy(update={"checkout_url": checkout_url})
+	return account.model_copy(update={"checkout_url": checkout_url, "transaction_id": transaction_id})
 
 
 @router.post("/cancel", response_model=BillingAccountResponse)
