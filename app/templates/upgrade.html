@@ -32,6 +32,18 @@
                     <span class="plan-stat-label">Status</span>
                     <span class="plan-stat-value" id="planStatus">TRIALING</span>
                 </div>
+                <div class="plan-stat" id="nextBillingContainer" style="display: none;">
+                    <span class="plan-stat-label">Next Billing</span>
+                    <span class="plan-stat-value" id="nextBilling">-</span>
+                </div>
+                <div class="plan-stat" id="pausedAtContainer" style="display: none;">
+                    <span class="plan-stat-label">Paused Since</span>
+                    <span class="plan-stat-value" id="pausedAt">-</span>
+                </div>
+                <div class="plan-stat" id="cancelledAtContainer" style="display: none;">
+                    <span class="plan-stat-label">Cancelled On</span>
+                    <span class="plan-stat-value" id="cancelledAt">-</span>
+                </div>
             </div>
         </div>
         
@@ -80,14 +92,40 @@
             return response.json();
         }
         
+        // Store current account info for plan loading
+        let currentAccount = null;
+        
         async function loadCurrentPlan() {
             try {
-                const usage = await apiCall('/billing/usage');
+                const account = await apiCall('/billing/account');
+                currentAccount = account;
                 
-                document.getElementById('currentPlanName').textContent = usage.plan_name || 'Free Trial';
+                document.getElementById('currentPlanName').textContent = account.plan_name || 'Free Trial';
                 document.getElementById('freeRequestsUsed').textContent = 
-                    `${usage.free_requests_used || 0} / ${usage.free_requests_limit || 10}`;
-                document.getElementById('planStatus').textContent = usage.subscription_status || 'TRIALING';
+                    `${account.free_requests_used || 0} / ${account.free_requests_limit || 10}`;
+                
+                // Show status with styling
+                const statusEl = document.getElementById('planStatus');
+                statusEl.textContent = account.status || 'TRIALING';
+                statusEl.className = 'plan-stat-value status-' + (account.status || 'trialing').toLowerCase();
+                
+                // Show next billing date if available
+                if (account.next_billing_date) {
+                    document.getElementById('nextBillingContainer').style.display = 'block';
+                    document.getElementById('nextBilling').textContent = new Date(account.next_billing_date).toLocaleDateString();
+                }
+                
+                // Show paused date if subscription is paused
+                if (account.paused_at) {
+                    document.getElementById('pausedAtContainer').style.display = 'block';
+                    document.getElementById('pausedAt').textContent = new Date(account.paused_at).toLocaleDateString();
+                }
+                
+                // Show cancelled date if subscription is cancelled
+                if (account.cancelled_at) {
+                    document.getElementById('cancelledAtContainer').style.display = 'block';
+                    document.getElementById('cancelledAt').textContent = new Date(account.cancelled_at).toLocaleDateString();
+                }
             } catch (error) {
                 console.error('Failed to load current plan:', error);
             }
@@ -106,8 +144,32 @@
                     return;
                 }
                 
-                plansGrid.innerHTML = paidPlans.map((plan, index) => `
-                    <div class="plan-card ${index === 0 ? 'recommended' : ''}">
+                // Check if user has an active subscription
+                const hasActiveSubscription = currentAccount && 
+                    currentAccount.paddle_subscription_id && 
+                    (currentAccount.status === 'active' || currentAccount.status === 'trialing');
+                
+                plansGrid.innerHTML = paidPlans.map((plan, index) => {
+                    const isCurrentPlan = currentAccount && currentAccount.plan_id === plan.id;
+                    const canSubscribe = !hasActiveSubscription || isCurrentPlan;
+                    
+                    let buttonText = 'Subscribe Now';
+                    let buttonClass = 'btn-subscribe';
+                    let buttonDisabled = '';
+                    
+                    if (isCurrentPlan) {
+                        buttonText = 'Current Plan';
+                        buttonClass = 'btn-subscribe btn-current';
+                        buttonDisabled = 'disabled';
+                    } else if (hasActiveSubscription) {
+                        buttonText = 'Cancel current subscription first';
+                        buttonClass = 'btn-subscribe btn-disabled';
+                        buttonDisabled = 'disabled';
+                    }
+                    
+                    return `
+                    <div class="plan-card ${index === 0 && !hasActiveSubscription ? 'recommended' : ''} ${isCurrentPlan ? 'current' : ''} ${hasActiveSubscription && !isCurrentPlan ? 'unavailable' : ''}">
+                        ${isCurrentPlan ? '<div class="plan-badge">Your Plan</div>' : ''}
                         <div class="plan-name">${plan.name}</div>
                         <div class="plan-price">$${plan.price.toFixed(2)}</div>
                         <div class="plan-price-period">per ${plan.interval}</div>
@@ -118,11 +180,11 @@
                             ${plan.has_priority_support ? '<li>Priority Support</li>' : ''}
                             ${plan.has_advanced_analytics ? '<li>Advanced Analytics</li>' : ''}
                         </ul>
-                        <button class="btn-subscribe" data-plan-name="${plan.name}" onclick="subscribeToPlan(event, ${plan.id})">
-                            Subscribe Now
+                        <button class="${buttonClass}" data-plan-name="${plan.name}" onclick="subscribeToPlan(event, ${plan.id})" ${buttonDisabled}>
+                            ${buttonText}
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
             } catch (error) {
                 console.error('Failed to load plans:', error);
                 document.getElementById('plansGrid').innerHTML = 
