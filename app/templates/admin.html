@@ -2718,8 +2718,8 @@
 
         function showLinkPaddlePriceModal(planId = null, planName = '') {
             const html = `
-                <div class="modal-backdrop" onclick="closeLinkPaddleModal()"></div>
-                <div class="modal">
+                <div class="webhook-modal-backdrop" onclick="closeLinkPaddleModal()"></div>
+                <div class="webhook-modal-content">
                     <div class="modal-header">
                         <h2>🔗 Link Paddle Price ID</h2>
                         <button class="modal-close" onclick="closeLinkPaddleModal()">×</button>
@@ -2743,7 +2743,7 @@
             
             const container = document.createElement('div');
             container.id = 'linkPaddleModal';
-            container.className = 'modal-container';
+            container.className = 'webhook-modal-container';
             container.innerHTML = html;
             document.body.appendChild(container);
         }
@@ -2910,8 +2910,8 @@
                 const data = await response.json();
                 
                 let html = `
-                    <div class="modal-backdrop" onclick="closeBillingDetailsModal()"></div>
-                    <div class="modal" style="max-width: 800px;">
+                    <div class="webhook-modal-backdrop" onclick="closeBillingDetailsModal()"></div>
+                    <div class="webhook-modal-content">
                         <div class="modal-header">
                             <h2>💳 Billing Account Details</h2>
                             <button class="modal-close" onclick="closeBillingDetailsModal()">×</button>
@@ -2951,12 +2951,15 @@
                                 <tr><td><strong>Requests This Period:</strong></td><td>${data.requests_used_current_period}</td></tr>
                             </table>
                         </div>
+                        <div class="modal-footer">
+                            <button class="btn-secondary" onclick="closeBillingDetailsModal()">Close</button>
+                        </div>
                     </div>
                 `;
                 
                 const container = document.createElement('div');
                 container.id = 'billing-details-modal';
-                container.className = 'modal-container';
+                container.className = 'webhook-modal-container';
                 container.innerHTML = html;
                 document.body.appendChild(container);
             } catch (error) {
