@@ -2722,11 +2722,11 @@
                 const data = await response.json();
                 
                 let html = `
-                    <div class="modal-backdrop" onclick="closeModal()"></div>
+                    <div class="modal-backdrop" onclick="closeBillingDetailsModal()"></div>
                     <div class="modal" style="max-width: 800px;">
                         <div class="modal-header">
                             <h2>💳 Billing Account Details</h2>
-                            <button class="modal-close" onclick="closeModal()">×</button>
+                            <button class="modal-close" onclick="closeBillingDetailsModal()">×</button>
                         </div>
                         <div class="modal-body">
                             <h3>Local Database</h3>
@@ -2761,11 +2761,19 @@
                 `;
                 
                 const container = document.createElement('div');
+                container.id = 'billing-details-modal';
                 container.className = 'modal-container';
                 container.innerHTML = html;
                 document.body.appendChild(container);
             } catch (error) {
                 showAlert(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function closeBillingDetailsModal() {
+            const modal = document.getElementById('billing-details-modal');
+            if (modal) {
+                modal.remove();
             }
         }
 
@@ -2816,16 +2824,20 @@
             tableDiv.innerHTML = '<div class="loading">Syncing all billing accounts...</div>';
             
             try {
-                const response = await fetch('/admin/subscriptions/sync-paddle', {
+                const response = await fetch('/admin/subscriptions/reconcile', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fix_drift: true })
                 });
                 
                 if (!response.ok) throw new Error('Failed to sync accounts');
                 
                 const data = await response.json();
                 
-                showAlert(`✅ ${data.message}. Synced: ${data.synced_count}, Errors: ${data.errors.length}`, 'success');
+                showAlert(`✅ Synced ${data.successful} accounts. Failed: ${data.failed}, Skipped: ${data.skipped}`, 'success');
                 
                 await loadBillingAccounts();
             } catch (error) {
@@ -2844,7 +2856,11 @@
             try {
                 const response = await fetch('/admin/subscriptions/reconcile', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    headers: {
+                        'Authorization': `Bearer ${getAuthToken()}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ fix_drift: true })
                 });
                 
                 if (!response.ok) throw new Error('Failed to reconcile');
@@ -2853,13 +2869,14 @@
                 
                 let html = '<div style="padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px; margin-top: 15px;">';
                 html += `<h4>✅ Reconciliation Complete</h4>`;
-                html += `<p><strong>Processed:</strong> ${data.processed}</p>`;
-                html += `<p><strong>Updated:</strong> ${data.updated}</p>`;
-                html += `<p><strong>Errors:</strong> ${data.errors}</p>`;
+                html += `<p><strong>Total Processed:</strong> ${data.total_processed}</p>`;
+                html += `<p><strong>Successful:</strong> ${data.successful}</p>`;
+                html += `<p><strong>Failed:</strong> ${data.failed}</p>`;
+                html += `<p><strong>Skipped:</strong> ${data.skipped}</p>`;
                 
                 if (data.details && data.details.length > 0) {
                     html += '<details><summary style="cursor: pointer; margin-top: 10px;">View Details</summary><ul>';
-                    data.details.forEach(detail => html += `<li>${detail}</li>`);
+                    data.details.forEach(detail => html += `<li>${JSON.stringify(detail)}</li>`);
                     html += '</ul></details>';
                 }
                 
