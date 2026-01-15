@@ -2704,7 +2704,7 @@
                     html += `<td style="padding: 8px;">${plan.id}</td>`;
                     html += `<td style="padding: 8px;">${plan.name}</td>`;
                     html += `<td style="padding: 8px;">$${plan.price}/${plan.interval}</td>`;
-                    html += `<td style="padding: 8px;"><button class="btn-secondary" onclick="showLinkPaddlePriceModal(${plan.id}, '${plan.name}')">🔗 Link</button></td>`;
+                    html += `<td style="padding: 8px;"><button class="btn-secondary" data-plan-id="${plan.id}" data-plan-name="${plan.name}" onclick="handleLinkPriceClick(event)">🔗 Link</button></td>`;
                     html += '</tr>';
                 });
                 
@@ -2744,6 +2744,13 @@
             container.className = 'modal-container';
             container.innerHTML = html;
             document.body.appendChild(container);
+        }
+
+        function handleLinkPriceClick(event) {
+            const btn = event.currentTarget;
+            const planId = parseInt(btn.dataset.planId);
+            const planName = btn.dataset.planName || '';
+            showLinkPaddlePriceModal(planId, planName);
         }
 
         async function linkPaddlePrice(event, planId = null) {
