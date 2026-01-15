@@ -3597,11 +3597,21 @@
 
         async function viewWebhookDetails(eventId) {
             try {
+                const token = getAuthToken();
+                console.log('viewWebhookDetails - Token:', token ? token.substring(0, 20) + '...' : 'NULL');
+                console.log('viewWebhookDetails - Fetching:', `/admin/webhooks/${eventId}`);
+                
                 const response = await fetch(`/admin/webhooks/${eventId}`, {
-                    headers: { 'Authorization': `Bearer ${getAuthToken()}` }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
-                if (!response.ok) throw new Error('Failed to load webhook details');
+                console.log('viewWebhookDetails - Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('viewWebhookDetails - Error:', errorText);
+                    throw new Error('Failed to load webhook details');
+                }
                 
                 const event = await response.json();
                 
