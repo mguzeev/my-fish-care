@@ -308,10 +308,8 @@ async def subscribe(
 			success_redirect = f"{settings.api_base_url}/billing/success"
 			checkout_url = f"{checkout_url}{separator}success_url={success_redirect}"
 
-	# Update local subscription state
-	ba.subscription_plan_id = plan.id
-	ba.subscription_status = SubscriptionStatus.ACTIVE
-	ba.subscription_start_date = datetime.utcnow()
+	# DO NOT update subscription state here - it will be updated by webhook after payment
+	# Only commit the paddle_customer_id if it was created
 	await db.commit()
 	await db.refresh(ba)
 

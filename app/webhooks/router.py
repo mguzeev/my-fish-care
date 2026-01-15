@@ -210,14 +210,23 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
 async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Optional[str] = None, webhook_event: Optional[PaddleWebhookEvent] = None) -> dict:
     """Handle subscription.created event."""
+    from app.models.billing import SubscriptionPlan
+    
     paddle_subscription_id = data.get("id")
     customer_id = data.get("customer_id")
     subscription_status = data.get("status")
     next_billed_at = data.get("next_billed_at")
     
+    # Extract price_id from subscription items to determine the plan
+    price_id = None
+    items = data.get("items", [])
+    if items and len(items) > 0:
+        price_data = items[0].get("price", {})
+        price_id = price_data.get("id")
+    
     logger.info(
         f"Subscription created: paddle_id={paddle_subscription_id}, "
-        f"customer_id={customer_id}, status={subscription_status}"
+        f"customer_id={customer_id}, status={subscription_status}, price_id={price_id}"
     )
     
     # First, try to find by paddle_subscription_id (in case it was already set)
@@ -242,6 +251,19 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
         if event_id and billing_account.last_webhook_event_id == event_id:
             logger.info(f"Duplicate event: {event_id}")
             return {"message": "Event already processed"}
+        
+        # Find and set subscription plan based on price_id
+        if price_id:
+            plan_result = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.paddle_price_id == price_id)
+            )
+            plan = plan_result.scalar_one_or_none()
+            if plan:
+                billing_account.subscription_plan_id = plan.id
+                billing_account.subscription_start_date = datetime.utcnow()
+                logger.info(f"Set subscription_plan_id={plan.id} ({plan.name}) for price_id={price_id}")
+            else:
+                logger.warning(f"No plan found for price_id={price_id}")
         
         # Always update paddle_subscription_id with the new subscription
         # This handles cases where user creates a new subscription
@@ -285,11 +307,20 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
 
 async def handle_subscription_updated(data: dict, db: AsyncSession, event_id: Optional[str] = None, webhook_event: Optional[PaddleWebhookEvent] = None) -> dict:
     """Handle subscription.updated event."""
+    from app.models.billing import SubscriptionPlan
+    
     paddle_subscription_id = data.get("id")
     subscription_status = data.get("status")
     next_billed_at = data.get("next_billed_at")
     
-    logger.info(f"Subscription updated: paddle_id={paddle_subscription_id}, status={subscription_status}")
+    # Extract price_id from subscription items
+    price_id = None
+    items = data.get("items", [])
+    if items and len(items) > 0:
+        price_data = items[0].get("price", {})
+        price_id = price_data.get("id")
+    
+    logger.info(f"Subscription updated: paddle_id={paddle_subscription_id}, status={subscription_status}, price_id={price_id}")
     
     result = await db.execute(
         select(BillingAccount).where(
@@ -302,6 +333,16 @@ async def handle_subscription_updated(data: dict, db: AsyncSession, event_id: Op
         if event_id and billing_account.last_webhook_event_id == event_id:
             logger.info(f"Duplicate event: {event_id}")
             return {"message": "Event already processed"}
+        
+        # Update plan if price_id changed
+        if price_id:
+            plan_result = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.paddle_price_id == price_id)
+            )
+            plan = plan_result.scalar_one_or_none()
+            if plan and billing_account.subscription_plan_id != plan.id:
+                billing_account.subscription_plan_id = plan.id
+                logger.info(f"Updated subscription_plan_id={plan.id} ({plan.name}) for price_id={price_id}")
         
         mapped_status = PADDLE_STATUS_MAP.get(subscription_status, SubscriptionStatus.ACTIVE)
         billing_account.subscription_status = mapped_status
