@@ -54,7 +54,10 @@
             <div class="data-table">
                 <div class="section-header">
                     <h2>Agent Management</h2>
-                    <button onclick="loadAgentModelsForSelect('agentModel'); openModal('createAgentModal')" class="btn-primary">+ Create New Agent</button>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="loadAgentModelsForSelect('agentModel'); openModal('createAgentModal')" class="btn-primary">+ Create New Agent</button>
+                        <button onclick="deleteInactiveAgents()" class="btn-secondary" style="background: #dc3545; color: white;">🗑️ Delete Inactive</button>
+                    </div>
                 </div>
                 <div id="agentsTable" class="loading">Loading agents...</div>
             </div>
@@ -1997,16 +2000,64 @@
         }
 
         async function deleteAgent(agentId) {
-            if (!confirm('Are you sure you want to delete this agent? This action cannot be undone.')) {
+            // Get agent info first to check status
+            const agents = await apiCall('/admin/agents?active_only=false');
+            const agent = agents.find(a => a.id === agentId);
+            
+            const message = agent && !agent.is_active 
+                ? 'This agent is inactive. Delete permanently? This cannot be undone.'
+                : 'Deactivate this agent? (Delete again to remove permanently)';
+            
+            if (!confirm(message)) {
                 return;
             }
             
             try {
-                await apiCall(`/admin/agents/${agentId}`, { method: 'DELETE' });
-                showAlert('Agent deleted successfully');
+                const result = await apiCall(`/admin/agents/${agentId}`, { method: 'DELETE' });
+                showAlert(result.detail || 'Agent deleted successfully');
                 await loadAgents();
             } catch (error) {
                 showAlert('Failed to delete agent: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteInactiveAgents() {
+            try {
+                // Get all agents including inactive
+                const agents = await apiCall('/admin/agents?active_only=false');
+                const inactiveAgents = agents.filter(a => !a.is_active);
+                
+                if (inactiveAgents.length === 0) {
+                    showAlert('No inactive agents to delete', 'info');
+                    return;
+                }
+                
+                if (!confirm(`Are you sure you want to delete ${inactiveAgents.length} inactive agent(s)? This action cannot be undone.`)) {
+                    return;
+                }
+                
+                let deleted = 0;
+                let failed = 0;
+                
+                for (const agent of inactiveAgents) {
+                    try {
+                        await apiCall(`/admin/agents/${agent.id}`, { method: 'DELETE' });
+                        deleted++;
+                    } catch (e) {
+                        console.error(`Failed to delete agent ${agent.id}:`, e);
+                        failed++;
+                    }
+                }
+                
+                if (failed > 0) {
+                    showAlert(`Deleted ${deleted} agents, ${failed} failed`, 'warning');
+                } else {
+                    showAlert(`Successfully deleted ${deleted} inactive agent(s)`);
+                }
+                
+                await loadAgents();
+            } catch (error) {
+                showAlert('Failed to delete inactive agents: ' + error.message, 'error');
             }
         }
 

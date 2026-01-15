@@ -2720,16 +2720,22 @@ async def delete_agent(
     _: None = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete agent (soft delete - mark as inactive)."""
+    """Delete agent. If already inactive - hard delete, otherwise soft delete (mark as inactive)."""
     result = await db.execute(select(Agent).where(Agent.id == agent_id))
     agent = result.scalar_one_or_none()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
     
-    agent.is_active = False
-    await db.commit()
-    
-    return {"detail": "Agent deleted"}
+    if agent.is_active:
+        # Soft delete - mark as inactive
+        agent.is_active = False
+        await db.commit()
+        return {"detail": "Agent deactivated"}
+    else:
+        # Hard delete - remove from database
+        await db.delete(agent)
+        await db.commit()
+        return {"detail": "Agent permanently deleted"}
 
 
 # ============================================================================
