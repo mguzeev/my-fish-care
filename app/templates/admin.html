@@ -2682,15 +2682,15 @@
                 
                 if (!response.ok) throw new Error('Failed to check price IDs');
                 
-                const data = await response.json();
+                const plans = await response.json();
                 
-                if (data.plans_without_price_ids.length === 0) {
+                if (plans.length === 0) {
                     tableDiv.innerHTML = '<div class="success-box">✅ All plans have Paddle Price IDs configured!</div>';
                     return;
                 }
                 
                 let html = '<div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">';
-                html += `<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ ${data.plans_without_price_ids.length} Plans Missing Price IDs</h4>`;
+                html += `<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ ${plans.length} Plans Missing Price IDs</h4>`;
                 html += '<table style="width: 100%; border-collapse: collapse;">';
                 html += '<thead><tr style="background: #f8f9fa; text-align: left;">';
                 html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Plan ID</th>';
@@ -2699,7 +2699,7 @@
                 html += '<th style="padding: 8px; border-bottom: 2px solid #dee2e6;">Actions</th>';
                 html += '</tr></thead><tbody>';
                 
-                data.plans_without_price_ids.forEach(plan => {
+                plans.forEach(plan => {
                     html += '<tr style="border-bottom: 1px solid #e9ecef;">';
                     html += `<td style="padding: 8px;">${plan.id}</td>`;
                     html += `<td style="padding: 8px;">${plan.name}</td>`;
@@ -2771,7 +2771,7 @@
                 }
                 
                 const data = await response.json();
-                showAlert(`✅ ${data.message}`, 'success');
+                showAlert(`✅ Plan "${data.name}" linked to Paddle price ${data.paddle_price_id}`, 'success');
                 closeModal();
                 checkMissingPriceIds();
             } catch (error) {
