@@ -2717,11 +2717,11 @@
 
         function showLinkPaddlePriceModal(planId = null, planName = '') {
             const html = `
-                <div class="modal-backdrop" onclick="closeModal()"></div>
+                <div class="modal-backdrop" onclick="closeLinkPaddleModal()"></div>
                 <div class="modal">
                     <div class="modal-header">
                         <h2>🔗 Link Paddle Price ID</h2>
-                        <button class="modal-close" onclick="closeModal()">×</button>
+                        <button class="modal-close" onclick="closeLinkPaddleModal()">×</button>
                     </div>
                     <div class="modal-body">
                         ${planId ? `<p><strong>Plan:</strong> ${planName} (ID: ${planId})</p>` : ''}
@@ -2732,7 +2732,7 @@
                                 <input type="text" name="paddle_price_id" placeholder="pri_01..." required>
                             </div>
                             <div class="modal-footer">
-                                <button type="button" onclick="closeModal()" class="btn-secondary">Cancel</button>
+                                <button type="button" onclick="closeLinkPaddleModal()" class="btn-secondary">Cancel</button>
                                 <button type="submit" class="btn-primary">Link Price ID</button>
                             </div>
                         </form>
@@ -2741,9 +2741,20 @@
             `;
             
             const container = document.createElement('div');
+            container.id = 'linkPaddleModal';
             container.className = 'modal-container';
             container.innerHTML = html;
             document.body.appendChild(container);
+        }
+
+        function closeLinkPaddleModal() {
+            const modal = document.getElementById('linkPaddleModal');
+            if (modal) modal.remove();
+        }
+
+        function closeWebhookModal() {
+            const modal = document.getElementById('webhookDetailsModal');
+            if (modal) modal.remove();
         }
 
         function handleLinkPriceClick(event) {
@@ -2779,7 +2790,7 @@
                 
                 const data = await response.json();
                 showAlert(`✅ Plan "${data.name}" linked to Paddle price ${data.paddle_price_id}`, 'success');
-                closeModal();
+                closeLinkPaddleModal();
                 checkMissingPriceIds();
             } catch (error) {
                 showAlert(`❌ Error: ${error.message}`, 'error');
@@ -2827,8 +2838,7 @@
             tableDiv.innerHTML = '<div class="loading">Loading billing accounts...</div>';
             
             const statusFilter = document.getElementById('billingStatusFilter')?.value || '';
-            const url = statusFilter ? `/admin/subscriptions?limit=100&skip=0` : '/admin/subscriptions?limit=100&skip=0';
-            // Note: filtering by status is done client-side below
+            const url = '/admin/subscriptions?limit=100&skip=0';
             
             try {
                 const response = await fetch(url, {
@@ -2850,18 +2860,18 @@
                 }
                 
                 let html = '<table class="data-table"><thead><tr>';
-                html += '<th>ID</th><th>User</th><th>Plan</th><th>Status</th><th>Paddle Sub ID</th><th>Current Period</th><th>Actions</th>';
+                html += '<th>ID</th><th>Organization</th><th>Plan</th><th>Status</th><th>Paddle Sub ID</th><th>Total Spent</th><th>Actions</th>';
                 html += '</tr></thead><tbody>';
                 
                 accounts.forEach(acc => {
                     const statusClass = acc.status === 'active' ? 'badge-success' : acc.status === 'canceled' ? 'badge-error' : 'badge-warning';
                     html += '<tr>';
                     html += `<td>${acc.id}</td>`;
-                    html += `<td>${acc.user_email || acc.user_id}</td>`;
+                    html += `<td>${acc.organization_name} (${acc.user_count} users)</td>`;
                     html += `<td>${acc.plan_name || 'N/A'}</td>`;
                     html += `<td><span class="badge ${statusClass}">${acc.status || 'unknown'}</span></td>`;
                     html += `<td>${acc.paddle_subscription_id || 'N/A'}</td>`;
-                    html += `<td>${acc.current_period_start ? new Date(acc.current_period_start).toLocaleDateString() : 'N/A'} - ${acc.current_period_end ? new Date(acc.current_period_end).toLocaleDateString() : 'N/A'}</td>`;
+                    html += `<td>$${acc.total_spent}</td>`;
                     html += `<td><button class="btn-secondary" onclick="viewBillingAccountDetails(${acc.id})">👁️ View</button></td>`;
                     html += '</tr>';
                 });
@@ -2896,33 +2906,39 @@
                             <button class="modal-close" onclick="closeBillingDetailsModal()">×</button>
                         </div>
                         <div class="modal-body">
-                            <h3>Local Database</h3>
+                            <h3>Account Information</h3>
                             <table style="width: 100%; margin-bottom: 20px;">
-                                <tr><td><strong>ID:</strong></td><td>${data.database.id}</td></tr>
-                                <tr><td><strong>User:</strong></td><td>${data.database.user_email} (${data.database.user_id})</td></tr>
-                                <tr><td><strong>Plan:</strong></td><td>${data.database.plan_name}</td></tr>
-                                <tr><td><strong>Status:</strong></td><td><span class="badge">${data.database.status}</span></td></tr>
-                                <tr><td><strong>Paddle Subscription ID:</strong></td><td>${data.database.paddle_subscription_id || 'N/A'}</td></tr>
-                                <tr><td><strong>Current Period:</strong></td><td>${data.database.current_period_start} - ${data.database.current_period_end}</td></tr>
+                                <tr><td><strong>ID:</strong></td><td>${data.id}</td></tr>
+                                <tr><td><strong>Organization:</strong></td><td>${data.organization_name} (ID: ${data.organization_id})</td></tr>
+                                <tr><td><strong>User Email:</strong></td><td>${data.user_email || 'N/A'}</td></tr>
+                                <tr><td><strong>User Count:</strong></td><td>${data.user_count}</td></tr>
+                                <tr><td><strong>Plan:</strong></td><td>${data.plan_name || 'No plan'}</td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge">${data.status}</span></td></tr>
                             </table>
                             
-                            ${data.paddle ? `
-                                <h3>Paddle API</h3>
-                                <table style="width: 100%;">
-                                    <tr><td><strong>Status:</strong></td><td><span class="badge">${data.paddle.status}</span></td></tr>
-                                    <tr><td><strong>Next Billed:</strong></td><td>${data.paddle.next_billed_at || 'N/A'}</td></tr>
-                                    <tr><td><strong>Billing Cycle:</strong></td><td>${data.paddle.billing_cycle || 'N/A'}</td></tr>
-                                    <tr><td><strong>Paused At:</strong></td><td>${data.paddle.paused_at || 'N/A'}</td></tr>
-                                    <tr><td><strong>Canceled At:</strong></td><td>${data.paddle.canceled_at || 'N/A'}</td></tr>
-                                </table>
-                            ` : '<p class="warning-box">⚠️ No data from Paddle API</p>'}
+                            <h3>Paddle Integration</h3>
+                            <table style="width: 100%; margin-bottom: 20px;">
+                                <tr><td><strong>Customer ID:</strong></td><td>${data.paddle_customer_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Subscription ID:</strong></td><td>${data.paddle_subscription_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Last Transaction:</strong></td><td>${data.last_transaction_id || 'N/A'}</td></tr>
+                            </table>
                             
-                            ${data.discrepancies && data.discrepancies.length > 0 ? `
-                                <div class="error-box" style="margin-top: 15px;">
-                                    <h4>⚠️ Discrepancies Found:</h4>
-                                    <ul>${data.discrepancies.map(d => `<li>${d}</li>`).join('')}</ul>
-                                </div>
-                            ` : '<div class="success-box" style="margin-top: 15px;">✅ No discrepancies detected</div>'}
+                            <h3>Subscription Dates</h3>
+                            <table style="width: 100%; margin-bottom: 20px;">
+                                <tr><td><strong>Start Date:</strong></td><td>${data.subscription_start_date ? new Date(data.subscription_start_date).toLocaleDateString() : 'N/A'}</td></tr>
+                                <tr><td><strong>End Date:</strong></td><td>${data.subscription_end_date ? new Date(data.subscription_end_date).toLocaleDateString() : 'N/A'}</td></tr>
+                                <tr><td><strong>Next Billing:</strong></td><td>${data.next_billing_date ? new Date(data.next_billing_date).toLocaleDateString() : 'N/A'}</td></tr>
+                                <tr><td><strong>Trial End:</strong></td><td>${data.trial_end_date ? new Date(data.trial_end_date).toLocaleDateString() : 'N/A'}</td></tr>
+                                <tr><td><strong>Cancelled At:</strong></td><td>${data.cancelled_at ? new Date(data.cancelled_at).toLocaleDateString() : 'N/A'}</td></tr>
+                            </table>
+                            
+                            <h3>Usage & Financial</h3>
+                            <table style="width: 100%;">
+                                <tr><td><strong>Balance:</strong></td><td>$${data.balance}</td></tr>
+                                <tr><td><strong>Total Spent:</strong></td><td>$${data.total_spent}</td></tr>
+                                <tr><td><strong>Free Requests Used:</strong></td><td>${data.free_requests_used}</td></tr>
+                                <tr><td><strong>Requests This Period:</strong></td><td>${data.requests_used_current_period}</td></tr>
+                            </table>
                         </div>
                     </div>
                 `;
@@ -2934,13 +2950,6 @@
                 document.body.appendChild(container);
             } catch (error) {
                 showAlert(`❌ Error: ${error.message}`, 'error');
-            }
-        }
-
-        function closeBillingDetailsModal() {
-            const modal = document.getElementById('billing-details-modal');
-            if (modal) {
-                modal.remove();
             }
         }
 
@@ -3583,11 +3592,11 @@
                 const event = await response.json();
                 
                 const html = `
-                    <div class="modal-backdrop" onclick="closeModal()"></div>
+                    <div class="modal-backdrop" onclick="closeWebhookModal()"></div>
                     <div class="modal" style="max-width: 900px;">
                         <div class="modal-header">
                             <h2>📨 Webhook Event Details</h2>
-                            <button class="modal-close" onclick="closeModal()">×</button>
+                            <button class="modal-close" onclick="closeWebhookModal()">×</button>
                         </div>
                         <div class="modal-body">
                             <table style="width: 100%; margin-bottom: 20px;">
@@ -3617,6 +3626,7 @@
                 `;
                 
                 const container = document.createElement('div');
+                container.id = 'webhookDetailsModal';
                 container.className = 'modal-container';
                 container.innerHTML = html;
                 document.body.appendChild(container);
