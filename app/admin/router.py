@@ -893,8 +893,63 @@ class SyncPaddlePlansResponse(BaseModel):
 
 class LinkPaddlePriceRequest(BaseModel):
     """Link a plan to a Paddle price."""
+    plan_id: int
     paddle_price_id: str
     paddle_product_id: Optional[str] = None
+
+
+@router.post("/plans/link-paddle", response_model=SubscriptionPlanResponse)
+async def link_plan_to_paddle_price_body(
+    request: LinkPaddlePriceRequest,
+    current_user: User = Depends(get_current_active_user),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Link a subscription plan to a Paddle price (plan_id in request body)."""
+    plan_id = request.plan_id
+    result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    plan = result.scalar_one_or_none()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    
+    # Check if paddle_price_id is already used by another plan
+    existing = await db.execute(
+        select(SubscriptionPlan).where(
+            (SubscriptionPlan.paddle_price_id == request.paddle_price_id) &
+            (SubscriptionPlan.id != plan_id)
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400,
+            detail="This Paddle price is already linked to another plan"
+        )
+    
+    plan.paddle_price_id = request.paddle_price_id
+    if request.paddle_product_id:
+        plan.paddle_product_id = request.paddle_product_id
+    
+    await db.commit()
+    await db.refresh(plan)
+    
+    return SubscriptionPlanResponse(
+        id=plan.id,
+        name=plan.name,
+        interval=plan.interval.value,
+        price=plan.price,
+        currency=plan.currency,
+        max_requests_per_interval=plan.max_requests_per_interval,
+        max_tokens_per_request=plan.max_tokens_per_request,
+        free_requests_limit=plan.free_requests_limit,
+        free_trial_days=plan.free_trial_days,
+        has_api_access=plan.has_api_access,
+        has_priority_support=plan.has_priority_support,
+        has_advanced_analytics=plan.has_advanced_analytics,
+        paddle_price_id=plan.paddle_price_id,
+        paddle_product_id=plan.paddle_product_id,
+        created_at=plan.created_at,
+        updated_at=plan.updated_at,
+    )
 
 
 @router.post("/plans/{plan_id}/link-paddle", response_model=SubscriptionPlanResponse)

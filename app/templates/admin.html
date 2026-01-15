@@ -2527,7 +2527,7 @@
             tableDiv.innerHTML = '<div class="loading">Checking for missing Price IDs...</div>';
             
             try {
-                const response = await fetch('/admin/plans/missing-price-ids', {
+                const response = await fetch('/admin/plans/paddle/missing-price-ids', {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -2777,7 +2777,7 @@
             tableDiv.innerHTML = '<div class="loading">Detecting drift in billing accounts...</div>';
             
             try {
-                const response = await fetch('/admin/subscriptions/drift-detection', {
+                const response = await fetch('/admin/subscriptions/paddle/drift-detection', {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -2842,7 +2842,7 @@
             resultsDiv.innerHTML = '<div class="loading">Reconciling subscriptions...</div>';
             
             try {
-                const response = await fetch('/admin/paddle/reconcile', {
+                const response = await fetch('/admin/subscriptions/reconcile', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
@@ -2908,7 +2908,7 @@
             resultsDiv.innerHTML = '<div class="loading">Running auto-backfill...</div>';
             
             try {
-                const response = await fetch('/admin/paddle/auto-backfill', {
+                const response = await fetch('/admin/paddle/auto-backfill-paddle-ids', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
@@ -2951,7 +2951,7 @@
             params.append('limit', limit);
             
             try {
-                const response = await fetch(`/admin/webhooks/events?${params}`, {
+                const response = await fetch(`/admin/webhooks?${params}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -2995,7 +2995,7 @@
 
         async function viewWebhookDetails(eventId) {
             try {
-                const response = await fetch(`/admin/webhooks/events/${eventId}`, {
+                const response = await fetch(`/admin/webhooks/${eventId}`, {
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
                 
@@ -3050,7 +3050,7 @@
             if (!confirm('Reprocess this webhook event?')) return;
             
             try {
-                const response = await fetch(`/admin/webhooks/events/${eventId}/reprocess`, {
+                const response = await fetch(`/admin/webhooks/${eventId}/reprocess`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${getAuthToken()}` }
                 });
