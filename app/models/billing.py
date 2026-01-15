@@ -28,6 +28,7 @@ class SubscriptionInterval(str, Enum):
 class SubscriptionStatus(str, Enum):
     """Subscription status enum."""
     ACTIVE = "active"
+    PAUSED = "paused"
     CANCELED = "canceled"
     PAST_DUE = "past_due"
     TRIALING = "trialing"
@@ -114,6 +115,7 @@ class BillingAccount(Base):
     trial_end_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     next_billing_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Balance and usage
     balance: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)

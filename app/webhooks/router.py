@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Map Paddle statuses to our SubscriptionStatus enum
 PADDLE_STATUS_MAP = {
     "active": SubscriptionStatus.ACTIVE,
-    "paused": SubscriptionStatus.ACTIVE,
+    "paused": SubscriptionStatus.PAUSED,
     "trialing": SubscriptionStatus.TRIALING,
     "past_due": SubscriptionStatus.PAST_DUE,
     "cancelled": SubscriptionStatus.CANCELED,
@@ -111,6 +111,17 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         paddle_subscription_id = data.get("id") if "subscription" in (event_type or "") else data.get("subscription_id")
         paddle_customer_id = data.get("customer_id")
         paddle_transaction_id = data.get("id") if "transaction" in (event_type or "") else data.get("transaction_id")
+        
+        # Check for duplicate event (idempotency) - before creating webhook record
+        if event_id:
+            existing_event = await db.execute(
+                select(PaddleWebhookEvent).where(
+                    PaddleWebhookEvent.paddle_event_id == event_id
+                )
+            )
+            if existing_event.scalar_one_or_none():
+                logger.info(f"Duplicate webhook event ignored: {event_id}")
+                return {"message": "Event already processed"}
         
         # Create webhook event record
         webhook_event = PaddleWebhookEvent(
@@ -361,7 +372,19 @@ async def handle_subscription_paused(data: dict, db: AsyncSession, event_id: Opt
             logger.info(f"Duplicate event: {event_id}")
             return {"message": "Event already processed"}
         
-        billing_account.subscription_status = SubscriptionStatus.ACTIVE  # Map paused to ACTIVE
+        billing_account.subscription_status = SubscriptionStatus.PAUSED
+        
+        # Store paused_at timestamp
+        if paused_at:
+            try:
+                billing_account.paused_at = datetime.fromisoformat(
+                    str(paused_at).replace("Z", "+00:00")
+                )
+            except (ValueError, TypeError):
+                billing_account.paused_at = datetime.utcnow()
+        else:
+            billing_account.paused_at = datetime.utcnow()
+        
         billing_account.last_webhook_event_id = event_id
         
         if webhook_event:
@@ -376,6 +399,7 @@ async def handle_subscription_paused(data: dict, db: AsyncSession, event_id: Opt
 async def handle_subscription_resumed(data: dict, db: AsyncSession, event_id: Optional[str] = None, webhook_event: Optional[PaddleWebhookEvent] = None) -> dict:
     """Handle subscription.resumed event."""
     paddle_subscription_id = data.get("id")
+    next_billed_at = data.get("next_billed_at")
     
     logger.info(f"Subscription resumed: paddle_id={paddle_subscription_id}")
     
@@ -392,7 +416,17 @@ async def handle_subscription_resumed(data: dict, db: AsyncSession, event_id: Op
             return {"message": "Event already processed"}
         
         billing_account.subscription_status = SubscriptionStatus.ACTIVE
+        billing_account.paused_at = None  # Clear paused timestamp
         billing_account.last_webhook_event_id = event_id
+        
+        # Update next billing date if provided
+        if next_billed_at:
+            try:
+                billing_account.next_billing_date = datetime.fromisoformat(
+                    str(next_billed_at).replace("Z", "+00:00")
+                )
+            except (ValueError, TypeError):
+                pass
         
         if webhook_event:
             webhook_event.billing_account_id = billing_account.id

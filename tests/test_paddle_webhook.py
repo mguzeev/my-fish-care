@@ -73,7 +73,7 @@ async def test_paddle_webhook_subscription_created(
 async def test_paddle_webhook_subscription_updated(
     client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
-    """Test webhook for subscription_updated event."""
+    """Test webhook for subscription_updated event with paused status."""
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
     
@@ -112,9 +112,9 @@ async def test_paddle_webhook_subscription_updated(
     )
     assert response.status_code == 200
     
-    # Verify account was updated
+    # Verify account was updated to PAUSED
     await db_session.refresh(ba)
-    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    assert ba.subscription_status == SubscriptionStatus.PAUSED
 
 
 @pytest.mark.asyncio
@@ -302,7 +302,7 @@ async def test_paddle_webhook_unknown_event(client: AsyncClient, monkeypatch):
 async def test_paddle_webhook_subscription_paused(
     client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
-    """Test webhook for subscription_paused event (maps to ACTIVE)."""
+    """Test webhook for subscription_paused event sets PAUSED status."""
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
     
@@ -323,7 +323,10 @@ async def test_paddle_webhook_subscription_paused(
     body = {
         "event_type": "subscription.paused",
         "event_id": "evt_123",
-        "data": {"id": "sub_123"},
+        "data": {
+            "id": "sub_123",
+            "paused_at": "2026-01-15T12:00:00Z",
+        },
     }
     raw = json.dumps(body)
     sig = _sign_payload(raw, secret)
@@ -338,16 +341,17 @@ async def test_paddle_webhook_subscription_paused(
     )
     assert response.status_code == 200
     
-    # Verify account remains ACTIVE
+    # Verify account is now PAUSED
     await db_session.refresh(ba)
-    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    assert ba.subscription_status == SubscriptionStatus.PAUSED
+    assert ba.paused_at is not None
 
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_subscription_resumed(
     client: AsyncClient, db_session: AsyncSession, monkeypatch
 ):
-    """Test webhook for subscription_resumed event (maps to ACTIVE)."""
+    """Test webhook for subscription_resumed event clears paused state."""
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
     
@@ -356,10 +360,12 @@ async def test_paddle_webhook_subscription_resumed(
     await db_session.commit()
     await db_session.refresh(org)
     
+    from datetime import datetime
     ba = BillingAccount(
         organization_id=org.id,
         paddle_subscription_id="sub_123",
-        subscription_status=SubscriptionStatus.ACTIVE,
+        subscription_status=SubscriptionStatus.PAUSED,
+        paused_at=datetime.utcnow(),
     )
     db_session.add(ba)
     await db_session.commit()
@@ -368,7 +374,10 @@ async def test_paddle_webhook_subscription_resumed(
     body = {
         "event_type": "subscription.resumed",
         "event_id": "evt_123",
-        "data": {"id": "sub_123"},
+        "data": {
+            "id": "sub_123",
+            "next_billed_at": "2026-02-15T12:00:00Z",
+        },
     }
     raw = json.dumps(body)
     sig = _sign_payload(raw, secret)
@@ -383,9 +392,11 @@ async def test_paddle_webhook_subscription_resumed(
     )
     assert response.status_code == 200
     
-    # Verify account remains ACTIVE
+    # Verify account is now ACTIVE and paused_at cleared
     await db_session.refresh(ba)
     assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    assert ba.paused_at is None
+    assert ba.next_billing_date is not None
 
 
 def _sign_payload(raw_body: str, secret: str) -> str:
@@ -445,6 +456,7 @@ async def test_paddle_webhook_signature_invalid(client: AsyncClient, monkeypatch
 
 @pytest.mark.asyncio
 async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: AsyncSession, monkeypatch):
+    """Test that duplicate webhook events are ignored (idempotency)."""
     secret = "test-secret"
     monkeypatch.setattr(settings, "paddle_webhook_secret", secret)
 
@@ -470,7 +482,7 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
     raw = json.dumps(body)
     sig = _sign_payload(raw, secret)
 
-    # First delivery
+    # First delivery - status changes to PAUSED
     response = await client.post(
         "/webhooks/paddle",
         content=raw,
@@ -482,8 +494,8 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
     assert response.status_code == 200
 
     await db_session.refresh(ba)
-    # paused maps to ACTIVE; event id stored
-    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    # paused maps to PAUSED; event id stored
+    assert ba.subscription_status == SubscriptionStatus.PAUSED
     assert ba.last_webhook_event_id == "evt_1"
 
     # Second delivery with same event id should be ignored
@@ -498,5 +510,6 @@ async def test_paddle_webhook_idempotent_event(client: AsyncClient, db_session: 
     assert response2.status_code == 200
 
     await db_session.refresh(ba)
+    # Event was already processed, status should remain PAUSED
     assert ba.last_webhook_event_id == "evt_1"
-    assert ba.subscription_status == SubscriptionStatus.ACTIVE
+    assert ba.subscription_status == SubscriptionStatus.PAUSED
