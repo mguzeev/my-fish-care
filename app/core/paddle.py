@@ -66,7 +66,9 @@ class PaddleClient:
         name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create a Paddle customer."""
-        response = self.client.create_customer(email=email, name=name or email)
+        from paddle_billing_client.models.customer import CustomerRequest
+        customer_data = CustomerRequest(email=email, name=name or email)
+        response = self.client.create_customer(data=customer_data)
         return self._response_to_dict(response)
     
     async def get_customer(self, customer_id: str) -> Dict[str, Any]:
@@ -80,11 +82,20 @@ class PaddleClient:
         price_id: str,
         quantity: int = 1,
     ) -> Dict[str, Any]:
-        """Create a subscription for a customer."""
-        response = self.client.create_subscription(
+        """
+        Create a subscription for a customer.
+        
+        Note: In Paddle Billing API, subscriptions are created via transactions.
+        This method creates a transaction with the subscription items, which
+        generates a checkout_url. The actual subscription is created when the
+        customer completes payment.
+        """
+        from paddle_billing_client.models.transaction import TransactionRequest
+        transaction_data = TransactionRequest(
             customer_id=customer_id,
             items=[{"price_id": price_id, "quantity": quantity}],
         )
+        response = self.client.create_transaction(data=transaction_data)
         return self._response_to_dict(response)
     
     async def get_subscription(self, subscription_id: str) -> Dict[str, Any]:
@@ -139,7 +150,17 @@ class PaddleClient:
         # Merge any additional kwargs
         update_params.update(kwargs)
         
-        response = self.client.update_subscription(subscription_id, **update_params)
+        from paddle_billing_client.models.subscription import SubscriptionRequest, Item
+        
+        # Convert items list to Item objects if needed
+        if 'items' in update_params:
+            update_params['items'] = [
+                Item(price_id=item.get('price_id'), quantity=item.get('quantity', 1))
+                for item in update_params['items']
+            ]
+        
+        subscription_data = SubscriptionRequest(**update_params)
+        response = self.client.update_subscription(subscription_id, data=subscription_data)
         return self._response_to_dict(response)
     
     async def add_subscription_items(
@@ -255,11 +276,9 @@ class PaddleClient:
         
         Reference: https://developer.paddle.com/api-reference/subscriptions/cancel-subscription
         """
-        # Paddle API accepts effective_from parameter
-        response = self.client.cancel_subscription(
-            subscription_id,
-            effective_from=effective_from
-        )
+        from paddle_billing_client.models.subscription import SubscriptionRequest
+        subscription_data = SubscriptionRequest(effective_from=effective_from)
+        response = self.client.cancel_subscription(subscription_id, data=subscription_data)
         return self._response_to_dict(response)
     
     async def pause_subscription(
@@ -283,11 +302,13 @@ class PaddleClient:
         
         Reference: https://developer.paddle.com/api-reference/subscriptions/pause-subscription
         """
+        from paddle_billing_client.models.subscription import SubscriptionRequest
         params = {"effective_from": effective_from}
         if resume_at:
             params["resume_at"] = resume_at
         
-        response = self.client.pause_subscription(subscription_id, **params)
+        subscription_data = SubscriptionRequest(**params)
+        response = self.client.pause_subscription(subscription_id, data=subscription_data)
         return self._response_to_dict(response)
     
     async def resume_subscription(
@@ -309,10 +330,9 @@ class PaddleClient:
         
         Reference: https://developer.paddle.com/api-reference/subscriptions/resume-subscription
         """
-        response = self.client.resume_subscription(
-            subscription_id,
-            effective_from=effective_from
-        )
+        from paddle_billing_client.models.subscription import SubscriptionRequest
+        subscription_data = SubscriptionRequest(effective_from=effective_from)
+        response = self.client.resume_subscription(subscription_id, data=subscription_data)
         return self._response_to_dict(response)
     
     async def get_prices(self, product_id: Optional[str] = None) -> list:
@@ -364,14 +384,16 @@ class PaddleClient:
         billing_cycle_frequency: int = 1,
     ) -> Dict[str, Any]:
         """Create a price for a product."""
-        response = self.client.create_price(
+        from paddle_billing_client.models.price import PriceRequest, UnitPrice, BillingCycle
+        price_data = PriceRequest(
             product_id=product_id,
-            unit_price={"amount": amount, "currency_code": currency},
-            billing_cycle={
-                "interval": billing_cycle_interval,
-                "frequency": billing_cycle_frequency,
-            },
+            unit_price=UnitPrice(amount=amount, currency_code=currency),
+            billing_cycle=BillingCycle(
+                interval=billing_cycle_interval,
+                frequency=billing_cycle_frequency,
+            ),
         )
+        response = self.client.create_price(data=price_data)
         return self._response_to_dict(response)
     
     async def get_transaction(self, transaction_id: str) -> Dict[str, Any]:
@@ -386,10 +408,12 @@ class PaddleClient:
         quantity: int = 1,
     ) -> Dict[str, Any]:
         """Create a hosted checkout transaction as a fallback to surface checkout_url."""
-        response = self.client.create_transaction(
+        from paddle_billing_client.models.transaction import TransactionRequest
+        transaction_data = TransactionRequest(
             customer_id=customer_id,
             items=[{"price_id": price_id, "quantity": quantity}],
         )
+        response = self.client.create_transaction(data=transaction_data)
         return self._response_to_dict(response)
 
     def verify_webhook_signature(
