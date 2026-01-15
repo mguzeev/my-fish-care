@@ -72,7 +72,11 @@ class PaddleClient:
         customer_data = CustomerRequest(email=email, name=name or email)
         try:
             response = self.client.create_customer(data=customer_data)
-            return self._response_to_dict(response)
+            response_dict = self._response_to_dict(response)
+            # Response is {meta: {...}, data: {...}} - extract the data
+            if 'data' in response_dict:
+                return response_dict['data']
+            return response_dict
         except ClientError as e:
             # 409 Conflict means customer with this email already exists
             if "409" in str(e):
@@ -114,6 +118,8 @@ class PaddleClient:
         This method creates a transaction with the subscription items, which
         generates a checkout_url. The actual subscription is created when the
         customer completes payment.
+        
+        Returns transaction data with checkout url for payment.
         """
         from paddle_billing_client.models.transaction import TransactionRequest
         transaction_data = TransactionRequest(
@@ -121,7 +127,12 @@ class PaddleClient:
             items=[{"price_id": price_id, "quantity": quantity}],
         )
         response = self.client.create_transaction(data=transaction_data)
-        return self._response_to_dict(response)
+        response_dict = self._response_to_dict(response)
+        
+        # Response is {meta: {...}, data: {...}} - extract the data
+        if 'data' in response_dict:
+            return response_dict['data']
+        return response_dict
     
     async def get_subscription(self, subscription_id: str) -> Dict[str, Any]:
         """Get subscription details."""
@@ -439,7 +450,11 @@ class PaddleClient:
             items=[{"price_id": price_id, "quantity": quantity}],
         )
         response = self.client.create_transaction(data=transaction_data)
-        return self._response_to_dict(response)
+        response_dict = self._response_to_dict(response)
+        # Response is {meta: {...}, data: {...}} - extract the data
+        if 'data' in response_dict:
+            return response_dict['data']
+        return response_dict
 
     def verify_webhook_signature(
         self,

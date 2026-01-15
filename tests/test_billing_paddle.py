@@ -11,19 +11,19 @@ from app.models.billing import SubscriptionPlan, SubscriptionInterval, BillingAc
 
 
 class _FakePaddle:
-    def __init__(self, subscription_response=None, transaction_response=None, customer_id="cus_123"):
-        self._subscription_response = subscription_response or {}
+    def __init__(self, transaction_response=None, customer_id="cus_123"):
         self._transaction_response = transaction_response or {}
         self._customer_id = customer_id
 
     async def create_customer(self, email: str, name: str):
-        return SimpleNamespace(id=self._customer_id)
+        return {"id": self._customer_id}
 
     async def create_subscription(self, customer_id: str, price_id: str, quantity: int = 1):
-        return SimpleNamespace(**self._subscription_response)
+        # In Paddle Billing, create_subscription actually creates a transaction
+        return self._transaction_response
 
     async def create_transaction_checkout(self, customer_id: str, price_id: str, quantity: int = 1):
-        return SimpleNamespace(**self._transaction_response)
+        return self._transaction_response
 
 
 @pytest.mark.asyncio
@@ -49,9 +49,10 @@ async def test_subscribe_paddle_success_with_checkout_url(
     await db_session.refresh(plan)
 
     fake = _FakePaddle(
-        subscription_response={
-            "id": "sub_123",
-            "url": "https://checkout/sub",
+        transaction_response={
+            "id": "txn_123",
+            "subscription_id": "sub_123",
+            "checkout": {"url": "https://checkout/sub"},
             "next_billed_at": "2026-02-01T00:00:00Z",
         }
     )
@@ -73,6 +74,7 @@ async def test_subscribe_paddle_success_with_checkout_url(
         ba = result.scalar_one_or_none()
         assert ba is not None
         assert ba.paddle_customer_id == "cus_123"
+        # subscription_id is set from transaction response if present
         assert ba.paddle_subscription_id == "sub_123"
         assert ba.subscription_status == SubscriptionStatus.ACTIVE
         assert ba.next_billing_date is not None
@@ -103,8 +105,10 @@ async def test_subscribe_paddle_fallback_checkout_url(
     await db_session.refresh(plan)
 
     fake = _FakePaddle(
-        subscription_response={"id": "sub_123"},
-        transaction_response={"checkout_url": "https://checkout/tx"},
+        transaction_response={
+            "id": "txn_123",
+            "checkout": {"url": "https://checkout/tx"},
+        },
     )
     fastapi_app.dependency_overrides[get_paddle_client] = lambda: fake
 
@@ -173,7 +177,7 @@ async def test_subscribe_paddle_subscription_failure(
     await db_session.commit()
     await db_session.refresh(plan)
 
-    fake = _FakePaddle(subscription_response={})
+    fake = _FakePaddle(transaction_response={})
     fastapi_app.dependency_overrides[get_paddle_client] = lambda: fake
 
     try:

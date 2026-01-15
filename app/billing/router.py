@@ -217,22 +217,26 @@ async def subscribe(
 			if not ba.paddle_customer_id:
 				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
 
-		# Create Paddle subscription
-		subscription = _as_dict(
+		# Create Paddle transaction (subscription is created after payment via webhook)
+		transaction = _as_dict(
 			await paddle.create_subscription(
 				customer_id=ba.paddle_customer_id,
 				price_id=plan.paddle_price_id,
 			)
 		)
-		subscription_id = subscription.get("id")
-		if not subscription_id:
-			raise HTTPException(status_code=502, detail="Failed to create Paddle subscription")
+		transaction_id = transaction.get("id")
+		if not transaction_id:
+			raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
 
-		ba.paddle_subscription_id = subscription_id
+		# Note: paddle_subscription_id will be set by webhook when payment completes
+		# For now, store the transaction_id if no subscription_id exists yet
+		if transaction.get("subscription_id"):
+			ba.paddle_subscription_id = transaction.get("subscription_id")
+		
 		# Capture next billing date if provided
 		next_bill = None
 		for key in ("next_billed_at", "next_billing_date"):
-			next_bill = subscription.get(key)
+			next_bill = transaction.get(key)
 			if next_bill:
 				break
 		if next_bill:
@@ -241,20 +245,12 @@ async def subscribe(
 			except ValueError:
 				pass
 
-		# Some Paddle responses include hosted url; surface if present
-		for key in ("url", "checkout_url", "hosted_page_url"):
-			if subscription.get(key):
-				checkout_url = subscription.get(key)
-				break
-
-		# Fallback: create hosted checkout transaction if no checkout_url returned
-		if not checkout_url:
-			transaction = _as_dict(
-				await paddle.create_transaction_checkout(
-					customer_id=ba.paddle_customer_id,
-					price_id=plan.paddle_price_id,
-				)
-			)
+		# Get checkout URL from transaction.checkout.url
+		checkout = transaction.get("checkout")
+		if isinstance(checkout, dict) and checkout.get("url"):
+			checkout_url = checkout.get("url")
+		else:
+			# Fallback: look for other possible keys
 			for key in ("url", "checkout_url", "hosted_page_url"):
 				if transaction.get(key):
 					checkout_url = transaction.get(key)
