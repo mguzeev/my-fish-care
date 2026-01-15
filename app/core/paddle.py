@@ -318,26 +318,42 @@ class PaddleClient:
     async def get_prices(self, product_id: Optional[str] = None) -> list:
         """Get available prices."""
         response = self.client.list_prices()
+        response_dict = self._response_to_dict(response)
+        
+        # Paddle API returns {meta: {...}, data: [...]}
+        if isinstance(response_dict, dict) and 'data' in response_dict:
+            return response_dict['data']
         
         if isinstance(response, list):
             return [self._response_to_dict(p) for p in response]
-        return [self._response_to_dict(response)]
+        return [response_dict] if response_dict else []
     
     def list_prices(self, product_id: Optional[str] = None) -> list:
         """Get available prices (synchronous version)."""
         response = self.client.list_prices()
+        response_dict = self._response_to_dict(response)
+        
+        # Paddle API returns {meta: {...}, data: [...]}
+        # We need to extract the data array
+        if isinstance(response_dict, dict) and 'data' in response_dict:
+            return response_dict['data']
         
         if isinstance(response, list):
             return [self._response_to_dict(p) for p in response]
-        return [self._response_to_dict(response)]
+        return [response_dict] if response_dict else []
     
     async def get_products(self) -> list:
         """Get available products."""
         response = self.client.list_products()
+        response_dict = self._response_to_dict(response)
+        
+        # Paddle API returns {meta: {...}, data: [...]}
+        if isinstance(response_dict, dict) and 'data' in response_dict:
+            return response_dict['data']
         
         if isinstance(response, list):
             return [self._response_to_dict(p) for p in response]
-        return [self._response_to_dict(response)]
+        return [response_dict] if response_dict else []
     
     async def create_price(
         self,
