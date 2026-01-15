@@ -117,6 +117,11 @@ class BillingAccountResponse(BaseModel):
 	trial_started_at: Optional[str]
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
+	# Subscription details
+	paddle_subscription_id: Optional[str] = None
+	next_billing_date: Optional[str] = None
+	paused_at: Optional[str] = None
+	cancelled_at: Optional[str] = None
 
 
 class UsageSummaryResponse(BaseModel):
@@ -164,6 +169,11 @@ async def _get_billing_account_response(
 		free_requests_used=ba.free_requests_used,
 		free_trial_days=plan.free_trial_days if plan else 0,
 		trial_started_at=ba.trial_started_at.isoformat() if ba.trial_started_at else None,
+		# Subscription details
+		paddle_subscription_id=ba.paddle_subscription_id,
+		next_billing_date=ba.next_billing_date.isoformat() if ba.next_billing_date else None,
+		paused_at=ba.paused_at.isoformat() if ba.paused_at else None,
+		cancelled_at=ba.cancelled_at.isoformat() if ba.cancelled_at else None,
 	)
 
 
@@ -225,6 +235,14 @@ async def subscribe(
 	if not ba:
 		ba = BillingAccount(organization_id=current_user.organization_id)
 		db.add(ba)
+
+	# Prevent creating new subscription if active one exists
+	from app.models.billing import SubscriptionStatus
+	if ba.paddle_subscription_id and ba.subscription_status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
+		raise HTTPException(
+			status_code=400, 
+			detail="Active subscription already exists. Cancel current subscription before subscribing to a new plan."
+		)
 
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None

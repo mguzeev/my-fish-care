@@ -243,10 +243,17 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
             logger.info(f"Duplicate event: {event_id}")
             return {"message": "Event already processed"}
         
-        # Set the paddle_subscription_id if not already set
-        if paddle_subscription_id and not billing_account.paddle_subscription_id:
+        # Always update paddle_subscription_id with the new subscription
+        # This handles cases where user creates a new subscription
+        if paddle_subscription_id:
+            if billing_account.paddle_subscription_id and billing_account.paddle_subscription_id != paddle_subscription_id:
+                logger.info(f"Replacing old subscription {billing_account.paddle_subscription_id} with new {paddle_subscription_id}")
             billing_account.paddle_subscription_id = paddle_subscription_id
             logger.info(f"Set paddle_subscription_id={paddle_subscription_id} for customer={customer_id}")
+        
+        # Clear paused/cancelled timestamps for new subscription
+        billing_account.paused_at = None
+        billing_account.cancelled_at = None
         
         # Map Paddle status to our status
         if subscription_status:
