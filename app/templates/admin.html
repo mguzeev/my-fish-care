@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Panel - {{ t('site_name') }}</title>
     <link rel="stylesheet" href="/static/css/style.css?v=2.0">
-    <link rel="stylesheet" href="/static/css/admin.css?v=1.0">
+    <link rel="stylesheet" href="/static/css/admin.css?v=1.1">
 </head>
 <body>
     <header>
@@ -3626,11 +3626,11 @@
                 }
                 
                 const html = `
-                    <div class="webhook-modal-backdrop" onclick="closeWebhookModal()"></div>
-                    <div class="webhook-modal-content">
-                        <div class="modal-header">
-                            <h2>📨 Webhook Event Details</h2>
-                            <button class="modal-close" onclick="closeWebhookModal()">×</button>
+                    <div class="webhook-modal-backdrop" onclick="closeWebhookModal()" style="position:absolute !important; top:0 !important; left:0 !important; right:0 !important; bottom:0 !important; width:100% !important; height:100% !important; background:rgba(0,0,0,0.6) !important;"></div>
+                    <div class="webhook-modal-content" style="position:relative !important; z-index:1 !important; background:#ffffff !important; border-radius:12px; padding:1.5rem 2rem; max-width:900px; width:90%; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                        <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem; padding-bottom:1rem; border-bottom:1px solid #e5e7eb;">
+                            <h2 style="margin:0; font-size:1.25rem;">📨 Webhook Event Details</h2>
+                            <button class="modal-close" onclick="closeWebhookModal()" style="background:none; border:none; font-size:1.75rem; cursor:pointer; color:#6b7280; line-height:1; padding:0;">×</button>
                         </div>
                         <div class="modal-body">
                             <table style="width: 100%; margin-bottom: 20px;">
@@ -3669,6 +3669,7 @@
                 const container = document.createElement('div');
                 container.id = 'webhookDetailsModal';
                 container.className = 'webhook-modal-container';
+                container.style.cssText = 'position:fixed !important; top:0 !important; left:0 !important; right:0 !important; bottom:0 !important; width:100vw !important; height:100vh !important; z-index:99999 !important; display:flex !important; align-items:center !important; justify-content:center !important;';
                 container.innerHTML = html;
                 document.body.appendChild(container);
             } catch (error) {
