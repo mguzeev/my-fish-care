@@ -41,6 +41,11 @@ PADDLE_IGNORED_EVENTS = {
     "customer.created",
     "customer.updated",
     "customer.imported",
+    # Transaction events - we only need completed/paid, others are intermediate states
+    "transaction.created",
+    "transaction.billed",
+    "transaction.updated",
+    "transaction.ready",
 }
 
 
