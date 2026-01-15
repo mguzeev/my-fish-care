@@ -1555,7 +1555,7 @@
             const freeRequests = parseInt(document.getElementById('planFreeRequests').value) || 0;
             const freeTrial = parseInt(document.getElementById('planFreeTrial').value) || 0;
             
-            if (!name || !price || !maxRequests || !maxTokens) {
+            if (!name || isNaN(price) || !maxRequests || !maxTokens) {
                 showAlert('Please fill in all required fields', 'error');
                 return;
             }
