@@ -141,7 +141,7 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
         f"customer_id={customer_id}, status={subscription_status}"
     )
     
-    # Find billing account by paddle subscription ID
+    # First, try to find by paddle_subscription_id (in case it was already set)
     result = await db.execute(
         select(BillingAccount).where(
             BillingAccount.paddle_subscription_id == paddle_subscription_id
@@ -149,14 +149,30 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
     )
     billing_account = result.scalar_one_or_none()
     
-    if billing_account and subscription_status:
+    # If not found by subscription_id, try to find by customer_id
+    # This is the normal case when subscription is first created
+    if not billing_account and customer_id:
+        result = await db.execute(
+            select(BillingAccount).where(
+                BillingAccount.paddle_customer_id == customer_id
+            )
+        )
+        billing_account = result.scalar_one_or_none()
+    
+    if billing_account:
         if event_id and billing_account.last_webhook_event_id == event_id:
             logger.info(f"Duplicate event: {event_id}")
             return {"message": "Event already processed"}
         
+        # Set the paddle_subscription_id if not already set
+        if paddle_subscription_id and not billing_account.paddle_subscription_id:
+            billing_account.paddle_subscription_id = paddle_subscription_id
+            logger.info(f"Set paddle_subscription_id={paddle_subscription_id} for customer={customer_id}")
+        
         # Map Paddle status to our status
-        mapped_status = PADDLE_STATUS_MAP.get(subscription_status, SubscriptionStatus.ACTIVE)
-        billing_account.subscription_status = mapped_status
+        if subscription_status:
+            mapped_status = PADDLE_STATUS_MAP.get(subscription_status, SubscriptionStatus.ACTIVE)
+            billing_account.subscription_status = mapped_status
         
         # Update next billing date
         if next_billed_at:
@@ -169,7 +185,9 @@ async def handle_subscription_created(data: dict, db: AsyncSession, event_id: Op
         
         billing_account.last_webhook_event_id = event_id
         await db.commit()
-        logger.info(f"Updated subscription: {paddle_subscription_id} -> {mapped_status}")
+        logger.info(f"Updated subscription: {paddle_subscription_id} -> {billing_account.subscription_status}")
+    else:
+        logger.warning(f"No billing account found for subscription={paddle_subscription_id}, customer={customer_id}")
     
     return {"message": "Subscription created"}
 
