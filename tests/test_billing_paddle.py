@@ -66,7 +66,9 @@ async def test_subscribe_paddle_success_with_checkout_url(
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["checkout_url"] == "https://checkout/sub"
+        # checkout_url now includes success_url parameter
+        assert "https://checkout/sub" in data["checkout_url"]
+        assert "success_url=" in data["checkout_url"]
 
         result = await db_session.execute(
             select(BillingAccount).where(BillingAccount.subscription_plan_id == plan.id)
@@ -120,7 +122,9 @@ async def test_subscribe_paddle_fallback_checkout_url(
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["checkout_url"] == "https://checkout/tx"
+        # checkout_url now includes success_url parameter
+        assert "https://checkout/tx" in data["checkout_url"]
+        assert "success_url=" in data["checkout_url"]
     finally:
         fastapi_app.dependency_overrides.pop(get_paddle_client, None)
 

@@ -58,6 +58,26 @@ async def upgrade_page(request: Request):
 	)
 
 
+@router.get("/success", response_class=HTMLResponse)
+async def payment_success_page(request: Request):
+	"""
+	Payment success page - shown after Paddle checkout completes.
+	Paddle redirects here with ?_ptxn=<transaction_id> parameter.
+	"""
+	lang = request.query_params.get("lang", "en")
+	transaction_id = request.query_params.get("_ptxn", "")
+	t = lambda key, **params: i18n.t(key, locale=lang, **params)
+	return templates.TemplateResponse(
+		"payment_success.html",
+		{
+			"request": request,
+			"language": lang,
+			"t": t,
+			"transaction_id": transaction_id,
+		}
+	)
+
+
 class SubscribeRequest(BaseModel):
 	plan_id: int
 
@@ -255,6 +275,12 @@ async def subscribe(
 				if transaction.get(key):
 					checkout_url = transaction.get(key)
 					break
+		
+		# Append success_url parameter to redirect after payment
+		if checkout_url:
+			separator = "&" if "?" in checkout_url else "?"
+			success_redirect = f"{settings.api_base_url}/billing/success"
+			checkout_url = f"{checkout_url}{separator}success_url={success_redirect}"
 
 	# Update local subscription state
 	ba.subscription_plan_id = plan.id
