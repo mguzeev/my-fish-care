@@ -119,7 +119,7 @@ async def paddle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
             paddle_subscription_id=paddle_subscription_id,
             paddle_customer_id=paddle_customer_id,
             paddle_transaction_id=paddle_transaction_id,
-            status=WebhookEventStatus.PENDING,
+            status=WebhookEventStatus.RECEIVED,
             signature_valid=signature_valid,
             signature_timestamp=signature_timestamp,
             payload_json=json.dumps(body, default=str)[:10000],  # Limit payload size
