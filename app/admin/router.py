@@ -3175,17 +3175,27 @@ async def update_subscription(
     
     # Update plan if provided
     if request.subscription_plan_id:
-        # Verify plan exists
+        # Verify plan exists and get plan details
         plan_check = await db.execute(
             select(SubscriptionPlan).where(SubscriptionPlan.id == request.subscription_plan_id)
         )
-        if not plan_check.scalar_one_or_none():
+        plan = plan_check.scalar_one_or_none()
+        if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
         
         billing.subscription_plan_id = request.subscription_plan_id
         # Reset period counters when changing plan
         billing.requests_used_current_period = 0
         billing.period_started_at = datetime.utcnow()
+        
+        # Update Paddle subscription ID based on plan
+        # If plan has no Paddle IDs, clear the subscription ID
+        # If plan has Paddle IDs and billing has no subscription ID yet, keep it empty (manual assignment)
+        if not plan.paddle_product_id and not plan.paddle_price_id:
+            # Free/manual plan - clear Paddle subscription
+            billing.paddle_subscription_id = None
+            billing.paddle_customer_id = None
+            billing.next_billing_date = None
     
     await db.commit()
     await db.refresh(billing)
