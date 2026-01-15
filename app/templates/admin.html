@@ -2820,7 +2820,8 @@
             tableDiv.innerHTML = '<div class="loading">Loading billing accounts...</div>';
             
             const statusFilter = document.getElementById('billingStatusFilter')?.value || '';
-            const url = statusFilter ? `/admin/subscriptions/filter?status=${encodeURIComponent(statusFilter)}` : '/admin/subscriptions/filter';
+            const url = statusFilter ? `/admin/subscriptions?limit=100&skip=0` : '/admin/subscriptions?limit=100&skip=0';
+            // Note: filtering by status is done client-side below
             
             try {
                 const response = await fetch(url, {
@@ -2829,7 +2830,12 @@
                 
                 if (!response.ok) throw new Error('Failed to load billing accounts');
                 
-                const accounts = await response.json();
+                let accounts = await response.json();
+                
+                // Filter by status if provided
+                if (statusFilter) {
+                    accounts = accounts.filter(acc => acc.status.toLowerCase().includes(statusFilter.toLowerCase()));
+                }
                 
                 if (accounts.length === 0) {
                     tableDiv.innerHTML = '<div class="info-box">No billing accounts found.</div>';
@@ -2858,6 +2864,11 @@
             } catch (error) {
                 tableDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
             }
+        }
+
+        function closeBillingDetailsModal() {
+            const modal = document.getElementById('billing-details-modal');
+            if (modal) modal.remove();
         }
 
         async function viewBillingAccountDetails(accountId) {
