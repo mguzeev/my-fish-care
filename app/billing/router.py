@@ -380,13 +380,3 @@ async def get_available_plans(db: AsyncSession = Depends(get_db)):
 		}
 		for plan in plans
 	]
-
-
-@router.get("/upgrade", response_class=HTMLResponse)
-async def upgrade_page(request: Request):
-	"""Render upgrade page."""
-	return templates.TemplateResponse("upgrade.html", {
-		"request": request,
-		"language": "en",
-		"t": lambda key: key
-	})
