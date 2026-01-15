@@ -3602,43 +3602,60 @@
                 
                 const event = await response.json();
                 
+                // Parse payload_json if it's a string
+                let payloadObj = {};
+                try {
+                    payloadObj = typeof event.payload_json === 'string' 
+                        ? JSON.parse(event.payload_json) 
+                        : (event.payload_json || {});
+                } catch (e) {
+                    payloadObj = { raw: event.payload_json };
+                }
+                
                 const html = `
-                    <div class="modal-backdrop" onclick="closeWebhookModal()"></div>
-                    <div class="modal" style="max-width: 900px;">
+                    <div class="webhook-modal-backdrop" onclick="closeWebhookModal()"></div>
+                    <div class="webhook-modal-content">
                         <div class="modal-header">
                             <h2>📨 Webhook Event Details</h2>
                             <button class="modal-close" onclick="closeWebhookModal()">×</button>
                         </div>
                         <div class="modal-body">
                             <table style="width: 100%; margin-bottom: 20px;">
-                                <tr><td><strong>ID:</strong></td><td>${event.id}</td></tr>
-                                <tr><td><strong>Paddle Event ID:</strong></td><td>${event.paddle_event_id}</td></tr>
+                                <tr><td style="width: 180px;"><strong>ID:</strong></td><td>${event.id}</td></tr>
+                                <tr><td><strong>Paddle Event ID:</strong></td><td style="word-break: break-all;">${event.paddle_event_id}</td></tr>
                                 <tr><td><strong>Event Type:</strong></td><td>${event.event_type}</td></tr>
-                                <tr><td><strong>Status:</strong></td><td><span class="badge">${event.status}</span></td></tr>
+                                <tr><td><strong>Status:</strong></td><td><span class="badge badge-${event.status.toLowerCase()}">${event.status}</span></td></tr>
+                                <tr><td><strong>Subscription ID:</strong></td><td style="word-break: break-all;">${event.paddle_subscription_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Customer ID:</strong></td><td style="word-break: break-all;">${event.paddle_customer_id || 'N/A'}</td></tr>
+                                <tr><td><strong>Transaction ID:</strong></td><td style="word-break: break-all;">${event.paddle_transaction_id || 'N/A'}</td></tr>
                                 <tr><td><strong>Billing Account ID:</strong></td><td>${event.billing_account_id || 'N/A'}</td></tr>
                                 <tr><td><strong>Received At:</strong></td><td>${new Date(event.received_at).toLocaleString()}</td></tr>
                                 <tr><td><strong>Processed At:</strong></td><td>${event.processed_at ? new Date(event.processed_at).toLocaleString() : 'N/A'}</td></tr>
                                 <tr><td><strong>Signature Valid:</strong></td><td>${event.signature_valid ? '✅ Yes' : '❌ No'}</td></tr>
+                                <tr><td><strong>Signature Timestamp:</strong></td><td>${event.signature_timestamp ? new Date(event.signature_timestamp).toLocaleString() : 'N/A'}</td></tr>
                             </table>
                             
                             ${event.error_message ? `
-                                <div class="error-box">
-                                    <h4>❌ Error Message:</h4>
-                                    <pre style="white-space: pre-wrap; word-wrap: break-word;">${event.error_message}</pre>
+                                <div class="error-box" style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 12px; margin-bottom: 15px;">
+                                    <h4 style="margin: 0 0 8px 0; color: #dc2626;">❌ Error Message:</h4>
+                                    <pre style="white-space: pre-wrap; word-wrap: break-word; margin: 0;">${event.error_message}</pre>
                                 </div>
                             ` : ''}
                             
                             <details style="margin-top: 15px;">
-                                <summary style="cursor: pointer; font-weight: bold;">📦 Event Payload</summary>
-                                <pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin-top: 10px;">${JSON.stringify(event.payload, null, 2)}</pre>
+                                <summary style="cursor: pointer; font-weight: bold; padding: 8px 0;">📦 Event Payload (click to expand)</summary>
+                                <pre style="background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto; margin-top: 10px; max-height: 400px; overflow-y: auto; font-size: 12px;">${JSON.stringify(payloadObj, null, 2)}</pre>
                             </details>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn-secondary" onclick="closeWebhookModal()">Close</button>
                         </div>
                     </div>
                 `;
                 
                 const container = document.createElement('div');
                 container.id = 'webhookDetailsModal';
-                container.className = 'modal-container';
+                container.className = 'webhook-modal-container';
                 container.innerHTML = html;
                 document.body.appendChild(container);
             } catch (error) {
