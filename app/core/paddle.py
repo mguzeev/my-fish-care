@@ -137,7 +137,12 @@ class PaddleClient:
     async def get_subscription(self, subscription_id: str) -> Dict[str, Any]:
         """Get subscription details."""
         response = self.client.get_subscription(subscription_id)
-        return self._response_to_dict(response)
+        response_dict = self._response_to_dict(response)
+        
+        # Response is {meta: {...}, data: {...}} - extract the data
+        if 'data' in response_dict:
+            return response_dict['data']
+        return response_dict
     
     async def update_subscription(
         self,
