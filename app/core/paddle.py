@@ -65,11 +65,36 @@ class PaddleClient:
         email: str,
         name: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Create a Paddle customer."""
-        from paddle_billing_client.models.customer import CustomerRequest
+        """Create a Paddle customer, or return existing customer if email already exists."""
+        from paddle_billing_client.models.customer import CustomerRequest, CustomerQueryParams
+        from apiclient.exceptions import ClientError
+        
         customer_data = CustomerRequest(email=email, name=name or email)
-        response = self.client.create_customer(data=customer_data)
-        return self._response_to_dict(response)
+        try:
+            response = self.client.create_customer(data=customer_data)
+            return self._response_to_dict(response)
+        except ClientError as e:
+            # 409 Conflict means customer with this email already exists
+            if "409" in str(e):
+                # Search for existing customer by email
+                existing = await self.get_customer_by_email(email)
+                if existing:
+                    return existing
+            raise
+    
+    async def get_customer_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        """Find a customer by email address."""
+        from paddle_billing_client.models.customer import CustomerQueryParams
+        
+        query_params = CustomerQueryParams(email=email)
+        response = self.client.list_customers(query_params=query_params)
+        response_dict = self._response_to_dict(response)
+        
+        # Response contains {data: [...], meta: {...}}
+        customers = response_dict.get('data', [])
+        if customers and len(customers) > 0:
+            return customers[0]
+        return None
     
     async def get_customer(self, customer_id: str) -> Dict[str, Any]:
         """Get customer details."""
