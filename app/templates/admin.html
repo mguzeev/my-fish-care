@@ -2624,6 +2624,7 @@
         async function loadPaddleTab() {
             await Promise.all([
                 validatePaddleConfig(),
+                checkMissingPriceIds(),
                 loadBillingAccounts(),
                 loadWebhookEvents(),
                 loadTestSubscriptionAccounts()
@@ -2704,7 +2705,7 @@
                     html += `<td style="padding: 8px;">${plan.id}</td>`;
                     html += `<td style="padding: 8px;">${plan.name}</td>`;
                     html += `<td style="padding: 8px;">$${plan.price}/${plan.interval}</td>`;
-                    html += `<td style="padding: 8px;"><button class="btn-secondary" data-plan-id="${plan.id}" data-plan-name="${plan.name}" onclick="handleLinkPriceClick(event)">🔗 Link</button></td>`;
+                    html += `<td style="padding: 8px;"><button class="btn-secondary" onclick="showLinkPaddlePriceModal(${plan.id}, '${plan.name.replace(/'/g, "\\'")}')">🔗 Link</button></td>`;
                     html += '</tr>';
                 });
                 
@@ -2757,12 +2758,7 @@
             if (modal) modal.remove();
         }
 
-        function handleLinkPriceClick(event) {
-            const btn = event.currentTarget;
-            const planId = parseInt(btn.dataset.planId);
-            const planName = btn.dataset.planName || '';
-            showLinkPaddlePriceModal(planId, planName);
-        }
+        // handleLinkPriceClick removed - using direct onclick call to showLinkPaddlePriceModal
 
         async function linkPaddlePrice(event, planId = null) {
             event.preventDefault();
@@ -2814,19 +2810,34 @@
                 const data = await response.json();
                 
                 let html = '<div style="margin-top: 15px; padding: 15px; background: #d4edda; border-left: 4px solid #28a745; border-radius: 4px;">';
-                html += `<h4 style="margin: 0 0 10px 0;">✅ ${data.message}</h4>`;
-                html += `<p><strong>Synced:</strong> ${data.synced_count} plans</p>`;
+                html += `<h4 style="margin: 0 0 10px 0;">✅ Sync Complete</h4>`;
+                html += `<p><strong>Total Synced:</strong> ${data.synced_count} plans</p>`;
                 
-                if (data.errors && data.errors.length > 0) {
-                    html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">⚠️ Errors</summary><ul>';
-                    data.errors.forEach(err => html += `<li>${err}</li>`);
+                if (data.created_plans && data.created_plans.length > 0) {
+                    html += `<p><strong>Created:</strong> ${data.created_plans.length} plans (IDs: ${data.created_plans.join(', ')})</p>`;
+                }
+                
+                if (data.updated_plans && data.updated_plans.length > 0) {
+                    html += `<p><strong>Updated:</strong> ${data.updated_plans.length} plans (IDs: ${data.updated_plans.join(', ')})</p>`;
+                }
+                
+                if (data.skipped_plans && data.skipped_plans.length > 0) {
+                    html += '<details style="margin-top: 10px;"><summary style="cursor: pointer; font-weight: bold;">⚠️ Skipped (' + data.skipped_plans.length + ')</summary><ul>';
+                    data.skipped_plans.forEach(skip => html += `<li>${skip.reason}: ${skip.price_id || skip.price || 'unknown'}</li>`);
                     html += '</ul></details>';
+                }
+                
+                if (data.message) {
+                    html += `<p style="margin-top: 10px;"><em>${data.message}</em></p>`;
                 }
                 
                 html += '</div>';
                 statusDiv.innerHTML = html;
                 
-                setTimeout(() => statusDiv.innerHTML = '', 10000);
+                // Refresh missing price IDs check
+                checkMissingPriceIds();
+                
+                setTimeout(() => statusDiv.innerHTML = '', 15000);
             } catch (error) {
                 statusDiv.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
             }
