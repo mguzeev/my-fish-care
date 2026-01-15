@@ -3119,8 +3119,7 @@
                 
                 if (!response.ok) throw new Error('Failed to load accounts');
                 
-                const data = await response.json();
-                const accounts = data.subscriptions || [];
+                const accounts = await response.json();
                 
                 // Filter only accounts with Paddle subscription
                 const paddleAccounts = accounts.filter(acc => acc.paddle_subscription_id);
