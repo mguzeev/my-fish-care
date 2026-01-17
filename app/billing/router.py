@@ -236,13 +236,14 @@ async def subscribe(
 		ba = BillingAccount(organization_id=current_user.organization_id)
 		db.add(ba)
 
-	# Prevent creating new subscription if active one exists
-	from app.models.billing import SubscriptionStatus
-	if ba.paddle_subscription_id and ba.subscription_status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
-		raise HTTPException(
-			status_code=400, 
-			detail="Active subscription already exists. Cancel current subscription before subscribing to a new plan."
-		)
+	# For SUBSCRIPTION plans: prevent creating new subscription if active one exists
+	from app.models.billing import SubscriptionStatus, PlanType
+	if plan.plan_type == PlanType.SUBSCRIPTION:
+		if ba.paddle_subscription_id and ba.subscription_status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
+			raise HTTPException(
+				status_code=400, 
+				detail="Active subscription already exists. Cancel current subscription before subscribing to a new plan."
+			)
 
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
@@ -263,7 +264,9 @@ async def subscribe(
 			if not ba.paddle_customer_id:
 				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
 
-		# Create Paddle transaction (subscription is created after payment via webhook)
+		# Create Paddle transaction
+		# For SUBSCRIPTION plans: create subscription (recurring)
+		# For ONE_TIME plans: create one-time transaction
 		transaction = _as_dict(
 			await paddle.create_subscription(
 				customer_id=ba.paddle_customer_id,
@@ -274,8 +277,8 @@ async def subscribe(
 		if not transaction_id:
 			raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
 
-		# Note: paddle_subscription_id will be set by webhook when payment completes
-		# For now, store the transaction_id if no subscription_id exists yet
+		# Note: paddle_subscription_id will be set by webhook when payment completes (for subscriptions only)
+		# For one-time purchases, this will remain NULL
 		if transaction.get("subscription_id"):
 			ba.paddle_subscription_id = transaction.get("subscription_id")
 		
@@ -308,8 +311,18 @@ async def subscribe(
 			success_redirect = f"{settings.api_base_url}/billing/success"
 			checkout_url = f"{checkout_url}{separator}success_url={success_redirect}"
 
-	# DO NOT update subscription state here - it will be updated by webhook after payment
-	# Only commit the paddle_customer_id if it was created
+	# If Paddle is disabled, activate the plan immediately (manual/local mode)
+	if not settings.paddle_billing_enabled:
+		now = datetime.utcnow()
+		ba.subscription_plan_id = plan.id
+		ba.subscription_status = SubscriptionStatus.ACTIVE
+		ba.subscription_start_date = now
+		ba.period_started_at = now
+		# For one-time plans, grant the purchased quota immediately
+		if plan.plan_type == PlanType.ONE_TIME and plan.one_time_limit:
+			ba.one_time_purchases_count += plan.one_time_limit
+
+	# DO NOT update subscription state here when Paddle is enabled - it will be updated by webhook after payment
 	await db.commit()
 	await db.refresh(ba)
 
@@ -368,6 +381,8 @@ async def get_usage_info(
 	db: AsyncSession = Depends(get_db)
 ):
 	"""Get current usage information and limits."""
+	from app.models.billing import PlanType
+	
 	if not current_user.organization_id:
 		raise HTTPException(status_code=403, detail="No organization assigned")
 	
@@ -384,23 +399,38 @@ async def get_usage_info(
 	
 	billing_account, plan = row
 	
-	# Calculate remaining
-	free_remaining = max(0, plan.free_requests_limit - billing_account.free_requests_used)
-	paid_remaining = max(0, plan.max_requests_per_interval - billing_account.requests_used_current_period)
-	
-	return {
-		"plan_name": plan.name,
-		"plan_interval": plan.interval.value,
-		"subscription_status": billing_account.subscription_status.value,
-		"free_requests_limit": plan.free_requests_limit,
-		"free_requests_used": billing_account.free_requests_used,
-		"free_remaining": free_remaining,
-		"paid_requests_limit": plan.max_requests_per_interval,
-		"paid_requests_used": billing_account.requests_used_current_period,
-		"paid_remaining": paid_remaining,
-		"period_started_at": billing_account.period_started_at.isoformat() if billing_account.period_started_at else None,
-		"trial_started_at": billing_account.trial_started_at.isoformat() if billing_account.trial_started_at else None,
-	}
+	# Calculate remaining based on plan type
+	if plan.plan_type == PlanType.ONE_TIME:
+		# For one-time purchases: show total purchased and remaining
+		one_time_remaining = max(0, billing_account.one_time_purchases_count - billing_account.requests_used_current_period)
+		return {
+			"plan_name": plan.name,
+			"plan_type": plan.plan_type.value,
+			"subscription_status": billing_account.subscription_status.value,
+			"one_time_limit": plan.one_time_limit,
+			"one_time_total_purchased": billing_account.one_time_purchases_count,
+			"one_time_used": billing_account.requests_used_current_period,
+			"one_time_remaining": one_time_remaining,
+		}
+	else:
+		# For subscriptions: show time-based limits
+		free_remaining = max(0, plan.free_requests_limit - billing_account.free_requests_used)
+		paid_remaining = max(0, plan.max_requests_per_interval - billing_account.requests_used_current_period)
+		
+		return {
+			"plan_name": plan.name,
+			"plan_type": plan.plan_type.value,
+			"plan_interval": plan.interval.value,
+			"subscription_status": billing_account.subscription_status.value,
+			"free_requests_limit": plan.free_requests_limit,
+			"free_requests_used": billing_account.free_requests_used,
+			"free_remaining": free_remaining,
+			"paid_requests_limit": plan.max_requests_per_interval,
+			"paid_requests_used": billing_account.requests_used_current_period,
+			"paid_remaining": paid_remaining,
+			"period_started_at": billing_account.period_started_at.isoformat() if billing_account.period_started_at else None,
+			"trial_started_at": billing_account.trial_started_at.isoformat() if billing_account.trial_started_at else None,
+		}
 
 
 @router.get("/plans")
@@ -413,6 +443,7 @@ async def get_available_plans(db: AsyncSession = Depends(get_db)):
 		{
 			"id": plan.id,
 			"name": plan.name,
+			"plan_type": plan.plan_type.value,
 			"interval": plan.interval.value,
 			"price": float(plan.price),
 			"currency": plan.currency,
@@ -420,6 +451,7 @@ async def get_available_plans(db: AsyncSession = Depends(get_db)):
 			"max_tokens_per_request": plan.max_tokens_per_request,
 			"free_requests_limit": plan.free_requests_limit,
 			"free_trial_days": plan.free_trial_days,
+			"one_time_limit": plan.one_time_limit,
 			"has_api_access": plan.has_api_access,
 			"has_priority_support": plan.has_priority_support,
 			"has_advanced_analytics": plan.has_advanced_analytics,

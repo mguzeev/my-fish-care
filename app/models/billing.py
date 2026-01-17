@@ -35,6 +35,12 @@ class SubscriptionStatus(str, Enum):
     EXPIRED = "expired"
 
 
+class PlanType(str, Enum):
+    """Plan type enum - subscription (time-based) vs one-time purchase (item-based)."""
+    SUBSCRIPTION = "subscription"  # Time-based: user can use unlimited times within period
+    ONE_TIME = "one_time"          # Item-based: user gets fixed count of uses, cumulative
+
+
 class SubscriptionPlan(Base):
     """Subscription plan model."""
     
@@ -46,9 +52,17 @@ class SubscriptionPlan(Base):
         SQLEnum(SubscriptionInterval, native_enum=False), nullable=False
     )
     
+    # Plan type: subscription (time-based) or one-time purchase (item-based)
+    plan_type: Mapped[PlanType] = mapped_column(
+        SQLEnum(PlanType, native_enum=False), default=PlanType.SUBSCRIPTION, nullable=False
+    )
+    
     # Pricing
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    
+    # For ONE_TIME plans: total number of items/uses user gets
+    one_time_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     
     # Limits
     max_requests_per_interval: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -116,6 +130,9 @@ class BillingAccount(Base):
     next_billing_date: Mapped[Optional[datetime]] = mapped_column(DateTime)
     cancelled_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    
+    # For ONE_TIME purchases: cumulative count of items/uses purchased
+    one_time_purchases_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     
     # Balance and usage
     balance: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0.00"), nullable=False)

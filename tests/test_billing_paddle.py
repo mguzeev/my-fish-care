@@ -70,15 +70,17 @@ async def test_subscribe_paddle_success_with_checkout_url(
         assert "https://checkout/sub" in data["checkout_url"]
         assert "success_url=" in data["checkout_url"]
 
-        result = await db_session.execute(
-            select(BillingAccount).where(BillingAccount.subscription_plan_id == plan.id)
-        )
-        ba = result.scalar_one_or_none()
-        assert ba is not None
+        # In Paddle mode, subscription is activated by webhook after payment; account exists but plan is not applied yet
+        ba = (
+            await db_session.execute(
+                select(BillingAccount).where(BillingAccount.organization_id == 1)
+            )
+        ).scalar_one()
         assert ba.paddle_customer_id == "cus_123"
-        # subscription_id is set from transaction response if present
         assert ba.paddle_subscription_id == "sub_123"
-        assert ba.subscription_status == SubscriptionStatus.ACTIVE
+        # Plan will be set by webhook; should remain unset until confirmation
+        assert ba.subscription_plan_id is None
+        assert ba.subscription_status == SubscriptionStatus.TRIALING
         assert ba.next_billing_date is not None
     finally:
         fastapi_app.dependency_overrides.pop(get_paddle_client, None)

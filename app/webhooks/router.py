@@ -491,12 +491,16 @@ async def handle_subscription_resumed(data: dict, db: AsyncSession, event_id: Op
 
 
 async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: Optional[str] = None, webhook_event: Optional[PaddleWebhookEvent] = None) -> dict:
-    """Handle transaction.completed event."""
+    """Handle transaction.completed event for both subscriptions and one-time purchases."""
+    from app.models.billing import SubscriptionPlan, PlanType
+    
     transaction_id = data.get("id")
     subscription_id = data.get("subscription_id")
+    customer_id = data.get("customer_id")
     
-    logger.info(f"Transaction completed: id={transaction_id}, subscription_id={subscription_id}")
+    logger.info(f"Transaction completed: id={transaction_id}, subscription_id={subscription_id}, customer_id={customer_id}")
     
+    # For subscriptions: subscription_id will be present
     if subscription_id:
         result = await db.execute(
             select(BillingAccount).where(
@@ -517,6 +521,57 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
                 webhook_event.billing_account_id = billing_account.id
             
             await db.commit()
+    
+    # For one-time purchases: subscription_id will be NULL
+    elif customer_id:
+        # Find billing account by customer_id
+        result = await db.execute(
+            select(BillingAccount).where(
+                BillingAccount.paddle_customer_id == customer_id
+            )
+        )
+        billing_account = result.scalar_one_or_none()
+        
+        if billing_account:
+            if event_id and billing_account.last_webhook_event_id == event_id:
+                logger.info(f"Duplicate event: {event_id}")
+                return {"message": "Event already processed"}
+            
+            # Extract price_id to find the plan
+            price_id = None
+            items = data.get("items", [])
+            if items and len(items) > 0:
+                price_data = items[0].get("price", {})
+                price_id = price_data.get("id")
+            
+            if price_id:
+                # Find plan by price_id
+                plan_result = await db.execute(
+                    select(SubscriptionPlan).where(SubscriptionPlan.paddle_price_id == price_id)
+                )
+                plan = plan_result.scalar_one_or_none()
+                
+                if plan and plan.plan_type == PlanType.ONE_TIME:
+                    # This is a one-time purchase
+                    logger.info(f"One-time purchase completed: customer={customer_id}, plan={plan.id} ({plan.name})")
+                    
+                    # Increment cumulative count
+                    if plan.one_time_limit:
+                        billing_account.one_time_purchases_count += plan.one_time_limit
+                        logger.info(f"Incremented one_time_purchases_count to {billing_account.one_time_purchases_count}")
+                    
+                    # Set current plan to this one-time plan
+                    billing_account.subscription_plan_id = plan.id
+                    billing_account.subscription_status = SubscriptionStatus.ACTIVE
+                    billing_account.subscription_start_date = datetime.utcnow()
+                    billing_account.last_transaction_id = transaction_id
+                    billing_account.last_webhook_event_id = event_id
+                    
+                    if webhook_event:
+                        webhook_event.billing_account_id = billing_account.id
+                    
+                    await db.commit()
+                    return {"message": "One-time purchase applied"}
     
     return {"message": "Transaction completed"}
 
