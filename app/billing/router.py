@@ -445,11 +445,23 @@ async def subscribe(
 					price_id=plan.paddle_price_id,
 				)
 			)
-		else:  # PlanType.ONE_TIME
-			# For one-time purchases
-			transaction = _as_dict(
+	else:  # PlanType.ONE_TIME
+		# For one-time purchases
+		transaction = _as_dict(
 			await paddle.create_transaction_checkout(
-		
+				customer_id=ba.paddle_customer_id,
+				price_id=plan.paddle_price_id,
+			)
+		)
+	transaction_id = transaction.get("id")
+	if not transaction_id:
+		raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
+
+	# Note: paddle_subscription_id will be set by webhook when payment completes (for subscriptions only)
+	# For one-time purchases, this will remain NULL
+	if transaction.get("subscription_id"):
+		ba.paddle_subscription_id = transaction.get("subscription_id")
+	
 		# Capture next billing date if provided
 		next_bill = None
 		for key in ("next_billed_at", "next_billing_date"):
