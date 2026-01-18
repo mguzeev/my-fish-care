@@ -245,6 +245,17 @@ async def subscribe(
 				detail="Active subscription already exists. Cancel current subscription before subscribing to a new plan."
 			)
 
+	# For ONE_TIME plans: prevent purchase while subscription is active
+	if plan.plan_type == PlanType.ONE_TIME:
+		if ba.subscription_plan_id and ba.subscription_status in (SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING):
+			current_plan = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == ba.subscription_plan_id))
+			current_plan = current_plan.scalar_one_or_none()
+			if current_plan and current_plan.plan_type == PlanType.SUBSCRIPTION:
+				raise HTTPException(
+					status_code=400, 
+					detail="Cannot purchase credits while subscription is active. Cancel subscription first to buy additional credits."
+				)
+
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
 

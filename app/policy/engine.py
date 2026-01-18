@@ -174,7 +174,8 @@ class PolicyEngine:
 
         if plan.plan_type == PlanType.ONE_TIME:
             total_purchased = billing_account.one_time_purchases_count
-            used = billing_account.requests_used_current_period
+            # Now using separate counter for ONE_TIME requests
+            used = billing_account.one_time_requests_used
             remaining = max(0, total_purchased - used)
 
             return _result(
@@ -269,7 +270,8 @@ class PolicyEngine:
         billing_account, plan = row
 
         if plan.plan_type == PlanType.ONE_TIME:
-            billing_account.requests_used_current_period += 1
+            # Now using separate counter for ONE_TIME requests
+            billing_account.one_time_requests_used += 1
             await db.commit()
             return
 

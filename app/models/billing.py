@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional, List
 from decimal import Decimal
-from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Enum as SQLEnum, Table, Column
+from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Enum as SQLEnum, Table, Column, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from enum import Enum
 from app.core.database import Base
@@ -77,6 +77,9 @@ class SubscriptionPlan(Base):
     has_priority_support: Mapped[bool] = mapped_column(default=False, nullable=False)
     has_advanced_analytics: Mapped[bool] = mapped_column(default=False, nullable=False)
     
+    # Default plan for new user registration
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
     # Paddle
     paddle_price_id: Mapped[Optional[str]] = mapped_column(String(100), unique=True)
     paddle_product_id: Mapped[Optional[str]] = mapped_column(String(100))
@@ -141,6 +144,8 @@ class BillingAccount(Base):
     # Usage tracking
     free_requests_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     requests_used_current_period: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Separate counter for ONE_TIME plan usage
+    one_time_requests_used: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     period_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     trial_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     

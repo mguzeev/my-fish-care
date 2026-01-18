@@ -560,10 +560,7 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
                         billing_account.one_time_purchases_count += plan.one_time_limit
                         logger.info(f"Incremented one_time_purchases_count to {billing_account.one_time_purchases_count}")
                     
-                    # Set current plan to this one-time plan
-                    billing_account.subscription_plan_id = plan.id
-                    billing_account.subscription_status = SubscriptionStatus.ACTIVE
-                    billing_account.subscription_start_date = datetime.utcnow()
+                    # Update transaction info only - do NOT overwrite subscription_plan_id
                     billing_account.last_transaction_id = transaction_id
                     billing_account.last_webhook_event_id = event_id
                     
