@@ -97,6 +97,29 @@ class SubscriptionPlan(Base):
         back_populates="plans",
         lazy="selectin"
     )
+
+    @property
+    def is_valid(self) -> bool:
+        """Check if plan is valid for purchase."""
+        from app.core.config import settings
+        return (
+            len(self.agents) > 0 and 
+            (not settings.paddle_billing_enabled or self.paddle_price_id is not None) and
+            self.price >= 0
+        )
+
+    @property  
+    def validation_errors(self) -> List[str]:
+        """Get list of validation errors."""
+        from app.core.config import settings
+        errors = []
+        if len(self.agents) == 0:
+            errors.append("No agents assigned to this plan")
+        if settings.paddle_billing_enabled and not self.paddle_price_id:
+            errors.append("Missing Paddle price configuration") 
+        if self.price < 0:
+            errors.append("Invalid price")
+        return errors
     
     def __repr__(self) -> str:
         return f"<SubscriptionPlan(id={self.id}, name={self.name}, interval={self.interval})>"
@@ -210,3 +233,35 @@ class PaddleWebhookEvent(Base):
     
     def __repr__(self) -> str:
         return f"<PaddleWebhookEvent(id={self.id}, event_id={self.paddle_event_id}, type={self.event_type})>"
+
+
+class OneTimePurchase(Base):
+    """History of one-time credit purchases."""
+    
+    __tablename__ = "one_time_purchases"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    billing_account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("billing_accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    plan_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("subscription_plans.id", ondelete="SET NULL"), nullable=True
+    )
+    
+    # Purchase details
+    credits_purchased: Mapped[int] = mapped_column(Integer, nullable=False)
+    price_paid: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    
+    # Paddle details
+    paddle_transaction_id: Mapped[Optional[str]] = mapped_column(String(100))
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    billing_account: Mapped["BillingAccount"] = relationship("BillingAccount")
+    plan: Mapped[Optional["SubscriptionPlan"]] = relationship("SubscriptionPlan")
+    
+    def __repr__(self) -> str:
+        return f"<OneTimePurchase(id={self.id}, credits={self.credits_purchased}, price={self.price_paid})>"

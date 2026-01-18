@@ -295,15 +295,23 @@ async def subscribe(
 			if not ba.paddle_customer_id:
 				raise HTTPException(status_code=502, detail="Failed to create Paddle customer")
 
-		# Create Paddle transaction
-		# For SUBSCRIPTION plans: create subscription (recurring)
-		# For ONE_TIME plans: create one-time transaction
-		transaction = _as_dict(
-			await paddle.create_subscription(
-				customer_id=ba.paddle_customer_id,
-				price_id=plan.paddle_price_id,
+		# Create Paddle transaction based on plan type
+		if plan.plan_type == PlanType.SUBSCRIPTION:
+			# For recurring subscriptions
+			transaction = _as_dict(
+				await paddle.create_subscription(
+					customer_id=ba.paddle_customer_id,
+					price_id=plan.paddle_price_id,
+				)
 			)
-		)
+		else:  # PlanType.ONE_TIME
+			# For one-time purchases
+			transaction = _as_dict(
+				await paddle.create_transaction(
+					customer_id=ba.paddle_customer_id,
+					price_id=plan.paddle_price_id,
+				)
+			)
 		transaction_id = transaction.get("id")
 		if not transaction_id:
 			raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
