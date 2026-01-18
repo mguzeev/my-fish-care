@@ -493,16 +493,21 @@
                 let timeInfo = '';
                 let usageInfo = '';
                 
+                // КОМБИНИРОВАННАЯ МОДЕЛЬ: показываем кредиты всегда (если есть)
+                let creditsInfo = '';
+                if (data.credits_purchased && data.credits_purchased > 0) {
+                    const creditsRemaining = data.credits_remaining || 0;
+                    const creditsUsed = data.credits_used || 0;
+                    creditsInfo = `<div class="stat-item">
+                        <span class="stat-label">🛒 Credits:</span>
+                        <span class="stat-value">${creditsRemaining} / ${data.credits_purchased}</span>
+                    </div>`;
+                }
+                
                 // Handle different plan types
                 if (data.plan_type === 'one_time') {
-                    // For ONE_TIME plans: show purchased credits and usage
-                    if (data.one_time_purchases_count) {
-                        const remaining = data.one_time_purchases_count - (data.one_time_requests_used || 0);
-                        usageInfo = `<div class="stat-item">
-                            <span class="stat-label">Credits:</span>
-                            <span class="stat-value">${remaining} / ${data.one_time_purchases_count}</span>
-                        </div>`;
-                    }
+                    // For ONE_TIME plans without subscription: show only credits info above
+                    // (already shown in creditsInfo)
                 } else {
                     // For subscription plans: show trial/billing dates
                     if (data.free_trial_days && data.trial_started_at) {
@@ -560,8 +565,9 @@
                         <span class="stat-label">Status:</span>
                         ${statusBadge}
                     </div>
-                    ${timeInfo}
+                    ${creditsInfo}
                     ${usageInfo}
+                    ${timeInfo}
                     ${cancellationInfo}
                     <div class="stat-item">
                         <span class="stat-label">Balance:</span>
