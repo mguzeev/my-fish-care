@@ -539,10 +539,72 @@ async def telegram_login_callback(
         )
         
         db.add(user)
+        await db.flush()  # Flush to get user.id
+        
+        # Create organization for the user
+        org = Organization(
+            name=f"{user.username}'s Organization",
+            slug=f"{user.username}-org".lower(),
+            description=f"Personal organization for {user.username}"
+        )
+        db.add(org)
+        await db.flush()
+        
+        # Assign user to organization
+        user.organization_id = org.id
+        
+        # Find default plan for new users
+        default_plan_result = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.is_default == True)
+        )
+        default_plan = default_plan_result.scalar_one_or_none()
+        
+        if not default_plan:
+            # Fallback to first available plan with free requests
+            fallback_result = await db.execute(
+                select(SubscriptionPlan)
+                .where(SubscriptionPlan.free_requests_limit > 0)
+                .order_by(SubscriptionPlan.id)
+            )
+            default_plan = fallback_result.scalar_one_or_none()
+            
+            # If still no plan, create a default Free Trial plan
+            if not default_plan:
+                from app.models.billing import SubscriptionInterval
+                default_plan = SubscriptionPlan(
+                    name="Free Trial",
+                    interval=SubscriptionInterval.MONTHLY,
+                    price=0.00,
+                    currency="USD",
+                    max_requests_per_interval=0,  # After free requests - block
+                    max_tokens_per_request=2000,
+                    free_requests_limit=10,  # 10 free requests
+                    free_trial_days=0,
+                    has_api_access=False,
+                    has_priority_support=False,
+                    has_advanced_analytics=False,
+                    is_default=True  # Mark as default
+                )
+                db.add(default_plan)
+                await db.flush()
+        
+        # Create billing account with default plan
+        billing_account = BillingAccount(
+            organization_id=org.id,
+            subscription_plan_id=default_plan.id,
+            subscription_status=SubscriptionStatus.TRIALING,
+            free_requests_used=0,
+            requests_used_current_period=0,
+            one_time_requests_used=0,  # Initialize new counter
+            trial_started_at=datetime.utcnow(),
+            period_started_at=datetime.utcnow()
+        )
+        db.add(billing_account)
+        
         await db.commit()
         await db.refresh(user)
         
-        logger.info(f"New user registered via Telegram: {user.id} (Telegram ID: {id})")
+        logger.info(f"New user registered via Telegram: {user.id} (Telegram ID: {id}) with default plan '{default_plan.name}' (org_id={org.id})")
     
     # Generate tokens
     access_token = create_access_token(data={"sub": user.id})
