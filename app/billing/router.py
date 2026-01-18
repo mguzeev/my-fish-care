@@ -239,14 +239,11 @@ async def _get_billing_account_response(
 		used_period = ba.requests_used_current_period
 		remaining_period = max(0, max_per_period - used_period) if max_per_period > 0 else 0
 	
-	# Для ONE_TIME: кредиты
-	credits_purchased = None
-	credits_used = None
-	credits_remaining = None
-	if is_one_time:
-		credits_purchased = ba.one_time_purchases_count
-		credits_used = ba.one_time_requests_used
-		credits_remaining = max(0, credits_purchased - credits_used)
+	# Кредиты (ONE_TIME) - показываем ВСЕГДА если они есть (комбинированная модель)
+	# Пользователь может иметь SUBSCRIPTION план И докупленные кредиты одновременно
+	credits_purchased = ba.one_time_purchases_count if ba.one_time_purchases_count > 0 else None
+	credits_used = ba.one_time_requests_used if ba.one_time_purchases_count > 0 else None
+	credits_remaining = max(0, ba.one_time_purchases_count - ba.one_time_requests_used) if ba.one_time_purchases_count > 0 else None
 	
 	# Определяем можно ли использовать сервис
 	can_use = False
@@ -254,29 +251,36 @@ async def _get_billing_account_response(
 	upgrade_reason = None
 	
 	if ba.subscription_status in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]:
-		if is_one_time:
-			# Для ONE_TIME проверяем наличие кредитов
-			if credits_remaining and credits_remaining > 0:
-				can_use = True
-			else:
-				should_upgrade = True
-				upgrade_reason = "Кредиты исчерпаны. Купите новый пакет запросов."
-		elif is_subscription:
-			# Для SUBSCRIPTION проверяем лимиты
-			if free_remaining > 0:
-				can_use = True
-			elif remaining_period and remaining_period > 0:
-				can_use = True
-			else:
-				should_upgrade = True
-				upgrade_reason = f"Лимит запросов исчерпан. Ждите начала нового периода или перейдите на более высокий тариф."
-			if free_remaining <= 0 and (not remaining_period or remaining_period <= 5):
-				should_upgrade = True
-				upgrade_reason = "Запросы заканчиваются. Рекомендуем обновить план."
-		else:
-			# Неизвестный тип - даем доступ
+		# Приоритетная проверка (комбинированная модель):
+		# 1. Сначала проверяем ONE_TIME кредиты (работают для ЛЮБОГО плана)
+		# 2. Потом проверяем бесплатные запросы
+		# 3. Потом лимиты SUBSCRIPTION
+		
+		# Проверка 1: ONE_TIME кредиты (если есть)
+		if credits_remaining and credits_remaining > 0:
 			can_use = True
+		# Проверка 2: Бесплатные запросы
+		elif free_remaining > 0:
+			can_use = True
+		# Проверка 3: Лимиты подписки (только для SUBSCRIPTION планов)
+		elif is_subscription and remaining_period and remaining_period > 0:
+			can_use = True
+		else:
+			# Все ресурсы исчерпаны
+			should_upgrade = True
+			if is_subscription:
+				upgrade_reason = "Лимит запросов исчерпан. Ждите начала нового периода, перейдите на более высокий тариф или купите пакет кредитов."
+			else:
+				upgrade_reason = "Кредиты исчерпаны. Купите новый пакет запросов или оформите подписку."
+		
+		# Предупреждение о скором исчерпании (только если еще есть доступ)
+		if can_use:
+			total_available = (credits_remaining or 0) + free_remaining + (remaining_period or 0)
+			if total_available <= 5:
+				should_upgrade = True
+				upgrade_reason = "Запросы заканчиваются. Рекомендуем обновить план или купить кредиты."
 	else:
+		# Статус не позволяет использовать сервис
 		should_upgrade = True
 		upgrade_reason = f"Статус подписки: {status_display}. Активируйте подписку для продолжения."
 	
