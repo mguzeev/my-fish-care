@@ -476,8 +476,8 @@
                 <div class="form-group">
                     <label>Plan Type</label>
                     <select id="editPlanType" onchange="toggleEditPlanTypeFields()">
-                        <option value="SUBSCRIPTION">Subscription (Time-based)</option>
-                        <option value="ONE_TIME">One-time Purchase (Credit-based)</option>
+                        <option value="subscription">Subscription (Time-based)</option>
+                        <option value="one_time">One-time Purchase (Credit-based)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -713,8 +713,8 @@
                 <div class="form-group">
                     <label>Plan Type</label>
                     <select id="planType" onchange="togglePlanTypeFields()">
-                        <option value="SUBSCRIPTION">Subscription (Time-based)</option>
-                        <option value="ONE_TIME">One-time Purchase (Credit-based)</option>
+                        <option value="subscription">Subscription (Time-based)</option>
+                        <option value="one_time">One-time Purchase (Credit-based)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -732,10 +732,10 @@
                 <div class="form-group" id="planIntervalGroup">
                     <label>Interval</label>
                     <select id="planInterval">
-                        <option value="MONTHLY">Monthly</option>
-                        <option value="YEARLY">Yearly</option>
-                        <option value="WEEKLY">Weekly</option>
-                        <option value="DAILY">Daily</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="daily">Daily</option>
                     </select>
                 </div>
             </div>
@@ -1650,19 +1650,19 @@
             const maxTokens = parseInt(document.getElementById('planMaxTokens').value);
             const freeRequests = parseInt(document.getElementById('planFreeRequests').value) || 0;
             const freeTrial = parseInt(document.getElementById('planFreeTrial').value) || 0;
-            const oneTimeLimit = planType === 'ONE_TIME' ? parseInt(document.getElementById('planOneTimeLimit').value) : null;
+            const oneTimeLimit = planType === 'one_time' ? parseInt(document.getElementById('planOneTimeLimit').value) : null;
             
             if (!name || isNaN(price)) {
                 showAlert('Please fill in all required fields', 'error');
                 return;
             }
             
-            if (planType === 'ONE_TIME' && !oneTimeLimit) {
+            if (planType === 'one_time' && !oneTimeLimit) {
                 showAlert('ONE_TIME plans must have credits/uses specified', 'error');
                 return;
             }
             
-            if (planType === 'SUBSCRIPTION' && (isNaN(maxRequests) || !maxTokens)) {
+            if (planType === 'subscription' && (isNaN(maxRequests) || !maxTokens)) {
                 showAlert('SUBSCRIPTION plans must have max requests and tokens specified', 'error');
                 return;
             }
@@ -1674,8 +1674,8 @@
                     interval,
                     plan_type: planType,
                     currency: 'USD',
-                    max_requests_per_interval: planType === 'SUBSCRIPTION' ? maxRequests : 1,
-                    max_tokens_per_request: planType === 'SUBSCRIPTION' ? maxTokens : 2000,
+                    max_requests_per_interval: planType === 'subscription' ? maxRequests : 1,
+                    max_tokens_per_request: planType === 'subscription' ? maxTokens : 2000,
                     free_requests_limit: freeRequests,
                     free_trial_days: freeTrial,
                     is_default: isDefault,
@@ -1684,7 +1684,7 @@
                     has_advanced_analytics: document.getElementById('planAdvancedAnalytics').checked
                 };
                 
-                if (planType === 'ONE_TIME') {
+                if (planType === 'one_time') {
                     payload.one_time_limit = oneTimeLimit;
                 }
                 
@@ -1724,7 +1724,7 @@
             const freeTrialGroup = document.getElementById('freeTrialGroup');
             const intervalGroup = document.getElementById('planIntervalGroup');
             
-            if (planType === 'ONE_TIME') {
+            if (planType === 'one_time') {
                 oneTimeLimitGroup.style.display = 'block';
                 subscriptionLimitsGroup.style.display = 'none';
                 freeTrialGroup.style.display = 'none';
@@ -1742,7 +1742,7 @@
             const oneTimeLimitGroup = document.getElementById('editOneTimeLimitGroup');
             const intervalGroup = document.getElementById('editPlanIntervalGroup');
             
-            if (planType === 'ONE_TIME') {
+            if (planType === 'one_time') {
                 oneTimeLimitGroup.style.display = 'block';
                 intervalGroup.style.display = 'none';
             } else {
@@ -1763,10 +1763,10 @@
                 
                 editingPlanId = planId;
                 document.getElementById('editPlanName').value = plan.name;
-                document.getElementById('editPlanType').value = plan.plan_type || 'SUBSCRIPTION';
+                document.getElementById('editPlanType').value = plan.plan_type || 'subscription';
                 document.getElementById('editPlanIsDefault').checked = plan.is_default || false;
                 document.getElementById('editPlanPrice').value = plan.price;
-                document.getElementById('editPlanInterval').value = plan.interval.toUpperCase();
+                document.getElementById('editPlanInterval').value = plan.interval;
                 document.getElementById('editPlanMaxRequests').value = plan.max_requests_per_interval;
                 document.getElementById('editPlanMaxTokens').value = plan.max_tokens_per_request;
                 document.getElementById('editPlanFreeRequests').value = plan.free_requests_limit || 0;
@@ -1788,7 +1788,7 @@
                 const oneTimeLimit = document.getElementById('editPlanOneTimeLimit').value;
                 
                 // Validate ONE_TIME plans must have one_time_limit
-                if (planType === 'ONE_TIME' && (!oneTimeLimit || parseInt(oneTimeLimit) <= 0)) {
+                if (planType === 'one_time' && (!oneTimeLimit || parseInt(oneTimeLimit) <= 0)) {
                     showAlert('ONE_TIME plans must have a valid credits/uses limit', 'error');
                     return;
                 }
@@ -1806,7 +1806,7 @@
                         max_tokens_per_request: parseInt(document.getElementById('editPlanMaxTokens').value),
                         free_requests_limit: parseInt(document.getElementById('editPlanFreeRequests').value) || 0,
                         free_trial_days: parseInt(document.getElementById('editPlanFreeTrial').value) || 0,
-                        one_time_limit: planType === 'ONE_TIME' ? parseInt(oneTimeLimit) : null,
+                        one_time_limit: planType === 'one_time' ? parseInt(oneTimeLimit) : null,
                         has_api_access: document.getElementById('editPlanApiAccess').checked,
                         has_priority_support: document.getElementById('editPlanPrioritySupport').checked,
                         has_advanced_analytics: document.getElementById('editPlanAdvancedAnalytics').checked
