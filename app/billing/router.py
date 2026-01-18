@@ -445,54 +445,53 @@ async def subscribe(
 					price_id=plan.paddle_price_id,
 				)
 			)
-	else:  # PlanType.ONE_TIME
-		# For one-time purchases
-		transaction = _as_dict(
-			await paddle.create_transaction_checkout(
-				customer_id=ba.paddle_customer_id,
-				price_id=plan.paddle_price_id,
+		else:  # PlanType.ONE_TIME
+			# For one-time purchases
+			transaction = _as_dict(
+				await paddle.create_transaction_checkout(
+					customer_id=ba.paddle_customer_id,
+					price_id=plan.paddle_price_id,
+				)
 			)
-		)
-	transaction_id = transaction.get("id")
-	if not transaction_id:
-		raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
+		transaction_id = transaction.get("id")
+		if not transaction_id:
+			raise HTTPException(status_code=502, detail="Failed to create Paddle transaction")
 
-	# Note: paddle_subscription_id will be set by webhook when payment completes (for subscriptions only)
-	# For one-time purchases, this will remain NULL
-	if transaction.get("subscription_id"):
-		ba.paddle_subscription_id = transaction.get("subscription_id")
-	
-		# Capture next billing date if provided
-		next_bill = None
-		for key in ("next_billed_at", "next_billing_date"):
-			next_bill = transaction.get(key)
-			if next_bill:
-				break
-		if next_bill:
-			try:
-				ba.next_billing_date = datetime.fromisoformat(str(next_bill).replace("Z", "+00:00"))
-			except ValueError:
-				pass
-
-		# Get checkout URL from transaction.checkout.url
-		checkout = transaction.get("checkout")
-		if isinstance(checkout, dict) and checkout.get("url"):
-			checkout_url = checkout.get("url")
-		else:
-			# Fallback: look for other possible keys
-			for key in ("url", "checkout_url", "hosted_page_url"):
-				if transaction.get(key):
-					checkout_url = transaction.get(key)
-					break
+		# Note: paddle_subscription_id will be set by webhook when payment completes (for subscriptions only)
+		# For one-time purchases, this will remain NULL
+		if transaction.get("subscription_id"):
+			ba.paddle_subscription_id = transaction.get("subscription_id")
 		
-		# Append success_url parameter to redirect after payment
-		if checkout_url:
-			separator = "&" if "?" in checkout_url else "?"
-			success_redirect = f"{settings.api_base_url}/billing/success"
-			checkout_url = f"{checkout_url}{separator}success_url={success_redirect}"
+			# Capture next billing date if provided
+			next_bill = None
+			for key in ("next_billed_at", "next_billing_date"):
+				next_bill = transaction.get(key)
+				if next_bill:
+					break
+			if next_bill:
+				try:
+					ba.next_billing_date = datetime.fromisoformat(str(next_bill).replace("Z", "+00:00"))
+				except ValueError:
+					pass
 
-	# If Paddle is disabled, activate the plan immediately (manual/local mode)
-	if not settings.paddle_billing_enabled:
+			# Get checkout URL from transaction.checkout.url
+			checkout = transaction.get("checkout")
+			if isinstance(checkout, dict) and checkout.get("url"):
+				checkout_url = checkout.get("url")
+			else:
+				# Fallback: look for other possible keys
+				for key in ("url", "checkout_url", "hosted_page_url"):
+					if transaction.get(key):
+						checkout_url = transaction.get(key)
+						break
+			
+			# Append success_url parameter to redirect after payment
+			if checkout_url:
+				separator = "&" if "?" in checkout_url else "?"
+				success_redirect = f"{settings.api_base_url}/billing/success"
+				checkout_url = f"{checkout_url}{separator}success_url={success_redirect}"
+	else:
+		# If Paddle is disabled, activate the plan immediately (manual/local mode)
 		now = datetime.utcnow()
 		ba.subscription_plan_id = plan.id
 		ba.subscription_status = SubscriptionStatus.ACTIVE
