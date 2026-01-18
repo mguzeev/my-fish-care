@@ -510,9 +510,11 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
         billing_account = result.scalar_one_or_none()
         
         if billing_account:
-            if event_id and billing_account.last_webhook_event_id == event_id:
-                logger.info(f"Duplicate event: {event_id}")
-                return {"message": "Event already processed"}
+            # Check for duplicate transaction by transaction_id (not event_id!)
+            # Paddle sends both transaction.paid and transaction.completed for the same transaction
+            if transaction_id and billing_account.last_transaction_id == transaction_id:
+                logger.info(f"Duplicate transaction: {transaction_id} (already processed)")
+                return {"message": "Transaction already processed"}
             
             billing_account.last_transaction_id = transaction_id
             billing_account.last_webhook_event_id = event_id
@@ -533,9 +535,11 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
         billing_account = result.scalar_one_or_none()
         
         if billing_account:
-            if event_id and billing_account.last_webhook_event_id == event_id:
-                logger.info(f"Duplicate event: {event_id}")
-                return {"message": "Event already processed"}
+            # Check for duplicate transaction by transaction_id (not event_id!)
+            # Paddle sends both transaction.paid and transaction.completed for the same transaction
+            if transaction_id and billing_account.last_transaction_id == transaction_id:
+                logger.info(f"Duplicate transaction: {transaction_id} (already processed)")
+                return {"message": "Transaction already processed"}
             
             # Extract price_id to find the plan
             price_id = None
