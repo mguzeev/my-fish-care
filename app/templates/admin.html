@@ -29,17 +29,17 @@
         </div>
 
         <div class="admin-tabs" role="tablist" aria-label="Admin sections">
-            <button class="admin-tab active" onclick="switchTab('dashboard')" role="tab" aria-selected="true" aria-controls="dashboard">Dashboard</button>
-            <button class="admin-tab" onclick="switchTab('agents')" role="tab" aria-selected="false" aria-controls="agents">Agents</button>
-            <button class="admin-tab" onclick="switchTab('prompts')" role="tab" aria-selected="false" aria-controls="prompts">Prompts</button>
-            <button class="admin-tab" onclick="switchTab('users')" role="tab" aria-selected="false" aria-controls="users">Users</button>
-            <button class="admin-tab" onclick="switchTab('subscriptions')" role="tab" aria-selected="false" aria-controls="subscriptions">Subscriptions</button>
-            <button class="admin-tab" onclick="switchTab('plans')" role="tab" aria-selected="false" aria-controls="plans">Plans</button>
-            <button class="admin-tab" onclick="switchTab('paddle')" role="tab" aria-selected="false" aria-controls="paddle">Paddle</button>
-            <button class="admin-tab" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
-            <button class="admin-tab" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
-            <button class="admin-tab" onclick="switchTab('llm-models')" role="tab" aria-selected="false" aria-controls="llm-models">LLM Models</button>
-            <button class="admin-tab" onclick="switchTab('logs')" role="tab" aria-selected="false" aria-controls="logs">Usage Logs</button>
+            <button class="admin-tab active" data-tab="dashboard" onclick="switchTab('dashboard')" role="tab" aria-selected="true" aria-controls="dashboard">Dashboard</button>
+            <button class="admin-tab" data-tab="agents" onclick="switchTab('agents')" role="tab" aria-selected="false" aria-controls="agents">Agents</button>
+            <button class="admin-tab" data-tab="prompts" onclick="switchTab('prompts')" role="tab" aria-selected="false" aria-controls="prompts">Prompts</button>
+            <button class="admin-tab" data-tab="users" onclick="switchTab('users')" role="tab" aria-selected="false" aria-controls="users">Users</button>
+            <button class="admin-tab" data-tab="subscriptions" onclick="switchTab('subscriptions')" role="tab" aria-selected="false" aria-controls="subscriptions">Subscriptions</button>
+            <button class="admin-tab" data-tab="plans" onclick="switchTab('plans')" role="tab" aria-selected="false" aria-controls="plans">Plans</button>
+            <button class="admin-tab" data-tab="paddle" onclick="switchTab('paddle')" role="tab" aria-selected="false" aria-controls="paddle">Paddle</button>
+            <button class="admin-tab" data-tab="policies" onclick="switchTab('policies')" role="tab" aria-selected="false" aria-controls="policies">Policies</button>
+            <button class="admin-tab" data-tab="organizations" onclick="switchTab('organizations')" role="tab" aria-selected="false" aria-controls="organizations">Organizations</button>
+            <button class="admin-tab" data-tab="llm-models" onclick="switchTab('llm-models')" role="tab" aria-selected="false" aria-controls="llm-models">LLM Models</button>
+            <button class="admin-tab" data-tab="logs" onclick="switchTab('logs')" role="tab" aria-selected="false" aria-controls="logs">Usage Logs</button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -1069,19 +1069,34 @@
         function switchTab(tabName) {
             currentTab = tabName;
             
+            console.log('Switching to tab:', tabName);
+            
             // Update tab buttons
             document.querySelectorAll('.admin-tab').forEach(tab => {
                 tab.classList.remove('active');
                 tab.setAttribute('aria-selected', 'false');
             });
-            event.target.classList.add('active');
-            event.target.setAttribute('aria-selected', 'true');
+            
+            // Find the tab button by data-tab attribute and activate it
+            const targetTabButton = document.querySelector(`.admin-tab[data-tab="${tabName}"]`);
+            if (targetTabButton) {
+                targetTabButton.classList.add('active');
+                targetTabButton.setAttribute('aria-selected', 'true');
+            } else {
+                console.warn('Tab button not found for:', tabName);
+            }
             
             // Update tab content
             document.querySelectorAll('.tab-content').forEach(content => {
                 content.classList.remove('active');
             });
-            document.getElementById(tabName).classList.add('active');
+            
+            const targetTab = document.getElementById(tabName);
+            if (targetTab) {
+                targetTab.classList.add('active');
+            } else {
+                console.warn('Tab content not found for:', tabName);
+            }
             
             // Load tab data
             loadTabData(tabName);
@@ -1129,9 +1144,14 @@
         // Load dashboard statistics
         async function loadDashboard() {
             try {
+                document.getElementById('statsGrid').innerHTML = '<div class="loading">Loading statistics...</div>';
+                
                 const stats = await apiCall('/admin/dashboard/stats');
                 
-                if (!stats) return;
+                if (!stats) {
+                    document.getElementById('statsGrid').innerHTML = '<div class="error">Failed to load statistics</div>';
+                    return;
+                }
                 
                 const statsHtml = `
                     <div class="stat-card">
@@ -2439,14 +2459,29 @@
         async function loadCurrentUser() {
             try {
                 const user = await apiCall('/auth/me');
-                if (user) {
-                    document.getElementById('adminName').textContent = user.email;
+                if (user && user.email) {
+                    const adminNameEl = document.getElementById('adminName');
+                    if (adminNameEl) {
+                        adminNameEl.textContent = user.email;
+                    }
                     if (!user.is_superuser) {
                         showAlert('Warning: You do not have admin privileges', 'warning');
+                    }
+                    console.log('User loaded:', user.email);
+                } else {
+                    console.warn('User data incomplete or missing');
+                    const adminNameEl = document.getElementById('adminName');
+                    if (adminNameEl) {
+                        adminNameEl.textContent = 'Admin';
                     }
                 }
             } catch (error) {
                 console.error('Failed to load user:', error);
+                const adminNameEl = document.getElementById('adminName');
+                if (adminNameEl) {
+                    adminNameEl.textContent = 'Admin';
+                }
+                // Don't show error to user for this non-critical operation
             }
         }
 
@@ -3895,6 +3930,43 @@
             } catch (error) {
                 statsBox.innerHTML = `<div class="error-box">❌ Error: ${error.message}</div>`;
             }
+        }
+
+        // Initialize admin panel
+        function initAdminPanel() {
+            console.log('initAdminPanel called');
+            
+            // Check authentication first
+            const token = getAuthToken();
+            if (!token) {
+                console.log('No auth token found, redirecting to login');
+                window.location.href = '/login';
+                return;
+            }
+            
+            console.log('Auth token found, initializing admin panel...');
+            
+            // Load current user info first
+            loadCurrentUser().catch(err => {
+                console.warn('Failed to load user info:', err);
+            });
+            
+            // Switch to dashboard tab to ensure it's active
+            console.log('Switching to dashboard tab');
+            switchTab('dashboard');
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing admin panel');
+            initAdminPanel();
+        });
+        
+        // Also initialize if page is already loaded
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initAdminPanel);
+        } else {
+            initAdminPanel();
         }
 
     </script>
