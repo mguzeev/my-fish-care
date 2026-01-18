@@ -490,25 +490,59 @@
                     statusBadge = `<span class="badge">${data.status}</span>`;
                 }
                 
-                let trialInfo = '';
-                if (data.free_trial_days && data.trial_started_at) {
-                    const trialStart = new Date(data.trial_started_at);
-                    const trialEnd = new Date(trialStart.getTime() + data.free_trial_days * 24 * 60 * 60 * 1000);
-                    const daysRemaining = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
-                    if (daysRemaining > 0) {
-                        trialInfo = `<div class="stat-item">
-                            <span class="stat-label">Trial Days Remaining:</span>
-                            <span class="stat-value">${daysRemaining} days</span>
+                let timeInfo = '';
+                let usageInfo = '';
+                
+                // Handle different plan types
+                if (data.plan_type === 'one_time') {
+                    // For ONE_TIME plans: show purchased credits and usage
+                    if (data.one_time_purchases_count) {
+                        const remaining = data.one_time_purchases_count - (data.one_time_requests_used || 0);
+                        usageInfo = `<div class="stat-item">
+                            <span class="stat-label">Credits:</span>
+                            <span class="stat-value">${remaining} / ${data.one_time_purchases_count}</span>
+                        </div>`;
+                    }
+                } else {
+                    // For subscription plans: show trial/billing dates
+                    if (data.free_trial_days && data.trial_started_at) {
+                        const trialStart = new Date(data.trial_started_at);
+                        const trialEnd = new Date(trialStart.getTime() + data.free_trial_days * 24 * 60 * 60 * 1000);
+                        const daysRemaining = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
+                        if (daysRemaining > 0) {
+                            timeInfo += `<div class="stat-item">
+                                <span class="stat-label">Trial Days Remaining:</span>
+                                <span class="stat-value">${daysRemaining} days</span>
+                            </div>`;
+                        }
+                    }
+                    
+                    // Show next billing date
+                    if (data.next_billing_date) {
+                        const nextBilling = new Date(data.next_billing_date).toLocaleDateString();
+                        timeInfo += `<div class="stat-item">
+                            <span class="stat-label">Next Billing:</span>
+                            <span class="stat-value">${nextBilling}</span>
+                        </div>`;
+                    }
+                    
+                    // Show free requests info
+                    if (data.free_requests_limit > 0) {
+                        const remaining = data.free_requests_limit - data.free_requests_used;
+                        usageInfo = `<div class="stat-item">
+                            <span class="stat-label">Free Requests:</span>
+                            <span class="stat-value">${remaining} / ${data.free_requests_limit}</span>
                         </div>`;
                     }
                 }
                 
-                let freeRequestsInfo = '';
-                if (data.free_requests_limit > 0) {
-                    const remaining = data.free_requests_limit - data.free_requests_used;
-                    freeRequestsInfo = `<div class="stat-item">
-                        <span class="stat-label">Free Requests:</span>
-                        <span class="stat-value">${remaining} / ${data.free_requests_limit}</span>
+                // Show cancelled date if cancelled
+                let cancellationInfo = '';
+                if (data.cancelled_at) {
+                    const cancelledDate = new Date(data.cancelled_at).toLocaleDateString();
+                    cancellationInfo = `<div class="stat-item">
+                        <span class="stat-label">Cancelled On:</span>
+                        <span class="stat-value">${cancelledDate}</span>
                     </div>`;
                 }
 
@@ -519,11 +553,16 @@
                         <span class="stat-value">${data.plan_name || 'No Plan'}</span>
                     </div>
                     <div class="stat-item">
+                        <span class="stat-label">Type:</span>
+                        <span class="stat-value">${data.plan_type || 'N/A'}</span>
+                    </div>
+                    <div class="stat-item">
                         <span class="stat-label">Status:</span>
                         ${statusBadge}
                     </div>
-                    ${trialInfo}
-                    ${freeRequestsInfo}
+                    ${timeInfo}
+                    ${usageInfo}
+                    ${cancellationInfo}
                     <div class="stat-item">
                         <span class="stat-label">Balance:</span>
                         <span class="stat-value">$${data.balance}</span>
@@ -657,7 +696,7 @@
             try {
                 container.className = 'activity-log loading';
                 container.textContent = 'Loading activity...';
-                const data = await apiCall(`/billing/usage-records?limit=${limit}&days=30`);
+                const data = await apiCall(`/billing/activity?limit=${limit}&days=30`);
                 
                 if (!data || data.length === 0) {
                     container.className = 'activity-log';
@@ -666,24 +705,21 @@
                 }
                 
                 let html = '<div class="activity-log">';
-                data.forEach(record => {
-                    const date = new Date(record.created_at).toLocaleDateString() + ' ' + new Date(record.created_at).toLocaleTimeString();
-                    const method = record.method || 'REQUEST';
-                    const methodClass = `method-${method.toLowerCase()}`;
-                    const statusClass = record.status_code >= 400 ? 'status-error' : 'status-ok';
+                data.forEach(event => {
+                    const date = new Date(event.created_at).toLocaleDateString() + ' ' + new Date(event.created_at).toLocaleTimeString();
+                    const statusClass = event.status_code && event.status_code >= 400 ? 'status-error' : 'status-ok';
                     
                     html += `
-                        <div class="activity-entry">
+                        <div class="activity-entry activity-${event.type}">
                             <div class="activity-entry__left">
-                                <div class="activity-method ${methodClass}">${method}</div>
-                                <div class="activity-endpoint">${record.endpoint}</div>
+                                <div class="activity-title">${event.title}</div>
+                                <div class="activity-description">${event.description}</div>
                                 <div class="activity-meta">${date}</div>
-                                ${record.error_message ? `<div class="activity-error">Error: ${record.error_message}</div>` : ''}
+                                ${event.error_message ? `<div class="activity-error">Error: ${event.error_message}</div>` : ''}
                             </div>
                             <div class="activity-entry__right">
-                                <div class="activity-status ${statusClass}">${record.status_code}</div>
-                                <div class="activity-meta">${record.response_time_ms}ms</div>
-                                ${record.total_tokens > 0 ? `<div class="activity-meta">Tokens: ${record.total_tokens}</div>` : ''}
+                                ${event.status_code ? `<div class="activity-status ${statusClass}">${event.status_code}</div>` : ''}
+                                ${event.response_time_ms ? `<div class="activity-meta">${event.response_time_ms}ms</div>` : ''}
                             </div>
                         </div>
                     `;

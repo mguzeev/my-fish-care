@@ -104,10 +104,28 @@ class UsageRecordResponse(BaseModel):
 	created_at: datetime
 
 
+class ActivityEventResponse(BaseModel):
+	"""Unified activity event for dashboard display."""
+	id: str  # Unique identifier (could be "usage_123" or "billing_456")
+	type: str  # "usage", "subscription", "payment", "cancellation"
+	title: str  # Human-readable title
+	description: str  # Detailed description
+	endpoint: Optional[str] = None  # For usage events
+	method: Optional[str] = None  # For usage events
+	status_code: Optional[int] = None  # For usage events
+	response_time_ms: Optional[int] = None  # For usage events  
+	total_tokens: Optional[int] = None  # For usage events
+	cost: Optional[Decimal] = None  # For usage/payment events
+	error_message: Optional[str] = None  # For error events
+	created_at: datetime  # When event occurred
+
+
 class BillingAccountResponse(BaseModel):
 	organization_id: int
 	plan_id: Optional[int]
 	plan_name: Optional[str]
+	plan_type: Optional[str]  # Added plan type
+	plan_interval: Optional[str]  # Added plan interval
 	status: str
 	balance: Decimal
 	total_spent: Decimal
@@ -115,6 +133,9 @@ class BillingAccountResponse(BaseModel):
 	free_requests_used: int
 	free_trial_days: int
 	trial_started_at: Optional[str]
+	trial_end_date: Optional[str]  # Added trial end date
+	subscription_start_date: Optional[str]  # Added subscription start
+	subscription_end_date: Optional[str]  # Added subscription end
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
 	# Subscription details
@@ -122,6 +143,9 @@ class BillingAccountResponse(BaseModel):
 	next_billing_date: Optional[str] = None
 	paused_at: Optional[str] = None
 	cancelled_at: Optional[str] = None
+	# Usage info for ONE_TIME plans
+	one_time_purchases_count: Optional[int] = None  # Added for ONE_TIME
+	one_time_requests_used: Optional[int] = None  # Added for ONE_TIME
 
 
 class UsageSummaryResponse(BaseModel):
@@ -162,6 +186,8 @@ async def _get_billing_account_response(
 		organization_id=org.id,
 		plan_id=ba.subscription_plan_id,
 		plan_name=plan.name if plan else None,
+		plan_type=plan.plan_type.value if plan else None,
+		plan_interval=plan.interval.value if plan else None,
 		status=ba.subscription_status.value,
 		balance=ba.balance,
 		total_spent=ba.total_spent,
@@ -169,11 +195,17 @@ async def _get_billing_account_response(
 		free_requests_used=ba.free_requests_used,
 		free_trial_days=plan.free_trial_days if plan else 0,
 		trial_started_at=ba.trial_started_at.isoformat() if ba.trial_started_at else None,
+		trial_end_date=ba.trial_end_date.isoformat() if ba.trial_end_date else None,
+		subscription_start_date=ba.subscription_start_date.isoformat() if ba.subscription_start_date else None,
+		subscription_end_date=ba.subscription_end_date.isoformat() if ba.subscription_end_date else None,
 		# Subscription details
 		paddle_subscription_id=ba.paddle_subscription_id,
 		next_billing_date=ba.next_billing_date.isoformat() if ba.next_billing_date else None,
 		paused_at=ba.paused_at.isoformat() if ba.paused_at else None,
 		cancelled_at=ba.cancelled_at.isoformat() if ba.cancelled_at else None,
+		# ONE_TIME plan details
+		one_time_purchases_count=ba.one_time_purchases_count if plan and plan.plan_type.value == "one_time" else None,
+		one_time_requests_used=ba.one_time_requests_used if plan and plan.plan_type.value == "one_time" else None,
 	)
 
 
@@ -390,6 +422,115 @@ async def cancel_subscription(
 	return await get_billing_account(current_user, db)
 
 
+@router.get("/activity", response_model=list[ActivityEventResponse])
+async def get_activity_events(
+	current_user: User = Depends(get_current_active_user),
+	db: AsyncSession = Depends(get_db),
+	limit: int = Query(10, ge=1, le=100),
+	days: int = Query(30, ge=1, le=90),
+):
+	"""Get comprehensive user activity including usage and billing events."""
+	start_date = datetime.utcnow() - timedelta(days=days)
+	events = []
+	
+	# 1. Get significant usage records (agent invocations, telegram usage)
+	significant_endpoints = [
+		'/agents/%/invoke',
+		'/channels/telegram/webhook',
+	]
+	
+	from sqlalchemy import or_
+	endpoint_filters = []
+	for pattern in significant_endpoints:
+		if '%' in pattern:
+			endpoint_filters.append(UsageRecord.endpoint.like(pattern))
+		else:
+			endpoint_filters.append(UsageRecord.endpoint == pattern)
+	
+	usage_result = await db.execute(
+		select(UsageRecord)
+		.where(
+			(UsageRecord.user_id == current_user.id)
+			& (UsageRecord.created_at >= start_date)
+			& or_(*endpoint_filters)
+		)
+		.order_by(desc(UsageRecord.created_at))
+		.limit(limit // 2)  # Reserve half for billing events
+	)
+	
+	for record in usage_result.scalars().all():
+		if '/agents/' in record.endpoint and '/invoke' in record.endpoint:
+			title = "🤖 AI Agent Query"
+			description = f"Used AI agent"
+			if record.total_tokens > 0:
+				description += f" • {record.total_tokens:,} tokens"
+			if record.cost > 0:
+				description += f" • ${record.cost}"
+		elif '/telegram/' in record.endpoint:
+			title = "📱 Telegram Query"  
+			description = "Used agent via Telegram"
+			if record.total_tokens > 0:
+				description += f" • {record.total_tokens:,} tokens"
+		else:
+			title = "📊 Activity"
+			description = record.endpoint
+			
+		events.append(ActivityEventResponse(
+			id=f"usage_{record.id}",
+			type="usage",
+			title=title,
+			description=description,
+			endpoint=record.endpoint,
+			method=record.method,
+			status_code=record.status_code,
+			response_time_ms=record.response_time_ms,
+			total_tokens=record.total_tokens if record.total_tokens > 0 else None,
+			cost=record.cost if record.cost > 0 else None,
+			error_message=record.error_message,
+			created_at=record.created_at
+		))
+	
+	# 2. Get billing account to check for billing events
+	if current_user.organization_id:
+		billing_result = await db.execute(
+			select(BillingAccount)
+			.where(BillingAccount.organization_id == current_user.organization_id)
+		)
+		billing_account = billing_result.scalar_one_or_none()
+		
+		if billing_account:
+			# Add subscription started event
+			if billing_account.subscription_start_date and billing_account.subscription_start_date >= start_date:
+				plan_result = await db.execute(
+					select(SubscriptionPlan).where(SubscriptionPlan.id == billing_account.subscription_plan_id)
+				)
+				plan = plan_result.scalar_one_or_none()
+				plan_name = plan.name if plan else "Unknown Plan"
+				
+				events.append(ActivityEventResponse(
+					id=f"subscription_{billing_account.id}",
+					type="subscription",
+					title="💳 New Subscription",
+					description=f"Subscribed to {plan_name}",
+					cost=plan.price if plan else None,
+					created_at=billing_account.subscription_start_date
+				))
+			
+			# Add cancellation event  
+			if billing_account.cancelled_at and billing_account.cancelled_at >= start_date:
+				events.append(ActivityEventResponse(
+					id=f"cancellation_{billing_account.id}",
+					type="cancellation", 
+					title="❌ Subscription Cancelled",
+					description="Cancelled subscription",
+					created_at=billing_account.cancelled_at
+				))
+	
+	# 3. Sort all events by date and limit
+	events.sort(key=lambda x: x.created_at, reverse=True)
+	return events[:limit]
+
+
 @router.get("/usage-records", response_model=list[UsageRecordResponse])
 async def get_usage_records(
 	current_user: User = Depends(get_current_active_user),
@@ -397,14 +538,32 @@ async def get_usage_records(
 	limit: int = Query(10, ge=1, le=100),
 	days: int = Query(30, ge=1, le=90),
 ):
-	"""Get user's usage records (activity log)."""
+	"""Get user's significant usage records (activity log) - only important events."""
 	start_date = datetime.utcnow() - timedelta(days=days)
+	
+	# Only show significant events: agent invocations and billing events
+	significant_endpoints = [
+		'/agents/%/invoke',  # Agent usage
+		'/channels/telegram/webhook',  # Telegram usage
+		'/billing/subscribe',  # Subscription events
+		'/billing/cancel',  # Cancellation events
+	]
+	
+	# Build query with endpoint filters
+	from sqlalchemy import or_
+	endpoint_filters = []
+	for pattern in significant_endpoints:
+		if '%' in pattern:
+			endpoint_filters.append(UsageRecord.endpoint.like(pattern))
+		else:
+			endpoint_filters.append(UsageRecord.endpoint == pattern)
 	
 	result = await db.execute(
 		select(UsageRecord)
 		.where(
 			(UsageRecord.user_id == current_user.id)
 			& (UsageRecord.created_at >= start_date)
+			& or_(*endpoint_filters)  # Only significant endpoints
 		)
 		.order_by(desc(UsageRecord.created_at))
 		.limit(limit)
@@ -441,14 +600,14 @@ async def get_usage_info(
 	# Calculate remaining based on plan type
 	if plan.plan_type == PlanType.ONE_TIME:
 		# For one-time purchases: show total purchased and remaining
-		one_time_remaining = max(0, billing_account.one_time_purchases_count - billing_account.requests_used_current_period)
+		one_time_remaining = max(0, billing_account.one_time_purchases_count - billing_account.one_time_requests_used)
 		return {
 			"plan_name": plan.name,
 			"plan_type": plan.plan_type.value,
 			"subscription_status": billing_account.subscription_status.value,
 			"one_time_limit": plan.one_time_limit,
 			"one_time_total_purchased": billing_account.one_time_purchases_count,
-			"one_time_used": billing_account.requests_used_current_period,
+			"one_time_used": billing_account.one_time_requests_used,
 			"one_time_remaining": one_time_remaining,
 		}
 	else:
