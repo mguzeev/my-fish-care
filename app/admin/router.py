@@ -620,17 +620,21 @@ async def get_plan(
         id=plan.id,
         name=plan.name,
         interval=plan.interval.value,
+        plan_type=plan.plan_type.value,
         price=plan.price,
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
         free_requests_limit=plan.free_requests_limit,
         free_trial_days=plan.free_trial_days,
+        one_time_limit=plan.one_time_limit,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        is_default=plan.is_default,
         paddle_price_id=plan.paddle_price_id,
         paddle_product_id=plan.paddle_product_id,
+        agent_count=len(plan.agents),
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
@@ -645,7 +649,7 @@ async def update_subscription_plan(
     db: AsyncSession = Depends(get_db),
 ):
     """Update subscription plan."""
-    from app.models.billing import SubscriptionInterval, PlanType, PlanType
+    from app.models.billing import SubscriptionInterval, PlanType
     
     result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
     plan = result.scalar_one_or_none()
