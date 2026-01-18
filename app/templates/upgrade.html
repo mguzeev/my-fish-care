@@ -136,7 +136,18 @@
                     let errorMessage = 'Request failed';
                     try {
                         const errorData = await response.json();
-                        errorMessage = errorData.detail || errorData.message || errorMessage;
+                        // Handle both string and object detail
+                        if (errorData.detail) {
+                            if (typeof errorData.detail === 'string') {
+                                errorMessage = errorData.detail;
+                            } else if (typeof errorData.detail === 'object' && errorData.detail.message) {
+                                errorMessage = errorData.detail.message;
+                            } else {
+                                errorMessage = JSON.stringify(errorData.detail);
+                            }
+                        } else if (errorData.message) {
+                            errorMessage = errorData.message;
+                        }
                     } catch (e) {
                         errorMessage = response.statusText || errorMessage;
                     }
