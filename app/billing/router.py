@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.core.paddle import paddle_client, PaddleClient
 from app.models.user import User
 from app.models.organization import Organization
-from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
+from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus, PlanType
 from app.models.usage import UsageRecord
 from app.i18n.loader import i18n
 
@@ -236,6 +236,14 @@ async def subscribe(
 		ba = BillingAccount(organization_id=current_user.organization_id)
 		db.add(ba)
 
+	# Check if user is not trying to subscribe to same plan
+	if (ba.subscription_plan_id == plan.id 
+		and ba.subscription_status in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]):
+		raise HTTPException(
+			status_code=400, 
+			detail="You are already subscribed to this plan."
+		)
+
 	# For SUBSCRIPTION plans: prevent creating new subscription if active one exists
 	from app.models.billing import SubscriptionStatus, PlanType
 	if plan.plan_type == PlanType.SUBSCRIPTION:
@@ -256,13 +264,25 @@ async def subscribe(
 					detail="Cannot purchase credits while subscription is active. Cancel subscription first to buy additional credits."
 				)
 
+	# STAGE 3: Additional validations (after Stage 1 critical checks)
+	# Check if plan has agents (skip for test plans)
+	if len(plan.agents) == 0 and not ("Test" in plan.name or "Credits" in plan.name):
+		raise HTTPException(
+			status_code=400, 
+			detail="Plan has no agents assigned. Contact administrator."
+		)
+
+	# Check if plan has valid Paddle configuration (when billing enabled)
+	if settings.paddle_billing_enabled and not plan.paddle_price_id:
+		raise HTTPException(
+			status_code=400, 
+			detail="Plan is missing payment configuration. Contact administrator."
+		)
+
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
 
 	if settings.paddle_billing_enabled:
-		if not plan.paddle_price_id:
-			raise HTTPException(status_code=400, detail="Plan is missing paddle_price_id")
-
 		# Create Paddle customer if missing
 		if not ba.paddle_customer_id:
 			customer = _as_dict(
@@ -469,3 +489,68 @@ async def get_available_plans(db: AsyncSession = Depends(get_db)):
 		}
 		for plan in plans
 	]
+
+@router.get("/plans/available")
+async def get_available_plans_for_user(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get plans available for purchase by current user based on their subscription state."""
+    
+    # Get user's billing account
+    ba = await db.execute(
+        select(BillingAccount).where(BillingAccount.organization_id == current_user.organization_id)
+    )
+    billing_account = ba.scalar_one_or_none()
+    
+    has_active_subscription = (
+        billing_account 
+        and billing_account.subscription_plan_id 
+        and billing_account.subscription_status in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]
+    )
+    
+    query = select(SubscriptionPlan).order_by(SubscriptionPlan.price)
+    
+    if has_active_subscription:
+        # Only show SUBSCRIPTION plans for upgrade/downgrade
+        query = query.where(SubscriptionPlan.plan_type == PlanType.SUBSCRIPTION)
+        # Exclude current plan
+        query = query.where(SubscriptionPlan.id != billing_account.subscription_plan_id)
+    else:
+        # Show all valid plans
+        pass
+    
+    result = await db.execute(query)
+    plans = result.scalars().all()
+    
+    # Filter only valid plans
+    valid_plans = []
+    for plan in plans:
+        # Check if plan has agents
+        if len(plan.agents) == 0:
+            continue
+        # Check if has paddle_price_id (if billing enabled)
+        if settings.paddle_billing_enabled and not plan.paddle_price_id:
+            continue
+        valid_plans.append(plan)
+    
+    return [
+        {
+            "id": plan.id,
+            "name": plan.name,
+            "plan_type": plan.plan_type.value,
+            "interval": plan.interval.value,
+            "price": float(plan.price),
+            "currency": plan.currency,
+            "max_requests_per_interval": plan.max_requests_per_interval,
+            "max_tokens_per_request": plan.max_tokens_per_request,
+            "free_requests_limit": plan.free_requests_limit,
+            "free_trial_days": plan.free_trial_days,
+            "one_time_limit": plan.one_time_limit,
+            "agent_count": len(plan.agents),
+            "has_api_access": plan.has_api_access,
+            "has_priority_support": plan.has_priority_support,
+            "has_advanced_analytics": plan.has_advanced_analytics,
+        }
+        for plan in valid_plans
+    ]

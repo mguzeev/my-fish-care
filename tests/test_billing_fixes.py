@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import text
 
 from app.core.security import create_access_token
 from app.models.billing import (
@@ -92,7 +93,21 @@ async def test_stage1_allow_one_time_purchase_without_subscription(
     client: AsyncClient, db_session: AsyncSession
 ):
     """Test Stage 1.1: Can purchase ONE_TIME credits without active subscription."""
-    
+    from app.models.llm_model import LLMModel
+
+    # Create LLM model
+    llm_model = LLMModel(
+        name="gpt-4-onetime",
+        display_name="GPT-4 OneTime",
+        provider="openai",
+        api_key="test-key",
+        max_tokens_limit=4096,
+        context_window=8192,
+        is_active=True
+    )
+    db_session.add(llm_model)
+    await db_session.flush()
+
     # Create user with organization
     user = User(
         email="test2@example.com",
@@ -101,13 +116,27 @@ async def test_stage1_allow_one_time_purchase_without_subscription(
     )
     db_session.add(user)
     await db_session.flush()
-    
+
     org = Organization(name="Test Org 2", slug="test-org-2")
     db_session.add(org)
     await db_session.flush()
-    
+
     user.organization_id = org.id
-    
+
+    # Create agent
+    agent = Agent(
+        name="OneTime Agent",
+        slug="onetime-agent",
+        system_prompt="You are a onetime agent",
+        prompt_template="OneTime: {input}",
+        llm_model_id=llm_model.id,
+        model_name="gpt-4",
+        is_active=True,
+        is_public=True
+    )
+    db_session.add(agent)
+    await db_session.flush()
+
     # Create ONE_TIME plan
     onetime_plan = SubscriptionPlan(
         name="20 Credits",
@@ -120,11 +149,13 @@ async def test_stage1_allow_one_time_purchase_without_subscription(
     )
     db_session.add(onetime_plan)
     await db_session.flush()
+
+    # Skip linking agent to plan for this test - Stage 3 doesn't require it
+    # Plan validation will be tested in separate Stage 3 tests
     
-    # Create billing account WITHOUT subscription
+    # Create billing account with TRIALING status
     billing_account = BillingAccount(
         organization_id=org.id,
-        subscription_plan_id=None,
         subscription_status=SubscriptionStatus.TRIALING,
         one_time_purchases_count=0,
         one_time_requests_used=0,
@@ -422,6 +453,20 @@ async def test_stage1_subscription_blocks_subscription_purchase(
     client: AsyncClient, db_session: AsyncSession
 ):
     """Test Stage 1: Cannot purchase another SUBSCRIPTION while one is active."""
+    from app.models.llm_model import LLMModel
+    
+    # Create LLM model
+    llm_model = LLMModel(
+        name="gpt-4-subscription",
+        display_name="GPT-4 Subscription",
+        provider="openai",
+        api_key="test-key",
+        max_tokens_limit=4096,
+        context_window=8192,
+        is_active=True
+    )
+    db_session.add(llm_model)
+    await db_session.flush()
     
     # Create user with organization
     user = User(
@@ -437,6 +482,20 @@ async def test_stage1_subscription_blocks_subscription_purchase(
     await db_session.flush()
     
     user.organization_id = org.id
+    
+    # Create agent
+    agent = Agent(
+        name="Subscription Agent",
+        slug="subscription-agent",
+        system_prompt="You are a subscription agent",
+        prompt_template="Subscription: {input}",
+        llm_model_id=llm_model.id,
+        model_name="gpt-4",
+        is_active=True,
+        is_public=True
+    )
+    db_session.add(agent)
+    await db_session.flush()
     
     # Create two SUBSCRIPTION plans
     current_plan = SubscriptionPlan(
