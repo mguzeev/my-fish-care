@@ -2,6 +2,7 @@
 import json
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 import hmac
 import hashlib
@@ -559,6 +560,23 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
                     # This is a one-time purchase
                     logger.info(f"One-time purchase completed: customer={customer_id}, plan={plan.id} ({plan.name})")
                     
+                    # Extract price information
+                    total_amount = Decimal(str(data.get("details", {}).get("totals", {}).get("total", "0")))
+                    currency = data.get("currency_code", "USD")
+                    
+                    # Create purchase history record
+                    from app.models.billing import OneTimePurchase
+                    purchase = OneTimePurchase(
+                        billing_account_id=billing_account.id,
+                        plan_id=plan.id,
+                        credits_purchased=plan.one_time_limit or 0,
+                        price_paid=total_amount,
+                        currency=currency,
+                        paddle_transaction_id=transaction_id,
+                        created_at=datetime.utcnow()
+                    )
+                    db.add(purchase)
+                    
                     # Increment cumulative count
                     if plan.one_time_limit:
                         billing_account.one_time_purchases_count += plan.one_time_limit
@@ -572,6 +590,7 @@ async def handle_transaction_completed(data: dict, db: AsyncSession, event_id: O
                         webhook_event.billing_account_id = billing_account.id
                     
                     await db.commit()
+                    logger.info(f"Created purchase history record for transaction {transaction_id}")
                     return {"message": "One-time purchase applied"}
     
     return {"message": "Transaction completed"}

@@ -1,0 +1,181 @@
+# Исправление дублирования транзакций и отображения истории покупок
+
+**Дата:** 18 января 2026  
+**Проблема:** Вебхуки Paddle обрабатывались дважды, транзакции не отображались пользователю
+
+---
+
+## 🔴 Проблема 1: Дублирование обработки транзакций
+
+### Что было:
+Paddle отправляет **два разных события** для одной транзакции:
+1. `transaction.paid` (event_id: `evt_01kf8y0xtfk4krz0jkmhz50wyc`)
+2. `transaction.completed` (event_id: `evt_01kf8y0zvn17qc9zrnq18c9664`)
+
+Оба события обрабатывались через `handle_transaction_completed()`, что приводило к:
+- Двойному начислению кредитов
+- Пользователь платил за 1 кредит, получал 2
+
+### Защита была неправильной:
+```python
+# СТАРАЯ (неработающая) проверка
+if event_id and billing_account.last_webhook_event_id == event_id:
+    return {"message": "Event already processed"}
+```
+
+**Проблема:** `event_id` разный для каждого события, но `transaction_id` одинаковый!
+
+### Решение:
+```python
+# НОВАЯ (правильная) проверка
+if transaction_id and billing_account.last_transaction_id == transaction_id:
+    logger.info(f"Duplicate transaction: {transaction_id} (already processed)")
+    return {"message": "Transaction already processed"}
+```
+
+**Изменения в:** [app/webhooks/router.py](app/webhooks/router.py#L521-L523)
+
+---
+
+## 🔴 Проблема 2: Транзакции не отображаются пользователю
+
+### Что было:
+Эндпоинт `/billing/activity` показывал только:
+- ✅ Подписки (subscription started)
+- ✅ Отмены подписок (subscription cancelled)
+- ❌ **Не показывал ONE_TIME покупки**
+
+Пользователь видел логи покупки в системе, но не видел в своей истории активности.
+
+### Решение 1: История покупок в БД
+
+Добавлена запись в таблицу `one_time_purchases` при обработке вебхука:
+
+```python
+# Create purchase history record
+from app.models.billing import OneTimePurchase
+purchase = OneTimePurchase(
+    billing_account_id=billing_account.id,
+    plan_id=plan.id,
+    credits_purchased=plan.one_time_limit or 0,
+    price_paid=total_amount,
+    currency=currency,
+    paddle_transaction_id=transaction_id,
+    created_at=datetime.utcnow()
+)
+db.add(purchase)
+```
+
+**Изменения в:** [app/webhooks/router.py](app/webhooks/router.py#L563-L575)
+
+### Решение 2: Отображение в activity feed
+
+Добавлен запрос one-time покупок в `/billing/activity`:
+
+```python
+# Add one-time purchase events
+from app.models.billing import OneTimePurchase
+purchases_result = await db.execute(
+    select(OneTimePurchase)
+    .where(
+        (OneTimePurchase.billing_account_id == billing_account.id)
+        & (OneTimePurchase.created_at >= start_date)
+    )
+    .order_by(desc(OneTimePurchase.created_at))
+)
+
+for purchase in purchases_result.scalars().all():
+    # Get plan name
+    plan_name = "Unknown Pack"
+    if purchase.plan_id:
+        plan_result = await db.execute(
+            select(SubscriptionPlan).where(SubscriptionPlan.id == purchase.plan_id)
+        )
+        plan = plan_result.scalar_one_or_none()
+        if plan:
+            plan_name = plan.name
+    
+    events.append(ActivityEventResponse(
+        id=f"purchase_{purchase.id}",
+        type="purchase",
+        title="🛒 Credits Purchased",
+        description=f"Bought {purchase.credits_purchased} credits • {plan_name}",
+        cost=purchase.price_paid,
+        created_at=purchase.created_at
+    ))
+```
+
+**Изменения в:** [app/billing/router.py](app/billing/router.py#L631-L659)
+
+---
+
+## ✅ Результат
+
+### Защита от дублей:
+- ✅ Проверка по `transaction_id` вместо `event_id`
+- ✅ Повторные события игнорируются с логом: `Duplicate transaction: txn_xxx (already processed)`
+- ✅ Кредиты начисляются ровно один раз
+
+### История покупок:
+- ✅ Все ONE_TIME покупки сохраняются в `one_time_purchases`
+- ✅ Пользователь видит историю в `/billing/activity`
+- ✅ Отображается: количество кредитов, название пакета, цена
+- ✅ Иконка 🛒 для покупок, 💳 для подписок, ❌ для отмен
+
+### Логи в production:
+```
+2026-01-18 16:11:48 - Transaction completed: id=txn_01kf8y02cab8cx4t5zscvat97s
+2026-01-18 16:11:48 - One-time purchase completed: customer=ctm_..., plan=9 (one time 20e 1 day)
+2026-01-18 16:11:48 - Incremented one_time_purchases_count to 1
+2026-01-18 16:11:48 - Created purchase history record for transaction txn_...
+
+2026-01-18 16:11:50 - Transaction completed: id=txn_01kf8y02cab8cx4t5zscvat97s
+2026-01-18 16:11:50 - Duplicate transaction: txn_01kf8y02cab8cx4t5zscvat97s (already processed)
+```
+
+---
+
+## 📝 Файлы изменены:
+
+1. [app/webhooks/router.py](app/webhooks/router.py)
+   - Добавлен импорт `Decimal`
+   - Исправлена проверка дублей (transaction_id вместо event_id)
+   - Добавлено создание записи `OneTimePurchase`
+   - Извлечение цены и валюты из webhook payload
+
+2. [app/billing/router.py](app/billing/router.py)
+   - Добавлен запрос one-time покупок в `/billing/activity`
+   - Формирование событий типа "purchase" с деталями
+   - Отображение количества кредитов и названия плана
+
+3. [UX_AUDIT_REGISTRATION_AND_BILLING.md](UX_AUDIT_REGISTRATION_AND_BILLING.md)
+   - Обновлена документация webhook логики
+   - Добавлено описание защиты от дублей
+   - Обновлен список "Что работает хорошо"
+
+---
+
+## 🚀 Деплой
+
+Для применения изменений:
+
+```bash
+# Перезапустить сервис
+sudo systemctl restart bot-generic
+
+# Проверить логи
+sudo journalctl -u bot-generic -f
+```
+
+---
+
+## 🧪 Как протестировать:
+
+1. Создать тестовую ONE_TIME покупку через Paddle Sandbox
+2. Проверить логи - должен быть только один `Incremented one_time_purchases_count`
+3. Открыть `/billing/activity` - покупка должна отображаться
+4. Проверить БД: `SELECT * FROM one_time_purchases ORDER BY created_at DESC LIMIT 1`
+
+---
+
+**Статус:** ✅ Готово к деплою

@@ -633,6 +633,37 @@ async def get_activity_events(
 					description="Cancelled subscription",
 					created_at=billing_account.cancelled_at
 				))
+			
+			# Add one-time purchase events
+			from app.models.billing import OneTimePurchase
+			purchases_result = await db.execute(
+				select(OneTimePurchase)
+				.where(
+					(OneTimePurchase.billing_account_id == billing_account.id)
+					& (OneTimePurchase.created_at >= start_date)
+				)
+				.order_by(desc(OneTimePurchase.created_at))
+			)
+			
+			for purchase in purchases_result.scalars().all():
+				# Get plan name
+				plan_name = "Unknown Pack"
+				if purchase.plan_id:
+					plan_result = await db.execute(
+						select(SubscriptionPlan).where(SubscriptionPlan.id == purchase.plan_id)
+					)
+					plan = plan_result.scalar_one_or_none()
+					if plan:
+						plan_name = plan.name
+				
+				events.append(ActivityEventResponse(
+					id=f"purchase_{purchase.id}",
+					type="purchase",
+					title="🛒 Credits Purchased",
+					description=f"Bought {purchase.credits_purchased} credits • {plan_name}",
+					cost=purchase.price_paid,
+					created_at=purchase.created_at
+				))
 	
 	# 3. Sort all events by date and limit
 	events.sort(key=lambda x: x.created_at, reverse=True)
