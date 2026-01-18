@@ -41,10 +41,12 @@ class DashboardStats(BaseModel):
     total_users: int
     total_organizations: int
     active_subscriptions: int
-    revenue_today: Decimal
-    revenue_month: Decimal
+    revenue_total: Decimal  # Changed from revenue_today
+    revenue_active: Decimal  # Changed from revenue_month  
     api_requests_today: int
     api_requests_month: int
+    one_time_plans_count: int = 0  # Added
+    subscription_plans_count: int = 0  # Added
 
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
@@ -72,20 +74,19 @@ async def get_dashboard_stats(
     )
     active_subscriptions = active_subs.scalar() or 0
     
-    # Revenue (today and month)
-    revenue_today_result = await db.execute(
-        select(func.coalesce(func.sum(BillingAccount.total_spent), Decimal("0.0"))).where(
-            func.date(BillingAccount.updated_at) == today
-        )
+    # Revenue (total accumulated)
+    revenue_total_result = await db.execute(
+        select(func.coalesce(func.sum(BillingAccount.total_spent), Decimal("0.0")))
     )
-    revenue_today = revenue_today_result.scalar() or Decimal("0.0")
+    revenue_total = revenue_total_result.scalar() or Decimal("0.0")
     
-    revenue_month_result = await db.execute(
-        select(func.coalesce(func.sum(BillingAccount.total_spent), Decimal("0.0"))).where(
-            func.date(BillingAccount.updated_at) >= month_start
+    # Active subscription revenue (current balance)
+    revenue_active_result = await db.execute(
+        select(func.coalesce(func.sum(BillingAccount.balance), Decimal("0.0"))).where(
+            BillingAccount.subscription_status == SubscriptionStatus.ACTIVE
         )
     )
-    revenue_month = revenue_month_result.scalar() or Decimal("0.0")
+    revenue_active = revenue_active_result.scalar() or Decimal("0.0")
     
     # API requests (today and month)
     requests_today_result = await db.execute(
@@ -102,14 +103,32 @@ async def get_dashboard_stats(
     )
     api_requests_month = requests_month_result.scalar() or 0
     
+    # Plans by type
+    from app.models.billing import PlanType
+    subscription_plans_result = await db.execute(
+        select(func.count(SubscriptionPlan.id)).where(
+            SubscriptionPlan.plan_type == PlanType.SUBSCRIPTION
+        )
+    )
+    subscription_plans_count = subscription_plans_result.scalar() or 0
+    
+    one_time_plans_result = await db.execute(
+        select(func.count(SubscriptionPlan.id)).where(
+            SubscriptionPlan.plan_type == PlanType.ONE_TIME
+        )
+    )
+    one_time_plans_count = one_time_plans_result.scalar() or 0
+    
     return DashboardStats(
         total_users=total_users,
         total_organizations=total_organizations,
         active_subscriptions=active_subscriptions,
-        revenue_today=revenue_today,
-        revenue_month=revenue_month,
+        revenue_total=revenue_total,
+        revenue_active=revenue_active,
         api_requests_today=api_requests_today,
         api_requests_month=api_requests_month,
+        one_time_plans_count=one_time_plans_count,
+        subscription_plans_count=subscription_plans_count,
     )
 
 
@@ -218,6 +237,8 @@ class BillingAccountDetailedResponse(BaseModel):
     # Usage tracking
     free_requests_used: int
     requests_used_current_period: int
+    one_time_requests_used: int  # Added for ONE_TIME plans
+    one_time_purchases_count: int  # Added for ONE_TIME plans
     period_started_at: Optional[datetime]
     
     # Timestamps
@@ -338,6 +359,8 @@ async def get_billing_account_details(
         total_spent=billing.total_spent,
         free_requests_used=billing.free_requests_used,
         requests_used_current_period=billing.requests_used_current_period,
+        one_time_requests_used=billing.one_time_requests_used,
+        one_time_purchases_count=billing.one_time_purchases_count,
         period_started_at=billing.period_started_at,
         created_at=billing.created_at,
         updated_at=billing.updated_at,
@@ -428,17 +451,21 @@ class SubscriptionPlanResponse(BaseModel):
     id: int
     name: str
     interval: str
+    plan_type: str  # SUBSCRIPTION or ONE_TIME
     price: Decimal
     currency: str
     max_requests_per_interval: int
     max_tokens_per_request: int
     free_requests_limit: int
     free_trial_days: int
+    one_time_limit: Optional[int] = None  # For ONE_TIME plans
     has_api_access: bool
     has_priority_support: bool
     has_advanced_analytics: bool
+    is_default: bool
     paddle_price_id: Optional[str] = None
     paddle_product_id: Optional[str] = None
+    agent_count: int = 0  # Number of linked agents
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -446,15 +473,18 @@ class SubscriptionPlanResponse(BaseModel):
 class CreateSubscriptionPlanRequest(BaseModel):
     name: str
     interval: str  # DAILY, WEEKLY, MONTHLY, YEARLY
+    plan_type: str = "SUBSCRIPTION"  # SUBSCRIPTION or ONE_TIME
     price: Decimal
     currency: str = "USD"
     max_requests_per_interval: int
     max_tokens_per_request: int
     free_requests_limit: int = 0
     free_trial_days: int = 0
+    one_time_limit: Optional[int] = None  # For ONE_TIME plans only
     has_api_access: bool = False
     has_priority_support: bool = False
     has_advanced_analytics: bool = False
+    is_default: bool = False
     paddle_price_id: Optional[str] = None
     paddle_product_id: Optional[str] = None
 
@@ -473,17 +503,21 @@ async def list_subscription_plans(
             id=p.id,
             name=p.name,
             interval=p.interval.value,
+            plan_type=p.plan_type.value,
             price=p.price,
             currency=p.currency,
             max_requests_per_interval=p.max_requests_per_interval,
             max_tokens_per_request=p.max_tokens_per_request,
             free_requests_limit=p.free_requests_limit,
             free_trial_days=p.free_trial_days,
+            one_time_limit=p.one_time_limit,
             has_api_access=p.has_api_access,
             has_priority_support=p.has_priority_support,
             has_advanced_analytics=p.has_advanced_analytics,
+            is_default=p.is_default,
             paddle_price_id=p.paddle_price_id,
             paddle_product_id=p.paddle_product_id,
+            agent_count=len(p.agents),
             created_at=p.created_at,
             updated_at=p.updated_at,
         )
@@ -499,20 +533,43 @@ async def create_subscription_plan(
     db: AsyncSession = Depends(get_db),
 ):
     """Create new subscription plan."""
-    from app.models.billing import SubscriptionInterval
+    from app.models.billing import SubscriptionInterval, PlanType
+    
+    # If setting as default, unset other defaults
+    if request.is_default:
+        await db.execute(
+            update(SubscriptionPlan)
+            .where(SubscriptionPlan.is_default == True)
+            .values(is_default=False)
+        )
+    
+    # Validate plan_type and one_time_limit consistency
+    if request.plan_type == "ONE_TIME" and not request.one_time_limit:
+        raise HTTPException(
+            status_code=400,
+            detail="ONE_TIME plans must have one_time_limit specified"
+        )
+    if request.plan_type == "SUBSCRIPTION" and request.one_time_limit:
+        raise HTTPException(
+            status_code=400,
+            detail="SUBSCRIPTION plans cannot have one_time_limit"
+        )
     
     plan = SubscriptionPlan(
         name=request.name,
         interval=SubscriptionInterval(request.interval),
+        plan_type=PlanType(request.plan_type),
         price=request.price,
         currency=request.currency,
         max_requests_per_interval=request.max_requests_per_interval,
         max_tokens_per_request=request.max_tokens_per_request,
         free_requests_limit=request.free_requests_limit,
         free_trial_days=request.free_trial_days,
+        one_time_limit=request.one_time_limit,
         has_api_access=request.has_api_access,
         has_priority_support=request.has_priority_support,
         has_advanced_analytics=request.has_advanced_analytics,
+        is_default=request.is_default,
         paddle_price_id=request.paddle_price_id,
         paddle_product_id=request.paddle_product_id,
     )
@@ -524,17 +581,21 @@ async def create_subscription_plan(
         id=plan.id,
         name=plan.name,
         interval=plan.interval.value,
+        plan_type=plan.plan_type.value,
         price=plan.price,
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
         free_requests_limit=plan.free_requests_limit,
         free_trial_days=plan.free_trial_days,
+        one_time_limit=plan.one_time_limit,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        is_default=plan.is_default,
         paddle_price_id=plan.paddle_price_id,
         paddle_product_id=plan.paddle_product_id,
+        agent_count=0,
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )
@@ -584,24 +645,47 @@ async def update_subscription_plan(
     db: AsyncSession = Depends(get_db),
 ):
     """Update subscription plan."""
-    from app.models.billing import SubscriptionInterval
+    from app.models.billing import SubscriptionInterval, PlanType, PlanType
     
     result = await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
     plan = result.scalar_one_or_none()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     
+    # If setting as default, unset other defaults
+    if request.is_default and not plan.is_default:
+        await db.execute(
+            update(SubscriptionPlan)
+            .where(SubscriptionPlan.is_default == True)
+            .values(is_default=False)
+        )
+    
+    # Validate plan_type and one_time_limit consistency
+    if request.plan_type == "ONE_TIME" and not request.one_time_limit:
+        raise HTTPException(
+            status_code=400,
+            detail="ONE_TIME plans must have one_time_limit specified"
+        )
+    if request.plan_type == "SUBSCRIPTION" and request.one_time_limit:
+        raise HTTPException(
+            status_code=400,
+            detail="SUBSCRIPTION plans cannot have one_time_limit"
+        )
+    
     plan.name = request.name
     plan.interval = SubscriptionInterval(request.interval)
+    plan.plan_type = PlanType(request.plan_type)
     plan.price = request.price
     plan.currency = request.currency
     plan.max_requests_per_interval = request.max_requests_per_interval
     plan.max_tokens_per_request = request.max_tokens_per_request
     plan.free_requests_limit = request.free_requests_limit
     plan.free_trial_days = request.free_trial_days
+    plan.one_time_limit = request.one_time_limit
     plan.has_api_access = request.has_api_access
     plan.has_priority_support = request.has_priority_support
     plan.has_advanced_analytics = request.has_advanced_analytics
+    plan.is_default = request.is_default
     plan.paddle_price_id = request.paddle_price_id
     plan.paddle_product_id = request.paddle_product_id
     
@@ -612,17 +696,21 @@ async def update_subscription_plan(
         id=plan.id,
         name=plan.name,
         interval=plan.interval.value,
+        plan_type=plan.plan_type.value,
         price=plan.price,
         currency=plan.currency,
         max_requests_per_interval=plan.max_requests_per_interval,
         max_tokens_per_request=plan.max_tokens_per_request,
         free_requests_limit=plan.free_requests_limit,
         free_trial_days=plan.free_trial_days,
+        one_time_limit=plan.one_time_limit,
         has_api_access=plan.has_api_access,
         has_priority_support=plan.has_priority_support,
         has_advanced_analytics=plan.has_advanced_analytics,
+        is_default=plan.is_default,
         paddle_price_id=plan.paddle_price_id,
         paddle_product_id=plan.paddle_product_id,
+        agent_count=len(plan.agents),
         created_at=plan.created_at,
         updated_at=plan.updated_at,
     )

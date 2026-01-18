@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background: #e2f3ff; border: 1px solid #b3d7ff; color: #0c5460; }
+        .btn { padding: 8px 16px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .plan-card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .badge { padding: 2px 6px; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .badge-success { background: #28a745; color: white; }
+        .badge-warning { background: #ffc107; color: black; }
+        .badge-info { background: #17a2b8; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Admin Panel API Test</h1>
+    
+    <div class="info test-result">
+        <strong>Server:</strong> http://localhost:8765<br>
+        <strong>Testing:</strong> Plan management improvements
+    </div>
+    
+    <button class="btn" onclick="testDashboard()">Test Dashboard</button>
+    <button class="btn" onclick="testPlans()">Test Plans</button>
+    <button class="btn" onclick="createTestPlan()">Create Test Plan</button>
+    <button class="btn" onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        const baseUrl = 'http://localhost:8765';
+        const token = 'admin_test_token'; // This won't work without proper auth
+        
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+        
+        async function apiCall(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${baseUrl}${endpoint}`, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        // Note: Authorization header would be needed for real testing
+                        ...options.headers
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                log(`❌ API Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        async function testDashboard() {
+            log('🔄 Testing dashboard stats...', 'info');
+            
+            try {
+                const stats = await apiCall('/admin/dashboard/stats');
+                
+                log(`✅ Dashboard Stats Retrieved:
+                <pre>${JSON.stringify(stats, null, 2)}</pre>
+                Key Metrics:
+                • Total Users: ${stats.total_users || 0}
+                • Active Subscriptions: ${stats.active_subscriptions || 0}
+                • Revenue Total: $${(stats.revenue_total || 0)}
+                • Revenue Active: $${(stats.revenue_active || 0)}
+                • Subscription Plans: ${stats.subscription_plans_count || 0}
+                • Credit Plans: ${stats.one_time_plans_count || 0}`, 'success');
+                
+            } catch (error) {
+                log(`❌ Dashboard test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testPlans() {
+            log('🔄 Testing plans list...', 'info');
+            
+            try {
+                const plans = await apiCall('/admin/plans');
+                
+                log(`✅ Plans Retrieved (${plans.length} total):`, 'success');
+                
+                plans.forEach(plan => {
+                    const typeClass = plan.plan_type === 'ONE_TIME' ? 'badge-warning' : 'badge-info';
+                    const defaultBadge = plan.is_default ? '<span class="badge badge-success">DEFAULT</span>' : '';
+                    
+                    let limitInfo = '';
+                    if (plan.plan_type === 'ONE_TIME') {
+                        limitInfo = `${plan.one_time_limit || 0} uses`;
+                    } else {
+                        limitInfo = `${plan.max_requests_per_interval || 0} requests per ${plan.interval}`;
+                    }
+                    
+                    document.getElementById('results').innerHTML += `
+                        <div class="plan-card">
+                            <strong>[${plan.id}] ${plan.name}</strong> 
+                            <span class="badge ${typeClass}">${plan.plan_type}</span>
+                            ${defaultBadge}
+                            <br>
+                            💰 $${plan.price} | 📊 ${limitInfo} | 🤖 ${plan.agent_count || 0} agents
+                            <br>
+                            <small>Features: ${[
+                                plan.has_api_access ? 'API' : null,
+                                plan.has_priority_support ? 'Support' : null, 
+                                plan.has_advanced_analytics ? 'Analytics' : null
+                            ].filter(Boolean).join(', ') || 'None'}</small>
+                        </div>
+                    `;
+                });
+                
+            } catch (error) {
+                log(`❌ Plans test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function createTestPlan() {
+            log('🔄 Creating test ONE_TIME plan...', 'info');
+            
+            const testPlan = {
+                name: "Test Credit Pack " + Date.now(),
+                plan_type: "ONE_TIME",
+                price: 9.99,
+                interval: "MONTHLY",
+                one_time_limit: 100,
+                currency: "USD",
+                max_requests_per_interval: 1,
+                max_tokens_per_request: 2000,
+                free_requests_limit: 0,
+                free_trial_days: 0,
+                is_default: false,
+                has_api_access: true,
+                has_priority_support: false,
+                has_advanced_analytics: false
+            };
+            
+            try {
+                const created = await apiCall('/admin/plans', {
+                    method: 'POST',
+                    body: JSON.stringify(testPlan)
+                });
+                
+                log(`✅ Created Test Plan:
+                <div class="plan-card">
+                    <strong>[${created.id}] ${created.name}</strong>
+                    <span class="badge badge-warning">${created.plan_type}</span>
+                    <br>
+                    💰 $${created.price} | 📊 ${created.one_time_limit} uses | 🤖 ${created.agent_count || 0} agents
+                </div>`, 'success');
+                
+                // Auto-delete after 5 seconds
+                setTimeout(async () => {
+                    try {
+                        await apiCall(`/admin/plans/${created.id}`, { method: 'DELETE' });
+                        log(`🗑️ Auto-deleted test plan ${created.id}`, 'info');
+                    } catch (e) {
+                        log(`⚠️ Failed to auto-delete test plan: ${e.message}`, 'error');
+                    }
+                }, 5000);
+                
+            } catch (error) {
+                log(`❌ Plan creation failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Run basic connectivity test on load
+        window.onload = async () => {
+            try {
+                const response = await fetch(`${baseUrl}/health`);
+                if (response.ok) {
+                    log('✅ Server is running and accessible', 'success');
+                } else {
+                    log('⚠️ Server responded but may have issues', 'error');
+                }
+            } catch (error) {
+                log('❌ Cannot connect to server. Make sure it\'s running on http://localhost:8765', 'error');
+            }
+        };
+    </script>
+</body>
+</html>

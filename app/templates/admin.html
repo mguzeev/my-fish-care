@@ -690,20 +690,41 @@
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
-                    <label>Price</label>
-                    <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
+                    <label>Plan Type</label>
+                    <select id="planType" onchange="togglePlanTypeFields()">
+                        <option value="SUBSCRIPTION">Subscription (Time-based)</option>
+                        <option value="ONE_TIME">One-time Purchase (Credit-based)</option>
+                    </select>
                 </div>
                 <div class="form-group">
-                    <label>Interval</label>
-                    <select id="planInterval">
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="daily">Daily</option>
-                    </select>
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="planIsDefault"> Set as Default Plan
+                    </label>
+                    <small>New users will be assigned this plan</small>
                 </div>
             </div>
             <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Price</label>
+                    <input type="number" id="planPrice" placeholder="9.99" step="0.01" min="0">
+                </div>
+                <div class="form-group" id="planIntervalGroup">
+                    <label>Interval</label>
+                    <select id="planInterval">
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="YEARLY">Yearly</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="DAILY">Daily</option>
+                    </select>
+                </div>
+            </div>
+            <!-- ONE_TIME specific field -->
+            <div class="form-group" id="oneTimeLimitGroup" style="display: none;">
+                <label>Credits/Uses (for ONE_TIME plans)</label>
+                <input type="number" id="planOneTimeLimit" placeholder="100" min="1">
+                <small>Number of uses customer gets with this purchase</small>
+            </div>
+            <div class="form-grid-2" id="subscriptionLimitsGroup">
                 <div class="form-group">
                     <label>Max Requests (Paid)</label>
                     <input type="number" id="planMaxRequests" placeholder="10000" min="1">
@@ -713,7 +734,7 @@
                     <input type="number" id="planMaxTokens" placeholder="4000" min="1">
                 </div>
             </div>
-            <div class="form-grid-2">
+            <div class="form-grid-2" id="freeTrialGroup">
                 <div class="form-group">
                     <label>Free Requests Limit</label>
                     <input type="number" id="planFreeRequests" min="0" placeholder="0 = no free requests">
@@ -1126,16 +1147,24 @@
                         <div class="value">${stats.total_organizations || 0}</div>
                     </div>
                     <div class="stat-card">
-                        <h3>Revenue (Month)</h3>
-                        <div class="value">$${parseFloat(stats.revenue_month || 0).toFixed(2)}</div>
+                        <h3>Total Revenue</h3>
+                        <div class="value">$${parseFloat(stats.revenue_total || 0).toFixed(2)}</div>
                     </div>
                     <div class="stat-card">
-                        <h3>Revenue (Today)</h3>
-                        <div class="value">$${parseFloat(stats.revenue_today || 0).toFixed(2)}</div>
+                        <h3>Active Revenue</h3>
+                        <div class="value">$${parseFloat(stats.revenue_active || 0).toFixed(2)}</div>
                     </div>
                     <div class="stat-card">
                         <h3>API Requests (Month)</h3>
                         <div class="value">${stats.api_requests_month || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Subscription Plans</h3>
+                        <div class="value">${stats.subscription_plans_count || 0}</div>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Credit Plans</h3>
+                        <div class="value">${stats.one_time_plans_count || 0}</div>
                     </div>
                 `;
                 
@@ -1277,10 +1306,11 @@
                             <tr>
                                 <th>ID</th>
                                 <th>Name</th>
+                                <th>Type</th>
                                 <th>Price</th>
-                                <th>Interval</th>
-                                <th>Max Requests</th>
-                                <th>Max Tokens</th>
+                                <th>Interval/Limit</th>
+                                <th>Agents</th>
+                                <th>Default</th>
                                 <th>Features</th>
                                 <th>Actions</th>
                             </tr>
@@ -1294,14 +1324,34 @@
                     if (plan.has_priority_support) features.push('Support');
                     if (plan.has_advanced_analytics) features.push('Analytics');
                     
+                    let intervalOrLimit = '';
+                    if (plan.plan_type === 'ONE_TIME') {
+                        intervalOrLimit = `${plan.one_time_limit || 0} uses`;
+                    } else {
+                        intervalOrLimit = `${plan.interval} (${plan.max_requests_per_interval} req)`;
+                    }
+                    
+                    const planTypeBadge = plan.plan_type === 'ONE_TIME' 
+                        ? '<span class="badge badge-warning">Credits</span>'
+                        : '<span class="badge badge-info">Subscription</span>';
+                    
+                    const defaultBadge = plan.is_default 
+                        ? '<span class="badge badge-success">Yes</span>'
+                        : '<span class="badge">No</span>';
+                    
+                    const agentValidation = plan.agent_count === 0 
+                        ? '<span class="badge badge-error" title="Plan has no agents">⚠️ 0</span>'
+                        : `<span class="badge badge-success">${plan.agent_count}</span>`;
+                    
                     tableHtml += `
                         <tr>
                             <td>${plan.id}</td>
                             <td>${plan.name}</td>
+                            <td>${planTypeBadge}</td>
                             <td>$${parseFloat(plan.price).toFixed(2)}</td>
-                            <td>${plan.interval}</td>
-                            <td>${plan.max_requests_per_interval}</td>
-                            <td>${plan.max_tokens_per_request}</td>
+                            <td>${intervalOrLimit}</td>
+                            <td>${agentValidation}</td>
+                            <td>${defaultBadge}</td>
                             <td>${features.length ? features.join(', ') : 'None'}</td>
                             <td>
                                 <div class="action-buttons">
@@ -1553,50 +1603,98 @@
             const name = document.getElementById('planName').value;
             const price = parseFloat(document.getElementById('planPrice').value);
             const interval = document.getElementById('planInterval').value;
+            const planType = document.getElementById('planType').value;
+            const isDefault = document.getElementById('planIsDefault').checked;
             const maxRequests = parseInt(document.getElementById('planMaxRequests').value);
             const maxTokens = parseInt(document.getElementById('planMaxTokens').value);
             const freeRequests = parseInt(document.getElementById('planFreeRequests').value) || 0;
             const freeTrial = parseInt(document.getElementById('planFreeTrial').value) || 0;
+            const oneTimeLimit = planType === 'ONE_TIME' ? parseInt(document.getElementById('planOneTimeLimit').value) : null;
             
-            if (!name || isNaN(price) || isNaN(maxRequests) || !maxTokens) {
+            if (!name || isNaN(price)) {
                 showAlert('Please fill in all required fields', 'error');
                 return;
             }
             
+            if (planType === 'ONE_TIME' && !oneTimeLimit) {
+                showAlert('ONE_TIME plans must have credits/uses specified', 'error');
+                return;
+            }
+            
+            if (planType === 'SUBSCRIPTION' && (isNaN(maxRequests) || !maxTokens)) {
+                showAlert('SUBSCRIPTION plans must have max requests and tokens specified', 'error');
+                return;
+            }
+            
             try {
+                const payload = {
+                    name,
+                    price,
+                    interval,
+                    plan_type: planType,
+                    currency: 'USD',
+                    max_requests_per_interval: planType === 'SUBSCRIPTION' ? maxRequests : 1,
+                    max_tokens_per_request: planType === 'SUBSCRIPTION' ? maxTokens : 2000,
+                    free_requests_limit: freeRequests,
+                    free_trial_days: freeTrial,
+                    is_default: isDefault,
+                    has_api_access: document.getElementById('planApiAccess').checked,
+                    has_priority_support: document.getElementById('planPrioritySupport').checked,
+                    has_advanced_analytics: document.getElementById('planAdvancedAnalytics').checked
+                };
+                
+                if (planType === 'ONE_TIME') {
+                    payload.one_time_limit = oneTimeLimit;
+                }
+                
                 await apiCall('/admin/plans', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        name,
-                        price,
-                        interval,
-                        currency: 'USD',
-                        max_requests_per_interval: maxRequests,
-                        max_tokens_per_request: maxTokens,
-                        free_requests_limit: freeRequests,
-                        free_trial_days: freeTrial,
-                        has_api_access: document.getElementById('planApiAccess').checked,
-                        has_priority_support: document.getElementById('planPrioritySupport').checked,
-                        has_advanced_analytics: document.getElementById('planAdvancedAnalytics').checked
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
                 showAlert('Plan created successfully');
+                
+                // Reset form
                 document.getElementById('planName').value = '';
                 document.getElementById('planPrice').value = '';
                 document.getElementById('planMaxRequests').value = '';
                 document.getElementById('planMaxTokens').value = '';
                 document.getElementById('planFreeRequests').value = '';
                 document.getElementById('planFreeTrial').value = '';
+                document.getElementById('planOneTimeLimit').value = '';
+                document.getElementById('planIsDefault').checked = false;
                 document.getElementById('planApiAccess').checked = false;
                 document.getElementById('planPrioritySupport').checked = false;
                 document.getElementById('planAdvancedAnalytics').checked = false;
+                document.getElementById('planType').value = 'SUBSCRIPTION';
+                togglePlanTypeFields();
                 
                 closeModal('createPlanModal');
                 await loadPlans();
             } catch (error) {
                 showAlert('Failed to create plan: ' + error.message, 'error');
             }
+        }
+        
+        function togglePlanTypeFields() {
+            const planType = document.getElementById('planType').value;
+            const oneTimeLimitGroup = document.getElementById('oneTimeLimitGroup');
+            const subscriptionLimitsGroup = document.getElementById('subscriptionLimitsGroup');
+            const freeTrialGroup = document.getElementById('freeTrialGroup');
+            const intervalGroup = document.getElementById('planIntervalGroup');
+            
+            if (planType === 'ONE_TIME') {
+                oneTimeLimitGroup.style.display = 'block';
+                subscriptionLimitsGroup.style.display = 'none';
+                freeTrialGroup.style.display = 'none';
+                intervalGroup.style.display = 'none';
+            } else {
+                oneTimeLimitGroup.style.display = 'none';
+                subscriptionLimitsGroup.style.display = 'flex';
+                freeTrialGroup.style.display = 'flex';
+                intervalGroup.style.display = 'block';
+            }
+        }
         }
 
         async function editPlan(planId) {
