@@ -172,26 +172,36 @@ class PolicyEngine:
                 payload["reason"] = "Superuser access"
             return payload
 
-        if plan.plan_type == PlanType.ONE_TIME:
-            total_purchased = billing_account.one_time_purchases_count
-            # Now using separate counter for ONE_TIME requests
-            used = billing_account.one_time_requests_used
-            remaining = max(0, total_purchased - used)
-
+        # Проверяем наличие кредитов (приоритет 1)
+        total_purchased = billing_account.one_time_purchases_count
+        credits_used = billing_account.one_time_requests_used
+        credits_remaining = max(0, total_purchased - credits_used)
+        
+        # Если есть кредиты - разрешаем использовать их в первую очередь
+        if credits_remaining > 0:
             return _result(
                 {
-                    "allowed": remaining > 0,
-                    "reason": (
-                        f"One-time uses remaining: {remaining}"
-                        if remaining > 0
-                        else "One-time uses exhausted. Purchase more credits."
-                    ),
+                    "allowed": True,
+                    "reason": f"Credits available: {credits_remaining} remaining",
                     "free_remaining": 0,
-                    "paid_remaining": remaining,
-                    "should_upgrade": remaining <= 0,
+                    "paid_remaining": credits_remaining,
+                    "should_upgrade": credits_remaining <= 5,  # Предупреждение при 5 и менее
                 }
             )
-
+        
+        # Если план ONE_TIME и кредиты закончились
+        if plan.plan_type == PlanType.ONE_TIME:
+            return _result(
+                {
+                    "allowed": False,
+                    "reason": "One-time credits exhausted. Purchase more credits.",
+                    "free_remaining": 0,
+                    "paid_remaining": 0,
+                    "should_upgrade": True,
+                }
+            )
+        
+        # Для SUBSCRIPTION планов (или если кредиты закончились при комбинированной модели)
         await self.reset_period_if_needed(billing_account, plan)
 
         free_remaining = plan.free_requests_limit - billing_account.free_requests_used
@@ -269,12 +279,22 @@ class PolicyEngine:
 
         billing_account, plan = row
 
-        if plan.plan_type == PlanType.ONE_TIME:
-            # Now using separate counter for ONE_TIME requests
+        # Приоритет 1: Используем кредиты если есть
+        total_purchased = billing_account.one_time_purchases_count
+        credits_used = billing_account.one_time_requests_used
+        credits_remaining = max(0, total_purchased - credits_used)
+        
+        if credits_remaining > 0:
             billing_account.one_time_requests_used += 1
             await db.commit()
             return
-
+        
+        # Если кредитов нет и план ONE_TIME - не списываем (нет доступа)
+        if plan.plan_type == PlanType.ONE_TIME:
+            await db.commit()
+            return
+        
+        # Приоритет 2: Используем лимиты подписки
         await self.reset_period_if_needed(billing_account, plan)
 
         if billing_account.free_requests_used < plan.free_requests_limit:
