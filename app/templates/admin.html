@@ -474,18 +474,39 @@
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
+                    <label>Plan Type</label>
+                    <select id="editPlanType" onchange="toggleEditPlanTypeFields()">
+                        <option value="SUBSCRIPTION">Subscription (Time-based)</option>
+                        <option value="ONE_TIME">One-time Purchase (Credit-based)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="editPlanIsDefault"> Set as Default Plan
+                    </label>
+                    <small>New users will be assigned this plan</small>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
                     <label>Price</label>
                     <input type="number" id="editPlanPrice" step="0.01" min="0">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="editPlanIntervalGroup">
                     <label>Interval</label>
                     <select id="editPlanInterval">
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="daily">Daily</option>
+                        <option value="MONTHLY">Monthly</option>
+                        <option value="YEARLY">Yearly</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="DAILY">Daily</option>
                     </select>
                 </div>
+            </div>
+            <!-- ONE_TIME specific field -->
+            <div class="form-group" id="editOneTimeLimitGroup" style="display: none;">
+                <label>Credits/Uses (for ONE_TIME plans)</label>
+                <input type="number" id="editPlanOneTimeLimit" placeholder="100" min="1">
+                <small>Number of uses customer gets with this purchase</small>
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
@@ -1716,6 +1737,20 @@
             }
         }
 
+        function toggleEditPlanTypeFields() {
+            const planType = document.getElementById('editPlanType').value;
+            const oneTimeLimitGroup = document.getElementById('editOneTimeLimitGroup');
+            const intervalGroup = document.getElementById('editPlanIntervalGroup');
+            
+            if (planType === 'ONE_TIME') {
+                oneTimeLimitGroup.style.display = 'block';
+                intervalGroup.style.display = 'none';
+            } else {
+                oneTimeLimitGroup.style.display = 'none';
+                intervalGroup.style.display = 'block';
+            }
+        }
+
         async function editPlan(planId) {
             try {
                 const plans = await apiCall('/admin/plans');
@@ -1728,15 +1763,19 @@
                 
                 editingPlanId = planId;
                 document.getElementById('editPlanName').value = plan.name;
+                document.getElementById('editPlanType').value = plan.plan_type || 'SUBSCRIPTION';
+                document.getElementById('editPlanIsDefault').checked = plan.is_default || false;
                 document.getElementById('editPlanPrice').value = plan.price;
-                document.getElementById('editPlanInterval').value = plan.interval;
+                document.getElementById('editPlanInterval').value = plan.interval.toUpperCase();
                 document.getElementById('editPlanMaxRequests').value = plan.max_requests_per_interval;
                 document.getElementById('editPlanMaxTokens').value = plan.max_tokens_per_request;
                 document.getElementById('editPlanFreeRequests').value = plan.free_requests_limit || 0;
                 document.getElementById('editPlanFreeTrial').value = plan.free_trial_days || 0;
+                document.getElementById('editPlanOneTimeLimit').value = plan.one_time_limit || '';
                 document.getElementById('editPlanApiAccess').checked = plan.has_api_access;
                 document.getElementById('editPlanPrioritySupport').checked = plan.has_priority_support;
                 document.getElementById('editPlanAdvancedAnalytics').checked = plan.has_advanced_analytics;
+                toggleEditPlanTypeFields();
                 openModal('editPlanModal');
             } catch (error) {
                 showAlert('Failed to load plan: ' + error.message, 'error');
@@ -1745,10 +1784,21 @@
 
         async function savePlanChanges() {
             try {
+                const planType = document.getElementById('editPlanType').value;
+                const oneTimeLimit = document.getElementById('editPlanOneTimeLimit').value;
+                
+                // Validate ONE_TIME plans must have one_time_limit
+                if (planType === 'ONE_TIME' && (!oneTimeLimit || parseInt(oneTimeLimit) <= 0)) {
+                    showAlert('ONE_TIME plans must have a valid credits/uses limit', 'error');
+                    return;
+                }
+                
                 await apiCall(`/admin/plans/${editingPlanId}`, {
                     method: 'PUT',
                     body: JSON.stringify({
                         name: document.getElementById('editPlanName').value,
+                        plan_type: planType,
+                        is_default: document.getElementById('editPlanIsDefault').checked,
                         price: parseFloat(document.getElementById('editPlanPrice').value),
                         interval: document.getElementById('editPlanInterval').value,
                         currency: 'USD',
@@ -1756,6 +1806,7 @@
                         max_tokens_per_request: parseInt(document.getElementById('editPlanMaxTokens').value),
                         free_requests_limit: parseInt(document.getElementById('editPlanFreeRequests').value) || 0,
                         free_trial_days: parseInt(document.getElementById('editPlanFreeTrial').value) || 0,
+                        one_time_limit: planType === 'ONE_TIME' ? parseInt(oneTimeLimit) : null,
                         has_api_access: document.getElementById('editPlanApiAccess').checked,
                         has_priority_support: document.getElementById('editPlanPrioritySupport').checked,
                         has_advanced_analytics: document.getElementById('editPlanAdvancedAnalytics').checked
