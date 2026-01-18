@@ -124,28 +124,47 @@ class BillingAccountResponse(BaseModel):
 	organization_id: int
 	plan_id: Optional[int]
 	plan_name: Optional[str]
-	plan_type: Optional[str]  # Added plan type
-	plan_interval: Optional[str]  # Added plan interval
+	plan_type: Optional[str]  # "subscription" or "one_time"
+	plan_type_display: Optional[str]  # Локализованное отображение типа плана
+	plan_interval: Optional[str]  # "monthly", "yearly" etc
 	status: str
+	status_display: str  # Понятное описание статуса
 	balance: Decimal
 	total_spent: Decimal
+	
+	# Бесплатные запросы (если есть)
 	free_requests_limit: int
 	free_requests_used: int
+	free_requests_remaining: int  # Вычисляемое поле
 	free_trial_days: int
 	trial_started_at: Optional[str]
-	trial_end_date: Optional[str]  # Added trial end date
-	subscription_start_date: Optional[str]  # Added subscription start
-	subscription_end_date: Optional[str]  # Added subscription end
+	trial_end_date: Optional[str]
+	
+	# Для SUBSCRIPTION планов
+	subscription_start_date: Optional[str]
+	subscription_end_date: Optional[str]
+	max_requests_per_period: Optional[int] = None  # Лимит за период
+	requests_used_current_period: Optional[int] = None  # Использовано за период
+	requests_remaining_current_period: Optional[int] = None  # Осталось за период
+	period_started_at: Optional[str] = None  # Когда начался текущий период
+	
+	# Для ONE_TIME планов (пакеты кредитов)
+	credits_purchased: Optional[int] = None  # Всего куплено кредитов
+	credits_used: Optional[int] = None  # Использовано кредитов
+	credits_remaining: Optional[int] = None  # Осталось кредитов
+	
+	# Детали платежей
 	checkout_url: Optional[str] = None
 	transaction_id: Optional[str] = None
-	# Subscription details
 	paddle_subscription_id: Optional[str] = None
 	next_billing_date: Optional[str] = None
 	paused_at: Optional[str] = None
 	cancelled_at: Optional[str] = None
-	# Usage info for ONE_TIME plans
-	one_time_purchases_count: Optional[int] = None  # Added for ONE_TIME
-	one_time_requests_used: Optional[int] = None  # Added for ONE_TIME
+	
+	# Рекомендации для UI
+	can_use_service: bool = True  # Может ли использовать сервис
+	should_upgrade: bool = False  # Нужно ли апгрейдиться
+	upgrade_reason: Optional[str] = None  # Причина апгрейда
 
 
 class UsageSummaryResponse(BaseModel):
@@ -182,30 +201,128 @@ async def _get_billing_account_response(
 	if ba.subscription_plan_id:
 		plan = (await db.execute(select(SubscriptionPlan).where(SubscriptionPlan.id == ba.subscription_plan_id))).scalar_one_or_none()
 
+	# Определяем тип плана и статус для понятного отображения
+	plan_type_val = plan.plan_type.value if plan else None
+	is_one_time = plan_type_val == "one_time"
+	is_subscription = plan_type_val == "subscription"
+	
+	# Человекопонятное название типа плана
+	plan_type_display = None
+	if is_subscription:
+		plan_type_display = "Подписка"
+	elif is_one_time:
+		plan_type_display = "Пакет запросов"
+	
+	# Человекопонятный статус
+	status_map = {
+		"active": "Активна",
+		"trialing": "Пробный период",
+		"paused": "Приостановлена",
+		"canceled": "Отменена",
+		"cancelled": "Отменена",
+		"past_due": "Просрочен платеж",
+		"expired": "Истекла",
+	}
+	status_display = status_map.get(ba.subscription_status.value, ba.subscription_status.value)
+	
+	# Бесплатные запросы
+	free_limit = plan.free_requests_limit if plan else 0
+	free_used = ba.free_requests_used
+	free_remaining = max(0, free_limit - free_used)
+	
+	# Для SUBSCRIPTION: лимиты за период
+	max_per_period = None
+	used_period = None
+	remaining_period = None
+	if is_subscription and plan:
+		max_per_period = plan.max_requests_per_interval
+		used_period = ba.requests_used_current_period
+		remaining_period = max(0, max_per_period - used_period) if max_per_period > 0 else 0
+	
+	# Для ONE_TIME: кредиты
+	credits_purchased = None
+	credits_used = None
+	credits_remaining = None
+	if is_one_time:
+		credits_purchased = ba.one_time_purchases_count
+		credits_used = ba.one_time_requests_used
+		credits_remaining = max(0, credits_purchased - credits_used)
+	
+	# Определяем можно ли использовать сервис
+	can_use = False
+	should_upgrade = False
+	upgrade_reason = None
+	
+	if ba.subscription_status in [SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING]:
+		if is_one_time:
+			# Для ONE_TIME проверяем наличие кредитов
+			if credits_remaining and credits_remaining > 0:
+				can_use = True
+			else:
+				should_upgrade = True
+				upgrade_reason = "Кредиты исчерпаны. Купите новый пакет запросов."
+		elif is_subscription:
+			# Для SUBSCRIPTION проверяем лимиты
+			if free_remaining > 0:
+				can_use = True
+			elif remaining_period and remaining_period > 0:
+				can_use = True
+			else:
+				should_upgrade = True
+				upgrade_reason = f"Лимит запросов исчерпан. Ждите начала нового периода или перейдите на более высокий тариф."
+			if free_remaining <= 0 and (not remaining_period or remaining_period <= 5):
+				should_upgrade = True
+				upgrade_reason = "Запросы заканчиваются. Рекомендуем обновить план."
+		else:
+			# Неизвестный тип - даем доступ
+			can_use = True
+	else:
+		should_upgrade = True
+		upgrade_reason = f"Статус подписки: {status_display}. Активируйте подписку для продолжения."
+	
 	return BillingAccountResponse(
 		organization_id=org.id,
 		plan_id=ba.subscription_plan_id,
-		plan_name=plan.name if plan else None,
-		plan_type=plan.plan_type.value if plan else None,
+		plan_name=plan.name if plan else "Без плана",
+		plan_type=plan_type_val,
+		plan_type_display=plan_type_display,
 		plan_interval=plan.interval.value if plan else None,
 		status=ba.subscription_status.value,
+		status_display=status_display,
 		balance=ba.balance,
 		total_spent=ba.total_spent,
-		free_requests_limit=plan.free_requests_limit if plan else 0,
-		free_requests_used=ba.free_requests_used,
+		
+		# Бесплатные запросы
+		free_requests_limit=free_limit,
+		free_requests_used=free_used,
+		free_requests_remaining=free_remaining,
 		free_trial_days=plan.free_trial_days if plan else 0,
 		trial_started_at=ba.trial_started_at.isoformat() if ba.trial_started_at else None,
 		trial_end_date=ba.trial_end_date.isoformat() if ba.trial_end_date else None,
+		
+		# SUBSCRIPTION поля
 		subscription_start_date=ba.subscription_start_date.isoformat() if ba.subscription_start_date else None,
 		subscription_end_date=ba.subscription_end_date.isoformat() if ba.subscription_end_date else None,
-		# Subscription details
+		max_requests_per_period=max_per_period,
+		requests_used_current_period=used_period,
+		requests_remaining_current_period=remaining_period,
+		period_started_at=ba.period_started_at.isoformat() if ba.period_started_at else None,
+		
+		# ONE_TIME поля
+		credits_purchased=credits_purchased,
+		credits_used=credits_used,
+		credits_remaining=credits_remaining,
+		
+		# Платежи
 		paddle_subscription_id=ba.paddle_subscription_id,
 		next_billing_date=ba.next_billing_date.isoformat() if ba.next_billing_date else None,
 		paused_at=ba.paused_at.isoformat() if ba.paused_at else None,
 		cancelled_at=ba.cancelled_at.isoformat() if ba.cancelled_at else None,
-		# ONE_TIME plan details
-		one_time_purchases_count=ba.one_time_purchases_count if plan and plan.plan_type.value == "one_time" else None,
-		one_time_requests_used=ba.one_time_requests_used if plan and plan.plan_type.value == "one_time" else None,
+		
+		# Рекомендации
+		can_use_service=can_use,
+		should_upgrade=should_upgrade,
+		upgrade_reason=upgrade_reason,
 	)
 
 

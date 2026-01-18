@@ -18,31 +18,78 @@
         </div>
         
         <div class="current-plan">
-            <h2>Your Current Plan</h2>
+            <h2>Ваш тарифный план</h2>
             <div class="current-plan-info">
-                <div class="plan-stat">
-                    <span class="plan-stat-label">Plan</span>
+                <!-- Основная информация о плане -->
+                <div class="plan-stat plan-stat-main">
+                    <span class="plan-stat-label">Текущий план</span>
                     <span class="plan-stat-value" id="currentPlanName">Free Trial</span>
+                    <span class="plan-stat-type" id="currentPlanType"></span>
                 </div>
+                
                 <div class="plan-stat">
-                    <span class="plan-stat-label">Free Requests Used</span>
-                    <span class="plan-stat-value" id="freeRequestsUsed">0 / 10</span>
-                </div>
-                <div class="plan-stat">
-                    <span class="plan-stat-label">Status</span>
+                    <span class="plan-stat-label">Статус</span>
                     <span class="plan-stat-value" id="planStatus">TRIALING</span>
                 </div>
+                
+                <!-- Секция для бесплатных запросов (если есть) -->
+                <div class="plan-stat" id="freeRequestsContainer" style="display: none;">
+                    <span class="plan-stat-label">🎁 Бесплатные запросы</span>
+                    <span class="plan-stat-value" id="freeRequestsInfo">0 / 10</span>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="freeRequestsProgress"></div>
+                    </div>
+                </div>
+                
+                <!-- Секция для SUBSCRIPTION планов -->
+                <div id="subscriptionDetails" style="display: none;">
+                    <div class="plan-stat">
+                        <span class="plan-stat-label">📊 Запросы за период</span>
+                        <span class="plan-stat-value" id="periodRequestsInfo">0 / 1000</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="periodRequestsProgress"></div>
+                        </div>
+                    </div>
+                    <div class="plan-stat" id="periodStartContainer">
+                        <span class="plan-stat-label">Период начался</span>
+                        <span class="plan-stat-value" id="periodStarted">-</span>
+                    </div>
+                </div>
+                
+                <!-- Секция для ONE_TIME планов (кредиты) -->
+                <div id="creditsDetails" style="display: none;">
+                    <div class="plan-stat">
+                        <span class="plan-stat-label">💳 Баланс кредитов</span>
+                        <span class="plan-stat-value" id="creditsInfo">0 / 0</span>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="creditsProgress"></div>
+                        </div>
+                    </div>
+                    <div class="plan-stat-note" id="creditsNote">
+                        Кредиты не сгорают и могут использоваться в любое время
+                    </div>
+                </div>
+                
+                <!-- Дополнительная информация -->
                 <div class="plan-stat" id="nextBillingContainer" style="display: none;">
-                    <span class="plan-stat-label">Next Billing</span>
+                    <span class="plan-stat-label">Следующее списание</span>
                     <span class="plan-stat-value" id="nextBilling">-</span>
                 </div>
                 <div class="plan-stat" id="pausedAtContainer" style="display: none;">
-                    <span class="plan-stat-label">Paused Since</span>
+                    <span class="plan-stat-label">Приостановлена с</span>
                     <span class="plan-stat-value" id="pausedAt">-</span>
                 </div>
                 <div class="plan-stat" id="cancelledAtContainer" style="display: none;">
-                    <span class="plan-stat-label">Cancelled On</span>
+                    <span class="plan-stat-label">Отменена</span>
                     <span class="plan-stat-value" id="cancelledAt">-</span>
+                </div>
+                
+                <!-- Предупреждения и рекомендации -->
+                <div id="upgradeAlert" class="alert alert-warning" style="display: none;">
+                    <span id="upgradeAlertText"></span>
+                </div>
+                <div id="serviceBlockedAlert" class="alert alert-error" style="display: none;">
+                    <span id="serviceBlockedText"></span>
                 </div>
             </div>
         </div>
@@ -100,32 +147,106 @@
                 const account = await apiCall('/billing/account');
                 currentAccount = account;
                 
-                document.getElementById('currentPlanName').textContent = account.plan_name || 'Free Trial';
-                document.getElementById('freeRequestsUsed').textContent = 
-                    `${account.free_requests_used || 0} / ${account.free_requests_limit || 10}`;
+                // Основная информация о плане
+                document.getElementById('currentPlanName').textContent = account.plan_name || 'Без плана';
                 
-                // Show status with styling
+                // Тип плана
+                const typeEl = document.getElementById('currentPlanType');
+                if (account.plan_type_display) {
+                    typeEl.textContent = `(${account.plan_type_display})`;
+                    typeEl.style.display = 'inline';
+                } else {
+                    typeEl.style.display = 'none';
+                }
+                
+                // Статус
                 const statusEl = document.getElementById('planStatus');
-                statusEl.textContent = account.status || 'TRIALING';
+                statusEl.textContent = account.status_display || account.status || 'TRIALING';
                 statusEl.className = 'plan-stat-value status-' + (account.status || 'trialing').toLowerCase();
                 
-                // Show next billing date if available
+                // Бесплатные запросы (если есть)
+                if (account.free_requests_limit > 0) {
+                    document.getElementById('freeRequestsContainer').style.display = 'block';
+                    document.getElementById('freeRequestsInfo').textContent = 
+                        `${account.free_requests_remaining} из ${account.free_requests_limit} осталось`;
+                    const freeProgress = (account.free_requests_used / account.free_requests_limit) * 100;
+                    document.getElementById('freeRequestsProgress').style.width = freeProgress + '%';
+                }
+                
+                // Для SUBSCRIPTION планов
+                if (account.plan_type === 'subscription' && account.max_requests_per_period !== null) {
+                    document.getElementById('subscriptionDetails').style.display = 'block';
+                    const remaining = account.requests_remaining_current_period || 0;
+                    const max = account.max_requests_per_period || 0;
+                    const used = account.requests_used_current_period || 0;
+                    
+                    if (max > 0) {
+                        document.getElementById('periodRequestsInfo').textContent = 
+                            `${remaining} из ${max} осталось`;
+                        const periodProgress = (used / max) * 100;
+                        document.getElementById('periodRequestsProgress').style.width = periodProgress + '%';
+                    } else {
+                        document.getElementById('periodRequestsInfo').textContent = 
+                            'Безлимитно в рамках плана';
+                    }
+                    
+                    if (account.period_started_at) {
+                        document.getElementById('periodStartContainer').style.display = 'block';
+                        const periodStart = new Date(account.period_started_at);
+                        document.getElementById('periodStarted').textContent = periodStart.toLocaleDateString('ru-RU');
+                    }
+                }
+                
+                // Для ONE_TIME планов (кредиты)
+                if (account.plan_type === 'one_time' && account.credits_purchased !== null) {
+                    document.getElementById('creditsDetails').style.display = 'block';
+                    const remaining = account.credits_remaining || 0;
+                    const total = account.credits_purchased || 0;
+                    const used = account.credits_used || 0;
+                    
+                    document.getElementById('creditsInfo').textContent = 
+                        `${remaining} из ${total} осталось`;
+                    
+                    if (total > 0) {
+                        const creditsProgress = (used / total) * 100;
+                        document.getElementById('creditsProgress').style.width = creditsProgress + '%';
+                    }
+                }
+                
+                // Следующее списание
                 if (account.next_billing_date) {
                     document.getElementById('nextBillingContainer').style.display = 'block';
-                    document.getElementById('nextBilling').textContent = new Date(account.next_billing_date).toLocaleDateString();
+                    document.getElementById('nextBilling').textContent = 
+                        new Date(account.next_billing_date).toLocaleDateString('ru-RU');
                 }
                 
-                // Show paused date if subscription is paused
+                // Приостановлена
                 if (account.paused_at) {
                     document.getElementById('pausedAtContainer').style.display = 'block';
-                    document.getElementById('pausedAt').textContent = new Date(account.paused_at).toLocaleDateString();
+                    document.getElementById('pausedAt').textContent = 
+                        new Date(account.paused_at).toLocaleDateString('ru-RU');
                 }
                 
-                // Show cancelled date if subscription is cancelled
+                // Отменена
                 if (account.cancelled_at) {
                     document.getElementById('cancelledAtContainer').style.display = 'block';
-                    document.getElementById('cancelledAt').textContent = new Date(account.cancelled_at).toLocaleDateString();
+                    document.getElementById('cancelledAt').textContent = 
+                        new Date(account.cancelled_at).toLocaleDateString('ru-RU');
                 }
+                
+                // Предупреждения и рекомендации
+                if (!account.can_use_service) {
+                    const blockedAlert = document.getElementById('serviceBlockedAlert');
+                    blockedAlert.style.display = 'block';
+                    document.getElementById('serviceBlockedText').textContent = 
+                        account.upgrade_reason || 'Сервис недоступен. Активируйте подписку.';
+                } else if (account.should_upgrade) {
+                    const upgradeAlert = document.getElementById('upgradeAlert');
+                    upgradeAlert.style.display = 'block';
+                    document.getElementById('upgradeAlertText').textContent = 
+                        account.upgrade_reason || 'Рекомендуем обновить план.';
+                }
+                
             } catch (error) {
                 console.error('Failed to load current plan:', error);
             }
@@ -152,33 +273,69 @@
                 plansGrid.innerHTML = paidPlans.map((plan, index) => {
                     const isCurrentPlan = currentAccount && currentAccount.plan_id === plan.id;
                     const canSubscribe = !hasActiveSubscription || isCurrentPlan;
+                    const isOneTime = plan.plan_type === 'one_time';
+                    const isSubscription = plan.plan_type === 'subscription';
                     
-                    let buttonText = 'Subscribe Now';
+                    let buttonText = isOneTime ? 'Купить пакет' : 'Подписаться';
                     let buttonClass = 'btn-subscribe';
                     let buttonDisabled = '';
                     
                     if (isCurrentPlan) {
-                        buttonText = 'Current Plan';
+                        buttonText = 'Текущий план';
                         buttonClass = 'btn-subscribe btn-current';
                         buttonDisabled = 'disabled';
-                    } else if (hasActiveSubscription) {
-                        buttonText = 'Cancel current subscription first';
+                    } else if (hasActiveSubscription && isSubscription) {
+                        buttonText = 'Сначала отмените текущую подписку';
+                        buttonClass = 'btn-subscribe btn-disabled';
+                        buttonDisabled = 'disabled';
+                    } else if (hasActiveSubscription && isOneTime) {
+                        buttonText = 'Недоступно при активной подписке';
                         buttonClass = 'btn-subscribe btn-disabled';
                         buttonDisabled = 'disabled';
                     }
                     
+                    // Определяем заголовок и описание в зависимости от типа
+                    let planTypeLabel = '';
+                    let planFeatures = '';
+                    
+                    if (isOneTime) {
+                        planTypeLabel = '<span class="plan-type-badge one-time">Пакет запросов</span>';
+                        const credits = plan.one_time_limit || 0;
+                        planFeatures = `
+                            <li><strong>${credits}</strong> запросов</li>
+                            <li>Кредиты не сгорают</li>
+                            <li>Используйте когда удобно</li>
+                            ${plan.has_api_access ? '<li>Доступ к API</li>' : ''}
+                        `;
+                    } else if (isSubscription) {
+                        planTypeLabel = '<span class="plan-type-badge subscription">Подписка</span>';
+                        const interval = plan.interval;
+                        const intervalRu = {
+                            'daily': 'день',
+                            'weekly': 'неделю',
+                            'monthly': 'месяц',
+                            'yearly': 'год'
+                        }[interval] || interval;
+                        
+                        planFeatures = `
+                            <li><strong>${plan.max_requests_per_interval}</strong> запросов за ${intervalRu}</li>
+                            ${plan.max_tokens_per_request > 0 ? `<li>До ${plan.max_tokens_per_request} токенов на запрос</li>` : ''}
+                            ${plan.free_requests_limit > 0 ? `<li>🎁 ${plan.free_requests_limit} бесплатных запросов</li>` : ''}
+                            ${plan.has_api_access ? '<li>Доступ к API</li>' : ''}
+                            ${plan.has_priority_support ? '<li>Приоритетная поддержка</li>' : ''}
+                            ${plan.has_advanced_analytics ? '<li>Расширенная аналитика</li>' : ''}
+                        `;
+                    }
+                    
                     return `
                     <div class="plan-card ${index === 0 && !hasActiveSubscription ? 'recommended' : ''} ${isCurrentPlan ? 'current' : ''} ${hasActiveSubscription && !isCurrentPlan ? 'unavailable' : ''}">
-                        ${isCurrentPlan ? '<div class="plan-badge">Your Plan</div>' : ''}
+                        ${isCurrentPlan ? '<div class="plan-badge">Ваш план</div>' : ''}
+                        ${planTypeLabel}
                         <div class="plan-name">${plan.name}</div>
                         <div class="plan-price">$${plan.price.toFixed(2)}</div>
-                        <div class="plan-price-period">per ${plan.interval}</div>
+                        <div class="plan-price-period">${isOneTime ? 'разовая покупка' : 'за ' + plan.interval}</div>
                         <ul class="plan-features">
-                            <li>${plan.max_requests_per_interval} requests per ${plan.interval}</li>
-                            ${plan.max_tokens_per_request > 0 ? `<li>Up to ${plan.max_tokens_per_request} tokens per request</li>` : ''}
-                            ${plan.has_api_access ? '<li>API Access</li>' : ''}
-                            ${plan.has_priority_support ? '<li>Priority Support</li>' : ''}
-                            ${plan.has_advanced_analytics ? '<li>Advanced Analytics</li>' : ''}
+                            ${planFeatures}
                         </ul>
                         <button class="${buttonClass}" data-plan-name="${plan.name}" onclick="subscribeToPlan(event, ${plan.id})" ${buttonDisabled}>
                             ${buttonText}

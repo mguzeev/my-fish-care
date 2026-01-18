@@ -499,6 +499,28 @@ nav {
     flex-direction: column;
 }
 
+.plan-stat-main {
+    grid-column: 1 / -1;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.plan-stat-type {
+    display: inline;
+    color: var(--text-light);
+    font-size: 0.875rem;
+    font-weight: normal;
+    margin-left: 0.5rem;
+}
+
+.plan-stat-note {
+    color: var(--text-light);
+    font-size: 0.875rem;
+    font-style: italic;
+    margin-top: 0.25rem;
+}
+
 .plan-stat-label {
     color: var(--text-light);
     font-size: 0.875rem;
@@ -509,6 +531,79 @@ nav {
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--text-color);
+}
+
+/* Progress bars */
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background-color: #e5e7eb;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--gradient);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+/* Alert boxes */
+.alert {
+    padding: 1rem;
+    border-radius: 8px;
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.alert-warning {
+    background-color: #fef3c7;
+    border-left: 4px solid var(--warning);
+    color: #92400e;
+}
+
+.alert-error {
+    background-color: #fee2e2;
+    border-left: 4px solid var(--error);
+    color: #991b1b;
+}
+
+.alert::before {
+    content: '⚠️';
+    font-size: 1.25rem;
+}
+
+.alert-error::before {
+    content: '🚫';
+}
+
+/* Status colors */
+.status-active {
+    color: var(--success) !important;
+}
+
+.status-trialing {
+    color: var(--primary-color) !important;
+}
+
+.status-paused {
+    color: var(--warning) !important;
+}
+
+.status-canceled, .status-cancelled {
+    color: var(--text-light) !important;
+}
+
+.status-past_due {
+    color: var(--error) !important;
+}
+
+.status-expired {
+    color: var(--error) !important;
 }
 
 .plans-grid {
@@ -527,6 +622,26 @@ nav {
     position: relative;
     overflow: hidden;
     border: 1px solid var(--border);
+}
+
+.plan-type-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+}
+
+.plan-type-badge.subscription {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+.plan-type-badge.one-time {
+    background-color: #fef3c7;
+    color: #92400e;
 }
 
 .plan-card:hover {
