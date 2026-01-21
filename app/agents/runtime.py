@@ -257,10 +257,23 @@ class AgentRuntime:
 			messages=messages,
 		)
 		usage = response.usage or None
+		prompt_tokens = usage.prompt_tokens if usage else 0
+		completion_tokens = usage.completion_tokens if usage else 0
+		total_tokens = usage.total_tokens if usage else 0
+		
+		# Fix incorrect total_tokens from some providers (e.g., Gemini)
+		# If total_tokens doesn't match sum, recalculate
+		if total_tokens != prompt_tokens + completion_tokens:
+			logger.warning(
+				f"Correcting total_tokens: API returned {total_tokens}, "
+				f"but prompt ({prompt_tokens}) + completion ({completion_tokens}) = {prompt_tokens + completion_tokens}"
+			)
+			total_tokens = prompt_tokens + completion_tokens
+		
 		usage_info = {
-			"prompt_tokens": usage.prompt_tokens if usage else 0,
-			"completion_tokens": usage.completion_tokens if usage else 0,
-			"total_tokens": usage.total_tokens if usage else 0,
+			"prompt_tokens": prompt_tokens,
+			"completion_tokens": completion_tokens,
+			"total_tokens": total_tokens,
 		}
 		return (response.choices[0].message.content or "", usage_info)
 
