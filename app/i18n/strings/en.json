@@ -32,12 +32,19 @@
   "errors": {
     "please_start": "Please use /start to register first.",
     "inactive": "Your account is inactive. Please contact support.",
-    "unsupported_locale": "Unsupported locale"
+    "unsupported_locale": "Unsupported locale",
+    "usage_limit": "⚠️ You've reached your usage limit. Please upgrade your plan.",
+    "file_too_large": "⚠️ File is too large. Maximum size is 10 MB.",
+    "general": "❌ An error occurred. Please try again later."
   }
   ,
   "locale": {
     "usage": "Usage: /locale <code>\nAvailable: {locales}",
     "success": "✅ Locale changed to: {code}",
     "invalid": "Unsupported locale. Available: {locales}"
+  },
+  "photo": {
+    "processing": "🖼️ Processing image...",
+    "no_vision_agent": "⚠️ No vision-capable AI model is available. Please contact support."
   }
 }

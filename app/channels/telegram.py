@@ -1,6 +1,9 @@
 """Telegram channel implementation."""
 import logging
+import uuid
+from datetime import datetime
 from typing import Any, Dict, Optional
+from pathlib import Path
 from telegram import Update, Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -16,6 +19,8 @@ from app.channels.base import BaseChannel
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.user import User
+from app.agents.runtime import agent_runtime
+from app.policy.engine import engine as policy_engine
 from app.channels.texts import (
     help_text,
     start_text_existing,
@@ -32,6 +37,8 @@ from app.channels.texts import (
     locale_usage,
     locale_success,
     locale_invalid,
+    photo_processing,
+    photo_no_vision_agent,
 )
 from app.models.session import Session
 import uuid
@@ -69,6 +76,7 @@ class TelegramChannel(BaseChannel):
         self.application.add_handler(CommandHandler("register", self.handle_register))
         self.application.add_handler(CommandHandler("profile", self.handle_profile))
         self.application.add_handler(CommandHandler("locale", self.handle_locale))
+        self.application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message))
         self.application.add_handler(CallbackQueryHandler(self.handle_callback))
         
@@ -420,10 +428,186 @@ class TelegramChannel(BaseChannel):
             )
             db.add(session)
             await db.commit()
+            
+            # Process message with AI agent
+            try:
+                # Get first available agent
+                from app.agents.router import _get_first_available_agent
+                agent = await _get_first_available_agent(db, user, requires_vision=False)
+                
+                # Check usage limits
+                usage_info = await policy_engine.check_usage_limits(db, user, agent.id)
+                if not usage_info["allowed"]:
+                    await update.message.reply_text(
+                        error_text("usage_limit", user.locale),
+                        parse_mode="Markdown"
+                    )
+                    return
+                
+                # Get active prompt
+                from app.agents.router import _get_active_prompt
+                prompt_version = await _get_active_prompt(agent.id, db)
+                
+                # Run agent
+                variables = {"input": message_text}
+                output, usage_tokens = await agent_runtime.run(
+                    agent, variables, prompt_version=prompt_version, stream=False
+                )
+                
+                # Increment usage
+                await policy_engine.increment_usage(db, user)
+                
+                # Send response
+                await update.message.reply_text(output)
+                
+            except Exception as e:
+                logger.error(f"Error processing message: {e}")
+                await update.message.reply_text(error_text("general", user.locale))
+    
+    async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """
+        Handle photo messages.
         
-        # TODO: Process message with AI agent
-        # For now, just echo back
-        await update.message.reply_text(echo_text(message_text, user.locale))
+        Args:
+            update: Telegram update
+            context: Bot context
+        """
+        if not update.effective_user or not update.message or not update.message.photo:
+            return
+        
+        user_id = update.effective_user.id
+        # Get caption as query text (or default prompt)
+        caption = update.message.caption or "What is in this image?"
+        
+        async with AsyncSessionLocal() as db:
+            # Check if user exists and is active
+            result = await db.execute(
+                select(User).where(User.telegram_id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                await update.message.reply_text(error_text("please_start", None))
+                return
+            
+            if not user.is_active:
+                await update.message.reply_text(error_text("inactive", user.locale))
+                return
+            
+            # Send processing message
+            processing_msg = await update.message.reply_text(photo_processing(user.locale))
+            
+            try:
+                # Get the largest photo (best quality)
+                photo = update.message.photo[-1]
+                
+                # Check file size (Telegram limit is 20MB, we limit to 10MB)
+                if photo.file_size and photo.file_size > 10 * 1024 * 1024:
+                    await processing_msg.edit_text(
+                        error_text("file_too_large", user.locale)
+                    )
+                    return
+                
+                # Download photo
+                file = await context.bot.get_file(photo.file_id)
+                
+                # Create unique filename
+                timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+                unique_id = uuid.uuid4().hex[:8]
+                # Get file extension from file path
+                file_ext = Path(file.file_path).suffix or ".jpg"
+                filename = f"{timestamp}_{unique_id}{file_ext}"
+                
+                # Ensure media/uploads directory exists
+                upload_dir = Path(settings.base_dir) / "media" / "uploads"
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Save file
+                file_path = upload_dir / filename
+                await file.download_to_drive(str(file_path))
+                
+                logger.info(f"Downloaded photo: {file_path}")
+                
+                # Get first available vision-capable agent
+                from app.agents.router import _get_first_available_agent
+                agent = await _get_first_available_agent(db, user, requires_vision=True)
+                
+                # Check usage limits
+                usage_info = await policy_engine.check_usage_limits(db, user, agent.id)
+                if not usage_info["allowed"]:
+                    await processing_msg.edit_text(
+                        error_text("usage_limit", user.locale)
+                    )
+                    return
+                
+                # Get active prompt
+                from app.agents.router import _get_active_prompt
+                prompt_version = await _get_active_prompt(agent.id, db)
+                
+                # Run agent with image
+                relative_path = f"media/uploads/{filename}"
+                variables = {
+                    "input": caption,
+                    "image_path": relative_path
+                }
+                
+                output, usage_tokens = await agent_runtime.run(
+                    agent, variables, prompt_version=prompt_version, stream=False
+                )
+                
+                # Increment usage
+                await policy_engine.increment_usage(db, user)
+                
+                # Log usage
+                from app.models.usage import UsageRecord
+                from decimal import Decimal
+                
+                prompt_tokens = usage_tokens.get("prompt_tokens", 0) if usage_tokens else 0
+                completion_tokens = usage_tokens.get("completion_tokens", 0) if usage_tokens else 0
+                total_tokens = usage_tokens.get("total_tokens", 0) if usage_tokens else 0
+                
+                model_name = agent.llm_model.name if agent.llm_model else "unknown"
+                cost_in = agent.llm_model.cost_per_1k_input_tokens if agent.llm_model else None
+                cost_out = agent.llm_model.cost_per_1k_output_tokens if agent.llm_model else None
+                cost_value = Decimal("0")
+                if cost_in:
+                    cost_value += Decimal(cost_in) * Decimal(prompt_tokens) / Decimal(1000)
+                if cost_out:
+                    cost_value += Decimal(cost_out) * Decimal(completion_tokens) / Decimal(1000)
+                
+                record = UsageRecord(
+                    user_id=user.id,
+                    endpoint="/channels/telegram/photo",
+                    method="POST",
+                    channel="telegram",
+                    model_name=model_name,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    total_tokens=total_tokens,
+                    response_time_ms=0,
+                    status_code=200,
+                    cost=cost_value,
+                    error_message=None,
+                    meta=None,
+                    has_image=True,
+                )
+                db.add(record)
+                await db.commit()
+                
+                # Delete processing message and send response
+                await processing_msg.delete()
+                await update.message.reply_text(f"📷 {output}")
+                
+            except Exception as e:
+                logger.error(f"Error processing photo: {e}", exc_info=True)
+                try:
+                    await processing_msg.edit_text(
+                        error_text("general", user.locale)
+                    )
+                except:
+                    await update.message.reply_text(
+                        error_text("general", user.locale)
+                    )
     
     async def handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """

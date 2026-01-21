@@ -80,3 +80,12 @@ def locale_success(code: str, locale: Optional[str]) -> str:
 def locale_invalid(locale: Optional[str], locales: str) -> str:
     return i18n.t("locale.invalid", locale, locales=locales)
 
+
+def photo_processing(locale: Optional[str]) -> str:
+    """Text shown while processing a photo."""
+    return i18n.t("photo.processing", locale)
+
+
+def photo_no_vision_agent(locale: Optional[str]) -> str:
+    """Text shown when no vision-capable agent is available."""
+    return i18n.t("photo.no_vision_agent", locale)
