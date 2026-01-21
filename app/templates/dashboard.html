@@ -899,11 +899,45 @@
             window.location.href = '/';
         }
 
+        // Load agent capabilities and adjust UI
+        async function loadAgentCapabilities() {
+            try {
+                const capabilities = await apiCall('/agents/capabilities');
+                
+                // Update UI based on capabilities
+                const queryInput = document.getElementById('queryInput');
+                const imageUploadSection = queryInput.closest('.form-group').nextElementSibling;
+                
+                if (!capabilities.supports_text) {
+                    // Hide text input if text is not supported
+                    queryInput.closest('.form-group').style.display = 'none';
+                }
+                
+                if (!capabilities.supports_vision) {
+                    // Hide image upload if vision is not supported
+                    if (imageUploadSection) {
+                        imageUploadSection.style.display = 'none';
+                    }
+                }
+                
+                // If only vision is supported, make query optional and update placeholder
+                if (capabilities.supports_vision && !capabilities.supports_text) {
+                    queryInput.placeholder = 'Optional: Add description or question about the image...';
+                    queryInput.required = false;
+                }
+                
+            } catch (error) {
+                console.error('Failed to load agent capabilities:', error);
+                // Don't block UI if capabilities can't be loaded
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await loadProfile();
             await loadUsageMetrics();
             await loadSubscription();
+            await loadAgentCapabilities();
         });
     </script>
 </body>

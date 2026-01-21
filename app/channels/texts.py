@@ -89,3 +89,13 @@ def photo_processing(locale: Optional[str]) -> str:
 def photo_no_vision_agent(locale: Optional[str]) -> str:
     """Text shown when no vision-capable agent is available."""
     return i18n.t("photo.no_vision_agent", locale)
+
+
+def text_not_supported(locale: Optional[str]) -> str:
+    """Text shown when agent doesn't support text."""
+    return i18n.t("errors.text_not_supported", locale)
+
+
+def vision_not_supported(locale: Optional[str]) -> str:
+    """Text shown when agent doesn't support vision/images."""
+    return i18n.t("errors.vision_not_supported", locale)

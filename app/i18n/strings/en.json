@@ -35,7 +35,9 @@
     "unsupported_locale": "Unsupported locale",
     "usage_limit": "⚠️ You've reached your usage limit. Please upgrade your plan.",
     "file_too_large": "⚠️ File is too large. Maximum size is 10 MB.",
-    "general": "❌ An error occurred. Please try again later."
+    "general": "❌ An error occurred. Please try again later.",
+    "text_not_supported": "📝 Sorry, this agent can only process images. Text messages are not supported.",
+    "vision_not_supported": "🖼️ Sorry, this agent can only process text. Image messages are not supported."
   }
   ,
   "locale": {

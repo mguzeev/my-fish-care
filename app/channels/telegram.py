@@ -39,6 +39,8 @@ from app.channels.texts import (
     locale_invalid,
     photo_processing,
     photo_no_vision_agent,
+    text_not_supported,
+    vision_not_supported,
 )
 from app.models.session import Session
 import uuid
@@ -435,6 +437,14 @@ class TelegramChannel(BaseChannel):
                 from app.agents.router import _get_first_available_agent
                 agent = await _get_first_available_agent(db, user, requires_vision=False)
                 
+                # Check if agent's model supports text
+                if agent.llm_model and not agent.llm_model.supports_text:
+                    await update.message.reply_text(
+                        text_not_supported(user.locale),
+                        parse_mode="Markdown"
+                    )
+                    return
+                
                 # Check usage limits
                 usage_info = await policy_engine.check_usage_limits(db, user, agent.id)
                 if not usage_info["allowed"]:
@@ -531,6 +541,13 @@ class TelegramChannel(BaseChannel):
                 # Get first available vision-capable agent
                 from app.agents.router import _get_first_available_agent
                 agent = await _get_first_available_agent(db, user, requires_vision=True)
+                
+                # Check if agent's model supports vision
+                if agent.llm_model and not agent.llm_model.supports_vision:
+                    await processing_msg.edit_text(
+                        vision_not_supported(user.locale)
+                    )
+                    return
                 
                 # Check usage limits
                 usage_info = await policy_engine.check_usage_limits(db, user, agent.id)

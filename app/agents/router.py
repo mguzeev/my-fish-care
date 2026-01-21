@@ -32,6 +32,14 @@ class AgentListResponse(BaseModel):
     version: str
 
 
+class AgentCapabilitiesResponse(BaseModel):
+    """Agent capabilities response."""
+    agent_id: int
+    agent_name: str
+    supports_text: bool
+    supports_vision: bool
+
+
 @router.get("", response_model=list[AgentListResponse])
 async def list_agents(
     db: AsyncSession = Depends(get_db),
@@ -98,6 +106,30 @@ async def list_agents(
         for agent in all_agents.values()
     ]
 
+
+@router.get("/capabilities", response_model=AgentCapabilitiesResponse)
+async def get_agent_capabilities(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get capabilities of the first available agent for the current user."""
+    # Get first available agent (text-only)
+    agent = await _get_first_available_agent(db, current_user, requires_vision=False)
+    
+    # Get model capabilities
+    supports_text = True
+    supports_vision = False
+    
+    if agent.llm_model:
+        supports_text = agent.llm_model.supports_text
+        supports_vision = agent.llm_model.supports_vision
+    
+    return AgentCapabilitiesResponse(
+        agent_id=agent.id,
+        agent_name=agent.name,
+        supports_text=supports_text,
+        supports_vision=supports_vision
+    )
 
 
 async def _get_agent_or_404(agent_id: int, db: AsyncSession) -> Agent:
@@ -215,6 +247,22 @@ async def invoke_auto_agent(
     # Get first available agent
     agent = await _get_first_available_agent(db, current_user, requires_vision)
     
+    # Validate agent capabilities
+    if agent.llm_model:
+        # Check if text is being sent but model doesn't support text
+        if payload.input and not agent.llm_model.supports_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This agent can only process images. Text queries are not supported."
+            )
+        
+        # Check if image is being sent but model doesn't support vision
+        if payload.image_path and not agent.llm_model.supports_vision:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This agent can only process text. Image queries are not supported."
+            )
+    
     # Check usage limits through Policy Engine
     usage_info = await policy_engine.check_usage_limits(db, current_user, agent.id)
     
@@ -318,6 +366,24 @@ async def invoke_agent(
     current_user: User = Depends(get_current_active_user),
 ):
     """Invoke an agent with user input (non-streaming by default)."""
+    agent = await _get_agent_or_404(agent_id, db)
+    
+    # Validate agent capabilities
+    if agent.llm_model:
+        # Check if text is being sent but model doesn't support text
+        if payload.input and not agent.llm_model.supports_text:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This agent can only process images. Text queries are not supported."
+            )
+        
+        # Check if image is being sent but model doesn't support vision
+        if payload.image_path and not agent.llm_model.supports_vision:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This agent can only process text. Image queries are not supported."
+            )
+    
     # Check usage limits through Policy Engine
     usage_info = await policy_engine.check_usage_limits(db, current_user, agent_id)
     
@@ -331,8 +397,6 @@ async def invoke_agent(
                 "paid_remaining": usage_info["paid_remaining"]
             }
         )
-    
-    agent = await _get_agent_or_404(agent_id, db)
 
     # Merge variables ensuring 'input' is present
     variables = {"input": payload.input, **payload.variables}
