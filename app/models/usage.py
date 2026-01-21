@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional
 from decimal import Decimal
-from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Text
+from sqlalchemy import String, DateTime, Integer, ForeignKey, Numeric, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
@@ -25,6 +25,9 @@ class UsageRecord(Base):
     prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     total_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    # Vision/Image support
+    has_image: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Performance
     response_time_ms: Mapped[int] = mapped_column(Integer, nullable=False)
