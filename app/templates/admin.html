@@ -872,6 +872,18 @@
                     </label>
                 </div>
             </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="llmModelSupportsText" checked> Supports Text
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="llmModelSupportsVision"> Supports Vision (Images)
+                    </label>
+                </div>
+            </div>
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal('createLLMModelModal')">Cancel</button>
                 <button class="btn-primary" onclick="createLLMModel()">Create Model</button>
@@ -925,6 +937,18 @@
                 <div class="form-group">
                     <label class="form-checkbox">
                         <input type="checkbox" id="editLLMModelIsDefault"> Set as Default
+                    </label>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="editLLMModelSupportsText"> Supports Text
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label class="form-checkbox">
+                        <input type="checkbox" id="editLLMModelSupportsVision"> Supports Vision (Images)
                     </label>
                 </div>
             </div>
@@ -2586,6 +2610,7 @@
                                 <th>API Key</th>
                                 <th>Max Tokens</th>
                                 <th>Context</th>
+                                <th>Capabilities</th>
                                 <th>Status</th>
                                 <th>Default</th>
                                 <th>Actions</th>
@@ -2601,6 +2626,18 @@
                     const defaultBadge = model.is_default ? 
                         '<span class="badge badge-active">Default</span>' : '';
                     
+                    // Build capabilities badges
+                    let capabilitiesBadges = '';
+                    if (model.supports_text) {
+                        capabilitiesBadges += '<span class="badge badge-active" style="margin-right: 4px;">📝 Text</span>';
+                    }
+                    if (model.supports_vision) {
+                        capabilitiesBadges += '<span class="badge badge-active" style="margin-right: 4px;">🖼️ Vision</span>';
+                    }
+                    if (!model.supports_text && !model.supports_vision) {
+                        capabilitiesBadges = '<span class="badge badge-inactive">None</span>';
+                    }
+                    
                     html += `
                         <tr>
                             <td>${model.id}</td>
@@ -2609,6 +2646,7 @@
                             <td><code>${model.api_key}</code></td>
                             <td>${model.max_tokens_limit.toLocaleString()}</td>
                             <td>${model.context_window.toLocaleString()}</td>
+                            <td>${capabilitiesBadges}</td>
                             <td>${statusBadge}</td>
                             <td>${defaultBadge}</td>
                             <td>
@@ -2644,6 +2682,8 @@
             const contextWindow = parseInt(document.getElementById('llmModelContextWindow').value);
             const isActive = document.getElementById('llmModelActive').checked;
             const isDefault = document.getElementById('llmModelIsDefault').checked;
+            const supportsText = document.getElementById('llmModelSupportsText').checked;
+            const supportsVision = document.getElementById('llmModelSupportsVision').checked;
 
             if (!name || !displayName || !apiKey) {
                 showAlert('Please fill in all required fields', 'error');
@@ -2662,7 +2702,9 @@
                         max_tokens_limit: maxTokensLimit,
                         context_window: contextWindow,
                         is_active: isActive,
-                        is_default: isDefault
+                        is_default: isDefault,
+                        supports_text: supportsText,
+                        supports_vision: supportsVision
                     })
                 });
 
@@ -2678,6 +2720,8 @@
                 document.getElementById('llmModelContextWindow').value = '8000';
                 document.getElementById('llmModelActive').checked = true;
                 document.getElementById('llmModelIsDefault').checked = false;
+                document.getElementById('llmModelSupportsText').checked = true;
+                document.getElementById('llmModelSupportsVision').checked = false;
                 
                 await loadLLMModels();
             } catch (error) {
@@ -2699,6 +2743,8 @@
                 document.getElementById('editLLMModelContextWindow').value = model.context_window;
                 document.getElementById('editLLMModelActive').checked = model.is_active;
                 document.getElementById('editLLMModelIsDefault').checked = model.is_default;
+                document.getElementById('editLLMModelSupportsText').checked = model.supports_text;
+                document.getElementById('editLLMModelSupportsVision').checked = model.supports_vision;
                 
                 document.getElementById('editLLMModelModal').classList.add('active');
             } catch (error) {
@@ -2716,6 +2762,8 @@
             const contextWindow = parseInt(document.getElementById('editLLMModelContextWindow').value);
             const isActive = document.getElementById('editLLMModelActive').checked;
             const isDefault = document.getElementById('editLLMModelIsDefault').checked;
+            const supportsText = document.getElementById('editLLMModelSupportsText').checked;
+            const supportsVision = document.getElementById('editLLMModelSupportsVision').checked;
 
             try {
                 const updateData = {
@@ -2724,7 +2772,9 @@
                     max_tokens_limit: maxTokensLimit,
                     context_window: contextWindow,
                     is_active: isActive,
-                    is_default: isDefault
+                    is_default: isDefault,
+                    supports_text: supportsText,
+                    supports_vision: supportsVision
                 };
 
                 // Only include api_key if it was changed

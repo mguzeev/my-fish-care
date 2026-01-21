@@ -3360,6 +3360,8 @@ class LLMModelResponse(BaseModel):
     cost_per_1k_output_tokens: Optional[float]
     is_active: bool
     is_default: bool
+    supports_text: bool
+    supports_vision: bool
     created_at: datetime
     updated_at: datetime
 
@@ -3376,6 +3378,8 @@ class CreateLLMModelRequest(BaseModel):
     cost_per_1k_output_tokens: Optional[float] = None
     is_active: bool = True
     is_default: bool = False
+    supports_text: bool = True
+    supports_vision: bool = False
 
 
 class UpdateLLMModelRequest(BaseModel):
@@ -3388,6 +3392,8 @@ class UpdateLLMModelRequest(BaseModel):
     cost_per_1k_output_tokens: Optional[float] = None
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
+    supports_text: Optional[bool] = None
+    supports_vision: Optional[bool] = None
 
 
 @router.get("/llm-models", response_model=list[LLMModelResponse])
@@ -3416,6 +3422,8 @@ async def list_llm_models(
             "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
             "is_active": model.is_active,
             "is_default": model.is_default,
+            "supports_text": model.supports_text,
+            "supports_vision": model.supports_vision,
             "created_at": model.created_at,
             "updated_at": model.updated_at,
         }
@@ -3451,6 +3459,8 @@ async def get_llm_model(
         "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
         "is_active": model.is_active,
         "is_default": model.is_default,
+        "supports_text": model.supports_text,
+        "supports_vision": model.supports_vision,
         "created_at": model.created_at,
         "updated_at": model.updated_at,
     }
@@ -3490,6 +3500,8 @@ async def create_llm_model(
         cost_per_1k_output_tokens=request.cost_per_1k_output_tokens,
         is_active=request.is_active,
         is_default=request.is_default,
+        supports_text=request.supports_text,
+        supports_vision=request.supports_vision,
     )
     db.add(model)
     await db.commit()
@@ -3509,6 +3521,8 @@ async def create_llm_model(
         "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
         "is_active": model.is_active,
         "is_default": model.is_default,
+        "supports_text": model.supports_text,
+        "supports_vision": model.supports_vision,
         "created_at": model.created_at,
         "updated_at": model.updated_at,
     }
@@ -3556,6 +3570,10 @@ async def update_llm_model(
         model.is_active = request.is_active
     if request.is_default is not None:
         model.is_default = request.is_default
+    if request.supports_text is not None:
+        model.supports_text = request.supports_text
+    if request.supports_vision is not None:
+        model.supports_vision = request.supports_vision
     
     await db.commit()
     await db.refresh(model)
@@ -3574,6 +3592,8 @@ async def update_llm_model(
         "cost_per_1k_output_tokens": float(model.cost_per_1k_output_tokens) if model.cost_per_1k_output_tokens else None,
         "is_active": model.is_active,
         "is_default": model.is_default,
+        "supports_text": model.supports_text,
+        "supports_vision": model.supports_vision,
         "created_at": model.created_at,
         "updated_at": model.updated_at,
     }
