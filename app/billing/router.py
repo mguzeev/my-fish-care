@@ -548,7 +548,8 @@ async def get_activity_events(
 	
 	# 1. Get significant usage records (agent invocations, telegram usage)
 	significant_endpoints = [
-		'/agents/%/invoke',
+		'/agents/invoke',  # Agent invocations without ID
+		'/agents/%/invoke',  # Agent invocations with ID
 		'/channels/telegram/webhook',
 	]
 	
@@ -692,7 +693,8 @@ async def get_usage_records(
 	
 	# Only show significant events: agent invocations and billing events
 	significant_endpoints = [
-		'/agents/%/invoke',  # Agent usage
+		'/agents/invoke',  # Agent usage without ID
+		'/agents/%/invoke',  # Agent usage with ID
 		'/channels/telegram/webhook',  # Telegram usage
 		'/billing/subscribe',  # Subscription events
 		'/billing/cancel',  # Cancellation events

@@ -862,6 +862,18 @@
             </div>
             <div class="form-grid-2">
                 <div class="form-group">
+                    <label>Cost per 1k Input Tokens ($)</label>
+                    <input type="number" id="llmModelCostInput" step="0.000001" min="0" value="0" placeholder="0.00001">
+                    <small style="color: #666;">e.g., 0.00001875 for Gemini</small>
+                </div>
+                <div class="form-group">
+                    <label>Cost per 1k Output Tokens ($)</label>
+                    <input type="number" id="llmModelCostOutput" step="0.000001" min="0" value="0" placeholder="0.00003">
+                    <small style="color: #666;">e.g., 0.00003 for Gemini</small>
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
                     <label class="form-checkbox">
                         <input type="checkbox" id="llmModelActive" checked> Active
                     </label>
@@ -926,6 +938,18 @@
                 <div class="form-group">
                     <label>Context Window</label>
                     <input type="number" id="editLLMModelContextWindow" min="1">
+                </div>
+            </div>
+            <div class="form-grid-2">
+                <div class="form-group">
+                    <label>Cost per 1k Input Tokens ($)</label>
+                    <input type="number" id="editLLMModelCostInput" step="0.000001" min="0" placeholder="0.00001">
+                    <small style="color: #666;">Leave 0 for free models</small>
+                </div>
+                <div class="form-group">
+                    <label>Cost per 1k Output Tokens ($)</label>
+                    <input type="number" id="editLLMModelCostOutput" step="0.000001" min="0" placeholder="0.00003">
+                    <small style="color: #666;">Leave 0 for free models</small>
                 </div>
             </div>
             <div class="form-grid-2">
@@ -2610,6 +2634,7 @@
                                 <th>API Key</th>
                                 <th>Max Tokens</th>
                                 <th>Context</th>
+                                <th>Cost ($/1k)</th>
                                 <th>Capabilities</th>
                                 <th>Status</th>
                                 <th>Default</th>
@@ -2638,6 +2663,16 @@
                         capabilitiesBadges = '<span class="badge badge-inactive">None</span>';
                     }
                     
+                    // Build cost info
+                    let costInfo = '';
+                    if (model.cost_per_1k_input_tokens || model.cost_per_1k_output_tokens) {
+                        const inCost = model.cost_per_1k_input_tokens ? model.cost_per_1k_input_tokens.toFixed(6) : '0';
+                        const outCost = model.cost_per_1k_output_tokens ? model.cost_per_1k_output_tokens.toFixed(6) : '0';
+                        costInfo = `<small>In: ${inCost}<br>Out: ${outCost}</small>`;
+                    } else {
+                        costInfo = '<span class="badge badge-active" style="background: #10b981;">FREE</span>';
+                    }
+                    
                     html += `
                         <tr>
                             <td>${model.id}</td>
@@ -2646,6 +2681,7 @@
                             <td><code>${model.api_key}</code></td>
                             <td>${model.max_tokens_limit.toLocaleString()}</td>
                             <td>${model.context_window.toLocaleString()}</td>
+                            <td>${costInfo}</td>
                             <td>${capabilitiesBadges}</td>
                             <td>${statusBadge}</td>
                             <td>${defaultBadge}</td>
@@ -2680,6 +2716,8 @@
             const apiBaseUrl = document.getElementById('llmModelApiBaseUrl').value.trim() || null;
             const maxTokensLimit = parseInt(document.getElementById('llmModelMaxTokensLimit').value);
             const contextWindow = parseInt(document.getElementById('llmModelContextWindow').value);
+            const costInput = parseFloat(document.getElementById('llmModelCostInput').value) || null;
+            const costOutput = parseFloat(document.getElementById('llmModelCostOutput').value) || null;
             const isActive = document.getElementById('llmModelActive').checked;
             const isDefault = document.getElementById('llmModelIsDefault').checked;
             const supportsText = document.getElementById('llmModelSupportsText').checked;
@@ -2701,6 +2739,8 @@
                         api_base_url: apiBaseUrl,
                         max_tokens_limit: maxTokensLimit,
                         context_window: contextWindow,
+                        cost_per_1k_input_tokens: costInput,
+                        cost_per_1k_output_tokens: costOutput,
                         is_active: isActive,
                         is_default: isDefault,
                         supports_text: supportsText,
@@ -2718,6 +2758,8 @@
                 document.getElementById('llmModelApiBaseUrl').value = '';
                 document.getElementById('llmModelMaxTokensLimit').value = '4000';
                 document.getElementById('llmModelContextWindow').value = '8000';
+                document.getElementById('llmModelCostInput').value = '0';
+                document.getElementById('llmModelCostOutput').value = '0';
                 document.getElementById('llmModelActive').checked = true;
                 document.getElementById('llmModelIsDefault').checked = false;
                 document.getElementById('llmModelSupportsText').checked = true;
@@ -2741,6 +2783,8 @@
                 document.getElementById('editLLMModelApiBaseUrl').value = model.api_base_url || '';
                 document.getElementById('editLLMModelMaxTokensLimit').value = model.max_tokens_limit;
                 document.getElementById('editLLMModelContextWindow').value = model.context_window;
+                document.getElementById('editLLMModelCostInput').value = model.cost_per_1k_input_tokens || 0;
+                document.getElementById('editLLMModelCostOutput').value = model.cost_per_1k_output_tokens || 0;
                 document.getElementById('editLLMModelActive').checked = model.is_active;
                 document.getElementById('editLLMModelIsDefault').checked = model.is_default;
                 document.getElementById('editLLMModelSupportsText').checked = model.supports_text;
@@ -2760,6 +2804,8 @@
             const apiBaseUrl = document.getElementById('editLLMModelApiBaseUrl').value.trim() || null;
             const maxTokensLimit = parseInt(document.getElementById('editLLMModelMaxTokensLimit').value);
             const contextWindow = parseInt(document.getElementById('editLLMModelContextWindow').value);
+            const costInput = parseFloat(document.getElementById('editLLMModelCostInput').value) || null;
+            const costOutput = parseFloat(document.getElementById('editLLMModelCostOutput').value) || null;
             const isActive = document.getElementById('editLLMModelActive').checked;
             const isDefault = document.getElementById('editLLMModelIsDefault').checked;
             const supportsText = document.getElementById('editLLMModelSupportsText').checked;
@@ -2771,6 +2817,8 @@
                     api_base_url: apiBaseUrl,
                     max_tokens_limit: maxTokensLimit,
                     context_window: contextWindow,
+                    cost_per_1k_input_tokens: costInput,
+                    cost_per_1k_output_tokens: costOutput,
                     is_active: isActive,
                     is_default: isDefault,
                     supports_text: supportsText,
