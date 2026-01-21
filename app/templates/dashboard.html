@@ -41,14 +41,22 @@
         <div class="dashboard-card card-spaced">
             <h2>AI Agent</h2>
             <div class="form-group">
-                <label>Select Agent</label>
-                <select id="agentSelect" class="form-control">
-                    <option value="">Loading agents...</option>
-                </select>
-            </div>
-            <div class="form-group">
                 <label>Your Query</label>
                 <textarea id="queryInput" rows="4" placeholder="Enter your query here..." class="form-control textarea-control"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Upload Image (Optional)</label>
+                <div class="file-upload-area">
+                    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+                    <button type="button" onclick="document.getElementById('imageInput').click()" class="btn btn-secondary">
+                        📷 Choose Image
+                    </button>
+                    <span id="selectedFileName" class="file-name"></span>
+                    <button type="button" id="removeImageBtn" onclick="removeImage()" class="btn btn-text hidden">✕ Remove</button>
+                </div>
+                <div id="imagePreview" class="image-preview hidden">
+                    <img id="previewImg" src="" alt="Preview">
+                </div>
             </div>
             <div class="form-group">
                 <button onclick="sendQuery()" class="btn btn-primary btn-full" id="sendQueryBtn">Send Query</button>
@@ -56,6 +64,7 @@
             
             <div id="queryResponse" class="card-section hidden">
                 <h3 class="section-title">Response:</h3>
+                <div id="agentInfo" class="text-muted" style="margin-bottom: 8px; font-size: 0.9em;"></div>
                 <div id="responseContent" class="response-box"></div>
             </div>
             
@@ -620,38 +629,82 @@
             }
         }
 
-        // Load available agents
-        async function loadAgents() {
+        // Image handling
+        let selectedImage = null;
+        let uploadedImagePath = null;
+
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                showAlert('Please select an image file', 'error');
+                return;
+            }
+
+            // Validate file size (10 MB)
+            if (file.size > 10 * 1024 * 1024) {
+                showAlert('Image is too large. Maximum size is 10 MB', 'error');
+                return;
+            }
+
+            selectedImage = file;
+            uploadedImagePath = null; // Reset uploaded path
+            
+            // Show file name
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('removeImageBtn').classList.remove('hidden');
+            
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('imagePreview').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeImage() {
+            selectedImage = null;
+            uploadedImagePath = null;
+            document.getElementById('imageInput').value = '';
+            document.getElementById('selectedFileName').textContent = '';
+            document.getElementById('removeImageBtn').classList.add('hidden');
+            document.getElementById('imagePreview').classList.add('hidden');
+        }
+
+        async function uploadImage() {
+            if (!selectedImage) return null;
+
+            const formData = new FormData();
+            formData.append('file', selectedImage);
+
+            const token = getAuthToken();
             try {
-                const agents = await apiCall('/agents');
-                const select = document.getElementById('agentSelect');
-                
-                if (agents && agents.length > 0) {
-                    select.innerHTML = '<option value="">Select an agent...</option>';
-                    agents.forEach(agent => {
-                        const option = document.createElement('option');
-                        option.value = agent.id;
-                        option.textContent = `${agent.name} - ${agent.description || ''}`;
-                        select.appendChild(option);
-                    });
-                } else {
-                    select.innerHTML = '<option value="">No agents available</option>';
+                const response = await fetch(API_BASE + '/web/upload-image', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Upload failed');
                 }
+
+                const result = await response.json();
+                return result.file_path;
             } catch (error) {
-                console.error('Failed to load agents:', error);
-                document.getElementById('agentSelect').innerHTML = '<option value="">Error loading agents</option>';
+                throw new Error('Failed to upload image: ' + error.message);
             }
         }
 
         // Send query to agent
         async function sendQuery() {
-            const agentId = document.getElementById('agentSelect').value;
             const query = document.getElementById('queryInput').value.trim();
-            
-            if (!agentId) {
-                showAlert('Please select an agent', 'error');
-                return;
-            }
             
             if (!query) {
                 showAlert('Please enter a query', 'error');
@@ -661,28 +714,54 @@
             const sendBtn = document.getElementById('sendQueryBtn');
             const responseDiv = document.getElementById('queryResponse');
             const responseContent = document.getElementById('responseContent');
+            const agentInfo = document.getElementById('agentInfo');
             
             try {
                 sendBtn.disabled = true;
-                sendBtn.textContent = 'Sending...';
+                sendBtn.textContent = 'Processing...';
                 responseContent.textContent = 'Processing your request...';
                 responseDiv.classList.remove('hidden');
+                agentInfo.textContent = '';
 
-                const result = await apiCall(`/agents/${agentId}/invoke`, {
+                // Upload image if selected
+                let imagePath = uploadedImagePath;
+                if (selectedImage && !uploadedImagePath) {
+                    sendBtn.textContent = 'Uploading image...';
+                    imagePath = await uploadImage();
+                    uploadedImagePath = imagePath;
+                }
+
+                sendBtn.textContent = 'Sending to AI...';
+
+                const payload = {
+                    input: query,
+                    variables: {},
+                    stream: false
+                };
+
+                if (imagePath) {
+                    payload.image_path = imagePath;
+                }
+
+                // Use new auto-select endpoint
+                const result = await apiCall(`/agents/invoke`, {
                     method: 'POST',
-                    body: JSON.stringify({
-                        input: query,
-                        variables: {},
-                        stream: false
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 responseContent.textContent = result.output;
                 
+                // Show which agent was used
+                if (result.agent_name) {
+                    agentInfo.textContent = `Agent used: ${result.agent_name} (${result.model})`;
+                    if (result.processed_image) {
+                        agentInfo.textContent += ' 📷 with image';
+                    }
+                }
+                
                 // Show usage information
                 if (result.usage) {
                     const usageDiv = document.getElementById('usageInfo');
-                    const usageText = document.getElementById('usageText');
                     const upgradeBtn = document.getElementById('upgradeBtn');
                     
                     usageDiv.classList.remove('hidden');
@@ -696,13 +775,15 @@
                         message = 'No requests remaining';
                     }
                     
-                    usageText.textContent = message;
-                    
-                    if (result.usage.should_upgrade) {
-                        upgradeBtn.classList.remove('hidden');
-                    } else {
-                        upgradeBtn.classList.add('hidden');
-                    }
+                    usageDiv.innerHTML = `
+                        <div class="info-banner__row">
+                            <div>
+                                <strong class="info-banner__title">Usage:</strong>
+                                <span class="info-banner__text">${message}</span>
+                            </div>
+                            ${result.usage.should_upgrade ? '<button id="upgradeBtn" class="btn btn-upgrade" type="button" onclick="goToUpgrade()">Upgrade Now 🚀</button>' : ''}
+                        </div>
+                    `;
                 }
                 
                 showAlert('Query completed successfully', 'success');
@@ -810,7 +891,6 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
             await loadProfile();
-            await loadAgents();
             await loadUsageMetrics();
             await loadSubscription();
         });
