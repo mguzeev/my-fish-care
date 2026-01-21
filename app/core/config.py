@@ -1,5 +1,7 @@
 """Configuration settings for the application."""
 import logging
+import os
+from pathlib import Path
 from functools import lru_cache
 from typing import Optional
 from pydantic import Field
@@ -16,6 +18,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     debug: bool = False
     api_base_url: str = "http://localhost:8000"  # Base URL for API endpoints and OAuth callbacks
+    base_dir: Path = Path(__file__).resolve().parent.parent.parent  # Project root directory
     
     
     # Database

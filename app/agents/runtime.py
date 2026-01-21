@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import logging
 import json
+import base64
+import os
+from pathlib import Path
 from typing import Any, AsyncGenerator, Dict, List, Optional
 from openai import AsyncOpenAI
 from app.core.config import settings
@@ -104,6 +107,89 @@ class AgentRuntime:
 			variables.append(PromptVariable(name="input", required=True, description="User message"))
 
 		return variables
+	
+	def _load_image_as_base64(self, image_path: str) -> Optional[str]:
+		"""
+		Load image from file system and convert to base64 data URL.
+		
+		Args:
+			image_path: Path to image file relative to media directory
+			
+		Returns:
+			Base64 data URL or None if file doesn't exist
+		"""
+		try:
+			# Construct full path
+			media_dir = Path(settings.base_dir) / "media"
+			full_path = media_dir / image_path
+			
+			if not full_path.exists():
+				logger.warning(f"Image file not found: {full_path}")
+				return None
+			
+			# Read file and encode to base64
+			with open(full_path, "rb") as image_file:
+				image_data = image_file.read()
+				base64_image = base64.b64encode(image_data).decode('utf-8')
+			
+			# Determine MIME type from extension
+			extension = full_path.suffix.lower()
+			mime_types = {
+				'.jpg': 'image/jpeg',
+				'.jpeg': 'image/jpeg',
+				'.png': 'image/png',
+				'.gif': 'image/gif',
+				'.webp': 'image/webp'
+			}
+			mime_type = mime_types.get(extension, 'image/jpeg')
+			
+			return f"data:{mime_type};base64,{base64_image}"
+		except Exception as e:
+			logger.error(f"Error loading image {image_path}: {e}")
+			return None
+	
+	def _build_messages_with_image(
+		self, 
+		prompt: RenderedPrompt, 
+		image_data_url: str
+	) -> List[Dict[str, Any]]:
+		"""
+		Build messages array with image support for vision models.
+		
+		Args:
+			prompt: Rendered prompt
+			image_data_url: Base64 data URL of the image
+			
+		Returns:
+			Messages array with image content
+		"""
+		messages = []
+		
+		# Add system message if present
+		for msg in prompt.to_messages():
+			if msg["role"] == "system":
+				messages.append(msg)
+			elif msg["role"] == "user":
+				# Transform user message to include image
+				messages.append({
+					"role": "user",
+					"content": [
+						{
+							"type": "text",
+							"text": msg["content"]
+						},
+						{
+							"type": "image_url",
+							"image_url": {
+								"url": image_data_url
+							}
+						}
+					]
+				})
+			else:
+				messages.append(msg)
+		
+		return messages
 
 	async def run(
 		self,
@@ -123,10 +209,22 @@ class AgentRuntime:
 			agent.max_tokens,
 			agent.llm_model.max_tokens_limit if agent.llm_model else self.default_max_tokens
 		)
+		
+		# Check if image is provided
+		image_path = variables.get("image_path")
+		image_data_url = None
+		if image_path:
+			image_data_url = self._load_image_as_base64(image_path)
+			if not image_data_url:
+				logger.warning(f"Failed to load image: {image_path}, continuing without image")
 
 		if stream:
-			return self._stream_completion(prompt, client, model_name, temperature, max_tokens)
-		return await self._completion(prompt, client, model_name, temperature, max_tokens)
+			return self._stream_completion(
+				prompt, client, model_name, temperature, max_tokens, image_data_url
+			)
+		return await self._completion(
+			prompt, client, model_name, temperature, max_tokens, image_data_url
+		)
 
 	async def _completion(
 		self, 
@@ -134,15 +232,23 @@ class AgentRuntime:
 		client: AsyncOpenAI,
 		model: str,
 		temperature: float,
-		max_tokens: int
+		max_tokens: int,
+		image_data_url: Optional[str] = None
 	) -> tuple[str, dict]:
 		"""Non-streaming completion with usage metadata."""
 		logger.debug(f"Sending completion request to {model}")
+		
+		# Build messages with or without image
+		if image_data_url:
+			messages = self._build_messages_with_image(prompt, image_data_url)
+		else:
+			messages = prompt.to_messages()
+		
 		response = await client.chat.completions.create(
 			model=model,
 			temperature=temperature,
 			max_tokens=max_tokens,
-			messages=prompt.to_messages(),
+			messages=messages,
 		)
 		usage = response.usage or None
 		usage_info = {
@@ -158,15 +264,23 @@ class AgentRuntime:
 		client: AsyncOpenAI,
 		model: str,
 		temperature: float,
-		max_tokens: int
+		max_tokens: int,
+		image_data_url: Optional[str] = None
 	) -> AsyncGenerator[str, None]:
 		"""Streaming completion generator."""
 		logger.debug(f"Sending streaming completion request to {model}")
+		
+		# Build messages with or without image
+		if image_data_url:
+			messages = self._build_messages_with_image(prompt, image_data_url)
+		else:
+			messages = prompt.to_messages()
+		
 		stream = await client.chat.completions.create(
 			model=model,
 			temperature=temperature,
 			max_tokens=max_tokens,
-			messages=prompt.to_messages(),
+			messages=messages,
 			stream=True,
 		)
 		async for chunk in stream:

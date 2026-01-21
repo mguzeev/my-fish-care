@@ -110,6 +110,86 @@ async def _get_agent_or_404(agent_id: int, db: AsyncSession) -> Agent:
     return agent
 
 
+async def _get_first_available_agent(
+    db: AsyncSession, 
+    current_user: User, 
+    requires_vision: bool = False
+) -> Agent:
+    """
+    Get the first available agent for the user.
+    
+    Args:
+        db: Database session
+        current_user: Current authenticated user
+        requires_vision: Whether the agent must support vision/images
+        
+    Returns:
+        First available agent
+        
+    Raises:
+        HTTPException: If no suitable agent is found
+    """
+    # Superusers see all active agents
+    if current_user.is_superuser:
+        query = select(Agent).where(Agent.is_active == True)
+        if requires_vision:
+            query = query.join(Agent.llm_model).where(Agent.llm_model.has(supports_vision=True))
+        result = await db.execute(query.limit(1))
+        agent = result.scalar_one_or_none()
+        if agent:
+            return agent
+    
+    # Get public agents
+    public_query = select(Agent).where(Agent.is_active == True, Agent.is_public == True)
+    if requires_vision:
+        public_query = public_query.join(Agent.llm_model).where(Agent.llm_model.has(supports_vision=True))
+    public_result = await db.execute(public_query)
+    public_agents = list(public_result.scalars().all())
+    
+    # Get agents from user's subscription plan
+    plan_agents = []
+    if current_user.organization_id:
+        billing_result = await db.execute(
+            select(BillingAccount, SubscriptionPlan)
+            .join(SubscriptionPlan, BillingAccount.subscription_plan_id == SubscriptionPlan.id)
+            .where(
+                BillingAccount.organization_id == current_user.organization_id,
+                BillingAccount.subscription_status.in_([
+                    SubscriptionStatus.ACTIVE,
+                    SubscriptionStatus.TRIALING
+                ])
+            )
+        )
+        row = billing_result.one_or_none()
+        if row:
+            _, plan = row
+            plan_with_agents = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.id == plan.id)
+            )
+            plan_obj = plan_with_agents.scalar_one()
+            plan_agents = [
+                a for a in plan_obj.agents 
+                if a.is_active and (not requires_vision or (a.llm_model and a.llm_model.supports_vision))
+            ]
+    
+    # Combine and get first one
+    all_agents = {agent.id: agent for agent in public_agents + plan_agents}
+    
+    if not all_agents:
+        if requires_vision:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="No agents with vision support available for your subscription"
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="No agents available for your subscription"
+        )
+    
+    # Return first available agent
+    return next(iter(all_agents.values()))
+
+
 async def _get_active_prompt(agent_id: int, db: AsyncSession) -> PromptVersion | None:
     result = await db.execute(
         select(PromptVersion)
@@ -117,6 +197,117 @@ async def _get_active_prompt(agent_id: int, db: AsyncSession) -> PromptVersion |
         .order_by(PromptVersion.updated_at.desc())
     )
     return result.scalars().first()
+
+
+@router.post("/invoke", response_model=AgentResponse)
+async def invoke_auto_agent(
+    payload: AgentInvokeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Invoke the first available agent automatically.
+    If image_path is provided, selects an agent with vision support.
+    """
+    # Determine if vision support is required
+    requires_vision = payload.image_path is not None
+    
+    # Get first available agent
+    agent = await _get_first_available_agent(db, current_user, requires_vision)
+    
+    # Check usage limits through Policy Engine
+    usage_info = await policy_engine.check_usage_limits(db, current_user, agent.id)
+    
+    if not usage_info["allowed"]:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "message": usage_info["reason"],
+                "should_upgrade": usage_info["should_upgrade"],
+                "free_remaining": usage_info["free_remaining"],
+                "paid_remaining": usage_info["paid_remaining"]
+            }
+        )
+
+    # Merge variables ensuring 'input' is present
+    variables = {"input": payload.input, **payload.variables}
+    
+    # Add image_path to variables if provided
+    if payload.image_path:
+        variables["image_path"] = payload.image_path
+
+    prompt_version = await _get_active_prompt(agent.id, db)
+
+    if payload.stream:
+        # Streaming response using text/event-stream
+        async def streamer() -> AsyncGenerator[bytes, None]:
+            async for chunk in await agent_runtime.run(
+                agent, variables, prompt_version=prompt_version, stream=True
+            ):
+                yield chunk.encode()
+        
+        # Increment usage counter after successful invocation
+        await policy_engine.increment_usage(db, current_user)
+
+        return StreamingResponse(streamer(), media_type="text/plain")
+
+    output, usage_tokens = await agent_runtime.run(
+        agent, variables, prompt_version=prompt_version, stream=False
+    )
+    
+    # Increment usage counter after successful invocation
+    await policy_engine.increment_usage(db, current_user)
+
+    # Persist detailed usage record with token counts
+    prompt_tokens = int(usage_tokens.get("prompt_tokens", 0)) if usage_tokens else 0
+    completion_tokens = int(usage_tokens.get("completion_tokens", 0)) if usage_tokens else 0
+    total_tokens = int(usage_tokens.get("total_tokens", 0)) if usage_tokens else 0
+
+    model_name = agent.llm_model.name if agent.llm_model else agent.model_name
+    cost_in = agent.llm_model.cost_per_1k_input_tokens if agent.llm_model else None
+    cost_out = agent.llm_model.cost_per_1k_output_tokens if agent.llm_model else None
+    cost_value = Decimal("0")
+    if cost_in is not None:
+        cost_value += Decimal(cost_in) * Decimal(prompt_tokens) / Decimal(1000)
+    if cost_out is not None:
+        cost_value += Decimal(cost_out) * Decimal(completion_tokens) / Decimal(1000)
+
+    try:
+        record = UsageRecord(
+            user_id=current_user.id,
+            endpoint=f"/agents/invoke",
+            method="POST",
+            channel="api",
+            model_name=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            response_time_ms=0,
+            status_code=200,
+            cost=cost_value,
+            error_message=None,
+            meta=None,
+            has_image=payload.image_path is not None,
+        )
+        db.add(record)
+        await db.commit()
+    except Exception as log_err:
+        await db.rollback()
+        logger.warning(f"Failed to persist usage record for agent {agent.id}: {log_err}")
+    
+    return AgentResponse(
+        agent_id=agent.id,
+        agent_name=agent.name,
+        output=output,
+        model=model_name,
+        processed_image=payload.image_path is not None,
+        usage=UsageInfo(
+            free_remaining=usage_info["free_remaining"],
+            paid_remaining=usage_info["paid_remaining"],
+            should_upgrade=usage_info["should_upgrade"]
+        ),
+        usage_tokens=total_tokens
+    )
 
 
 @router.post("/{agent_id}/invoke", response_model=AgentResponse)
@@ -202,8 +393,10 @@ async def invoke_agent(
     
     return AgentResponse(
         agent_id=agent_id,
+        agent_name=agent.name,
         output=output,
         model=model_name,
+        processed_image=False,
         usage=UsageInfo(
             free_remaining=usage_info["free_remaining"],
             paid_remaining=usage_info["paid_remaining"],
