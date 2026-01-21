@@ -829,11 +829,22 @@
                     const date = new Date(event.created_at).toLocaleDateString() + ' ' + new Date(event.created_at).toLocaleTimeString();
                     const statusClass = event.status_code && event.status_code >= 400 ? 'status-error' : 'status-ok';
                     
+                    // Add token info to description with image indicator
+                    let enhancedDescription = event.description;
+                    if (event.total_tokens) {
+                        const tokenBadge = event.has_image ? 
+                            `<span class="token-badge token-with-image">📷 ${event.total_tokens.toLocaleString()} tokens</span>` :
+                            `<span class="token-badge">${event.total_tokens.toLocaleString()} tokens</span>`;
+                        // Remove existing token info from description
+                        enhancedDescription = enhancedDescription.replace(/ • [\d,]+ tokens/g, '');
+                        enhancedDescription += ` ${tokenBadge}`;
+                    }
+                    
                     html += `
                         <div class="activity-entry activity-${event.type}">
                             <div class="activity-entry__left">
                                 <div class="activity-title">${event.title}</div>
-                                <div class="activity-description">${event.description}</div>
+                                <div class="activity-description">${enhancedDescription}</div>
                                 <div class="activity-meta">${date}</div>
                                 ${event.error_message ? `<div class="activity-error">Error: ${event.error_message}</div>` : ''}
                             </div>

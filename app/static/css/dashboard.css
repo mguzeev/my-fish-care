@@ -328,6 +328,36 @@
     align-items: flex-end;
 }
 
+.activity-title {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.activity-description {
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Token badge styling */
+.token-badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #e0e7ff;
+    color: #4338ca;
+    white-space: nowrap;
+}
+
+.token-badge.token-with-image {
+    background: #fce7f3;
+    color: #be185d;
+}
+
 .activity-method {
     display: inline-block;
     padding: 0.25rem 0.5rem;

@@ -115,6 +115,7 @@ class ActivityEventResponse(BaseModel):
 	status_code: Optional[int] = None  # For usage events
 	response_time_ms: Optional[int] = None  # For usage events  
 	total_tokens: Optional[int] = None  # For usage events
+	has_image: Optional[bool] = None  # For usage events with images
 	cost: Optional[Decimal] = None  # For usage/payment events
 	error_message: Optional[str] = None  # For error events
 	created_at: datetime  # When event occurred
@@ -573,6 +574,8 @@ async def get_activity_events(
 	for record in usage_result.scalars().all():
 		if '/agents/' in record.endpoint and '/invoke' in record.endpoint:
 			title = "🤖 AI Agent Query"
+			if record.has_image:
+				title = "📷 AI Vision Query"
 			description = f"Used AI agent"
 			if record.total_tokens > 0:
 				description += f" • {record.total_tokens:,} tokens"
@@ -580,6 +583,8 @@ async def get_activity_events(
 				description += f" • ${record.cost}"
 		elif '/telegram/' in record.endpoint:
 			title = "📱 Telegram Query"  
+			if record.has_image:
+				title = "📷 Telegram Photo"
 			description = "Used agent via Telegram"
 			if record.total_tokens > 0:
 				description += f" • {record.total_tokens:,} tokens"
@@ -597,6 +602,7 @@ async def get_activity_events(
 			status_code=record.status_code,
 			response_time_ms=record.response_time_ms,
 			total_tokens=record.total_tokens if record.total_tokens > 0 else None,
+			has_image=record.has_image,
 			cost=record.cost if record.cost > 0 else None,
 			error_message=record.error_message,
 			created_at=record.created_at
