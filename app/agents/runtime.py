@@ -123,6 +123,8 @@ class AgentRuntime:
 			media_dir = Path(settings.base_dir) / "media"
 			full_path = media_dir / image_path
 			
+			logger.info(f"Loading image: image_path={image_path}, full_path={full_path}, exists={full_path.exists()}")
+			
 			if not full_path.exists():
 				logger.warning(f"Image file not found: {full_path}")
 				return None
@@ -143,6 +145,7 @@ class AgentRuntime:
 			}
 			mime_type = mime_types.get(extension, 'image/jpeg')
 			
+			logger.info(f"Image loaded successfully: {len(image_data)} bytes, mime_type={mime_type}")
 			return f"data:{mime_type};base64,{base64_image}"
 		except Exception as e:
 			logger.error(f"Error loading image {image_path}: {e}")
@@ -214,9 +217,12 @@ class AgentRuntime:
 		image_path = variables.get("image_path")
 		image_data_url = None
 		if image_path:
+			logger.info(f"Image requested in agent run: {image_path}")
 			image_data_url = self._load_image_as_base64(image_path)
 			if not image_data_url:
 				logger.warning(f"Failed to load image: {image_path}, continuing without image")
+			else:
+				logger.info(f"Image loaded successfully for agent run")
 
 		if stream:
 			return self._stream_completion(

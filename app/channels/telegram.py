@@ -545,11 +545,14 @@ class TelegramChannel(BaseChannel):
                 prompt_version = await _get_active_prompt(agent.id, db)
                 
                 # Run agent with image
-                relative_path = f"media/uploads/{filename}"
+                # Path relative to media directory (runtime prepends media/)
+                relative_path = f"uploads/{filename}"
                 variables = {
                     "input": caption,
                     "image_path": relative_path
                 }
+                
+                logger.info(f"Processing Telegram photo: {filename}, agent: {agent.name}, caption: {caption}")
                 
                 output, usage_tokens = await agent_runtime.run(
                     agent, variables, prompt_version=prompt_version, stream=False
