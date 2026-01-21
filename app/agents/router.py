@@ -336,6 +336,10 @@ async def invoke_agent(
 
     # Merge variables ensuring 'input' is present
     variables = {"input": payload.input, **payload.variables}
+    
+    # Add image_path to variables if provided
+    if payload.image_path:
+        variables["image_path"] = payload.image_path
 
     prompt_version = await _get_active_prompt(agent.id, db)
 
@@ -384,6 +388,7 @@ async def invoke_agent(
             cost=cost_value,
             error_message=None,
             meta=None,
+            has_image=payload.image_path is not None,
         )
         db.add(record)
         await db.commit()
