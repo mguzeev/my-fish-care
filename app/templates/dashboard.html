@@ -221,6 +221,7 @@
     <script>
         let currentUser = null;
         let activityLogLoaded = false;
+        let agentCapabilities = null; // Store agent capabilities
         const API_BASE = '';
 
         // Get auth tokens from URL or localStorage
@@ -706,8 +707,24 @@
         async function sendQuery() {
             const query = document.getElementById('queryInput').value.trim();
             
-            if (!query) {
+            // Validate input based on capabilities
+            const hasImage = selectedImage || uploadedImagePath;
+            
+            // If no text and no image - error
+            if (!query && !hasImage) {
+                showAlert('Please enter a query or upload an image', 'error');
+                return;
+            }
+            
+            // If text is required but not provided (no image and text-only model)
+            if (!query && agentCapabilities && !agentCapabilities.supports_vision) {
                 showAlert('Please enter a query', 'error');
+                return;
+            }
+            
+            // If image is required but not provided (no text and vision-only model)
+            if (!hasImage && agentCapabilities && !agentCapabilities.supports_text && query) {
+                showAlert('This agent requires an image. Please upload an image.', 'error');
                 return;
             }
 
@@ -887,7 +904,8 @@
             if (!section.classList.contains('hidden')) {
                 loadActivityLog();
                 activityLogLoaded = true;
-            } else {
+            } elagentCapabilities = capabilities; // Store globally
+                se {
                 activityLogLoaded = false;
             }
         }
