@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from typing import Optional
 from pathlib import Path
 from app.core.config import settings, validate_paddle_settings
@@ -57,6 +58,16 @@ app = FastAPI(
     version=settings.app_version,
     debug=settings.debug,
     lifespan=lifespan,
+)
+
+# Add Session Middleware (required for OAuth)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    session_cookie="bot_session",
+    max_age=3600,  # 1 hour
+    same_site="lax",
+    https_only=not settings.debug,  # Use secure cookies in production
 )
 
 # Configure CORS

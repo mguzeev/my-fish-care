@@ -14,8 +14,13 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     username: Mapped[Optional[str]] = mapped_column(String(100), unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    hashed_password: Mapped[Optional[str]] = mapped_column(String(255))  # Optional for OAuth users
     full_name: Mapped[Optional[str]] = mapped_column(String(255))
+    
+    # OAuth
+    oauth_provider: Mapped[Optional[str]] = mapped_column(String(50))  # google, telegram, etc.
+    oauth_id: Mapped[Optional[str]] = mapped_column(String(255), index=True)  # OAuth provider's user ID
+    picture_url: Mapped[Optional[str]] = mapped_column(String(500))  # Profile picture URL
     # Localization
     locale: Mapped[str] = mapped_column(String(10), default="en", nullable=False)
     

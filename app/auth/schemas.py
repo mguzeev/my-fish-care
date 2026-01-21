@@ -1,5 +1,6 @@
 """Pydantic schemas for authentication."""
 from typing import Optional
+from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field, validator
 from app.core.config import settings
 
@@ -61,6 +62,11 @@ class UserResponse(BaseModel):
     is_verified: bool
     is_superuser: bool
     role: str
+    # OAuth fields
+    oauth_provider: Optional[str] = None
+    picture_url: Optional[str] = None
+    email_verified_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True

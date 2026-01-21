@@ -321,7 +321,17 @@
                 // Update header
                 document.getElementById('userName').textContent = user.full_name || user.username;
                 document.getElementById('userEmail').textContent = user.email;
-                document.getElementById('userAvatar').textContent = (user.full_name || user.username).charAt(0).toUpperCase();
+                
+                // Update avatar - use picture_url if available, otherwise use initial
+                const avatarElement = document.getElementById('userAvatar');
+                if (user.picture_url) {
+                    avatarElement.style.backgroundImage = `url(${user.picture_url})`;
+                    avatarElement.style.backgroundSize = 'cover';
+                    avatarElement.style.backgroundPosition = 'center';
+                    avatarElement.textContent = '';
+                } else {
+                    avatarElement.textContent = (user.full_name || user.username).charAt(0).toUpperCase();
+                }
 
                 // Show admin link if user is superuser
                 if (user.is_superuser) {

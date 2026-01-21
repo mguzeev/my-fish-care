@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google OAuth Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            margin: 10px;
+            background-color: #4285f4;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #357ae8;
+        }
+        .google-btn {
+            background-color: #fff;
+            color: #444;
+            border: 1px solid #ddd;
+            padding: 10px 24px;
+        }
+        .google-btn:hover {
+            background-color: #f8f8f8;
+        }
+        .google-btn img {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .token-display {
+            margin-top: 30px;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            word-break: break-all;
+            text-align: left;
+        }
+        .token-label {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Google OAuth Authentication Test</h1>
+    <p>Test Google OAuth integration for bot-generic</p>
+    
+    <div>
+        <a href="/auth/google/login" class="btn google-btn">
+            <img src="https://www.google.com/favicon.ico" alt="Google">
+            Sign in with Google
+        </a>
+    </div>
+    
+    <div id="tokens" class="token-display" style="display:none;">
+        <h3>Authentication Successful!</h3>
+        <div class="token-label">Access Token:</div>
+        <div id="access-token"></div>
+        <div class="token-label">Refresh Token:</div>
+        <div id="refresh-token"></div>
+    </div>
+
+    <script>
+        // Parse URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+            // Display tokens
+            document.getElementById('tokens').style.display = 'block';
+            document.getElementById('access-token').textContent = accessToken;
+            document.getElementById('refresh-token').textContent = refreshToken;
+            
+            // Store in localStorage
+            localStorage.setItem('access_token', accessToken);
+            localStorage.setItem('refresh_token', refreshToken);
+            
+            console.log('Tokens stored in localStorage');
+        }
+    </script>
+</body>
+</html>

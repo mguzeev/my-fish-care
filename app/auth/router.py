@@ -1,6 +1,7 @@
 """Authentication router."""
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -8,6 +9,7 @@ import hmac
 import hashlib
 import logging
 from urllib.parse import urlencode
+from authlib.integrations.starlette_client import OAuthError
 from app.core.database import get_db
 from app.core.security import (
     verify_password,
@@ -37,6 +39,7 @@ from app.auth.schemas import (
     MessageResponse,
 )
 from app.auth.dependencies import get_current_user, get_current_active_user
+from app.auth.oauth import oauth, get_google_user_info
 from app.models.user import User
 from app.models.organization import Organization
 from app.models.billing import BillingAccount, SubscriptionPlan, SubscriptionStatus
@@ -183,7 +186,20 @@ async def login(
     result = await db.execute(select(User).where(User.email == credentials.email))
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(credentials.password, user.hashed_password):
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+        )
+    
+    # Check if user registered via OAuth and has no password
+    if not user.hashed_password:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account uses social login. Please use 'Sign in with Google'",
+        )
+    
+    if not verify_password(credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -981,5 +997,200 @@ async def get_user(
         )
     
     return user
+
+
+@router.get("/google/login")
+async def google_login(request: Request):
+    """
+    Initiate Google OAuth login flow.
+    
+    Returns:
+        Redirect to Google's OAuth authorization page
+    """
+    if not settings.google_client_id or not settings.google_client_secret:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Google OAuth is not configured"
+        )
+    
+    # Construct redirect URI
+    redirect_uri = settings.google_redirect_uri or f"{settings.api_base_url}/auth/google/callback"
+    
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@router.get("/google/callback")
+async def google_callback(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Google OAuth callback.
+    
+    Args:
+        request: FastAPI request object
+        db: Database session
+        
+    Returns:
+        Redirect with token or error
+    """
+    try:
+        # Get the OAuth token
+        token = await oauth.google.authorize_access_token(request)
+        
+        # Get user info from Google
+        user_info = await get_google_user_info(token)
+        
+        # Extract user data
+        email = user_info.get('email')
+        google_id = user_info.get('sub')
+        full_name = user_info.get('name')
+        picture_url = user_info.get('picture')
+        email_verified = user_info.get('email_verified', False)
+        
+        if not email or not google_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to get email or user ID from Google"
+            )
+        
+        # Check if user exists by OAuth ID or email
+        result = await db.execute(
+            select(User).where(
+                (User.oauth_provider == 'google') & (User.oauth_id == google_id) |
+                (User.email == email)
+            )
+        )
+        user = result.scalar_one_or_none()
+        
+        if user:
+            # Update existing user's OAuth info if needed
+            if not user.oauth_provider:
+                user.oauth_provider = 'google'
+                user.oauth_id = google_id
+            
+            if picture_url and not user.picture_url:
+                user.picture_url = picture_url
+            
+            if email_verified and not user.email_verified_at:
+                user.email_verified_at = datetime.utcnow()
+                user.is_verified = True
+            
+            # Update last login
+            user.last_login_at = datetime.utcnow()
+            
+        else:
+            # Create new user
+            # Generate username from email if not provided
+            username = email.split('@')[0]
+            
+            # Ensure username is unique
+            counter = 1
+            original_username = username
+            while True:
+                result = await db.execute(select(User).where(User.username == username))
+                if not result.scalar_one_or_none():
+                    break
+                username = f"{original_username}{counter}"
+                counter += 1
+            
+            user = User(
+                email=email,
+                username=username,
+                full_name=full_name,
+                oauth_provider='google',
+                oauth_id=google_id,
+                picture_url=picture_url,
+                is_verified=email_verified,
+                email_verified_at=datetime.utcnow() if email_verified else None,
+                hashed_password=None,  # OAuth users don't need password
+            )
+            
+            db.add(user)
+            await db.flush()
+            
+            # Create organization for the new user
+            org = Organization(
+                name=f"{user.username}'s Organization",
+                slug=f"{user.username}-org".lower(),
+                description=f"Personal organization for {user.username}"
+            )
+            db.add(org)
+            await db.flush()
+            
+            # Assign user to organization
+            user.organization_id = org.id
+            
+            # Find default plan for new users
+            default_plan_result = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.is_default == True)
+            )
+            default_plan = default_plan_result.scalar_one_or_none()
+            
+            if not default_plan:
+                # Fallback to first available plan with free requests
+                fallback_result = await db.execute(
+                    select(SubscriptionPlan)
+                    .where(SubscriptionPlan.free_requests_limit > 0)
+                    .order_by(SubscriptionPlan.id)
+                )
+                default_plan = fallback_result.scalar_one_or_none()
+                
+                # If still no plan, create a default Free Trial plan
+                if not default_plan:
+                    from app.models.billing import SubscriptionInterval
+                    default_plan = SubscriptionPlan(
+                        name="Free Trial",
+                        interval=SubscriptionInterval.MONTHLY,
+                        price=0.00,
+                        currency="USD",
+                        max_requests_per_interval=0,
+                        max_tokens_per_request=2000,
+                        free_requests_limit=10,
+                        free_trial_days=0,
+                        has_api_access=False,
+                        has_priority_support=False,
+                        has_advanced_analytics=False,
+                        is_default=True
+                    )
+                    db.add(default_plan)
+                    await db.flush()
+            
+            # Create billing account with default plan
+            billing_account = BillingAccount(
+                organization_id=org.id,
+                subscription_plan_id=default_plan.id,
+                subscription_status=SubscriptionStatus.TRIALING,
+                free_requests_used=0,
+                requests_used_current_period=0,
+                one_time_requests_used=0,
+            )
+            db.add(billing_account)
+        
+        await db.commit()
+        
+        # Create tokens
+        access_token = create_access_token(data={"sub": user.id})
+        refresh_token = create_refresh_token(data={"sub": user.id})
+        
+        # Redirect to dashboard with tokens in query params
+        # Frontend will extract tokens and store them
+        redirect_url = f"/dashboard?access_token={access_token}&refresh_token={refresh_token}"
+        
+        return RedirectResponse(url=redirect_url)
+        
+    except OAuthError as e:
+        logger.error(f"OAuth error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth authentication failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Error during Google OAuth callback: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed"
+        )
+
 
 

@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     
+    # Google OAuth
+    google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_SECRET")
+    google_redirect_uri: Optional[str] = None  # Will be constructed from api_base_url if not set
+    
     # CORS
     cors_origins: list[str] = ["*"]
     cors_allow_credentials: bool = True
