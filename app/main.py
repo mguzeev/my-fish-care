@@ -61,6 +61,10 @@ app = FastAPI(
 )
 
 # Add Session Middleware (required for OAuth)
+# Important: For OAuth to work properly behind a proxy:
+# - Use same_site="none" in production for cross-site redirects from OAuth providers
+# - Set https_only=True in production for secure cookies
+# - Use consistent domain (no www/non-www mixing)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
@@ -69,6 +73,7 @@ app.add_middleware(
     same_site="none" if not settings.debug else "lax",  # "none" required for OAuth redirects in production
     https_only=not settings.debug,  # Use secure cookies in production
     path="/",  # Ensure cookie is available for all routes
+    domain=settings.session_cookie_domain,  # Set domain if needed (e.g., .myfishcare.com)
 )
 
 # Configure CORS

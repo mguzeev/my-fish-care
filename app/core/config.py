@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    session_cookie_domain: Optional[str] = None  # Cookie domain for session (e.g., .myfishcare.com)
     
     # Google OAuth
     google_client_id: Optional[str] = Field(default=None, alias="GOOGLE_CLIENT_ID")
