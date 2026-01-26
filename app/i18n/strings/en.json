@@ -15,16 +15,18 @@
     "cancelled": "Registration cancelled. Use /register anytime to link your email."
   },
   "profile": {
-    "header": "👤 *Your Profile*",
-    "name": "Name: {name}",
-    "username": "Username: @{username}",
-    "email": "Email: {email}",
-    "role": "Plan: {role}",
-    "status_active": "Status: ✅ Active",
-    "status_inactive": "Status: ❌ Inactive",
-    "verified_yes": "Verified: ✅ Yes",
-    "verified_no": "Verified: ❌ No",
-    "not_linked": "👤 Account not linked yet.\n\nTelegram ID: {telegram_id}\n\nRegister on our website or use /register to link your account and access:\n• More monthly reports\n• Priority processing\n• Extended history"
+    "header": "👤 {name}",
+    "current_plan": "\n📊 *Your Plan*",
+    "plan_name": "Plan: {plan_name}",
+    "plan_type": "Type: {plan_type}",
+    "plan_status": "Status: {status}",
+    "free_requests": "🎁 Free reports: {remaining} of {limit} remaining",
+    "subscription_requests": "📊 Monthly reports: {remaining} of {limit} remaining",
+    "onetime_credits": "💳 Credits: {remaining} of {total}",
+    "unlimited": "Unlimited",
+    "next_billing": "Next billing: {date}",
+    "upgrade_prompt": "\n💎 Upgrade to get more reports and priority processing",
+    "not_linked": "👤 Account not linked yet.\n\nTelegram ID: {telegram_id}\n\nRegister on our website or use /register to link your account."
   },
   "echo": {
     "response": "📝 Text messages are not supported.\n\n🐠 Please send a *photo* of your aquarium fish to receive informational insights."

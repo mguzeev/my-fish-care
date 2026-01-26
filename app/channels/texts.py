@@ -37,23 +37,51 @@ def register_success(email: str, locale: Optional[str]) -> str:
 
 def profile_text(
     name: Optional[str],
-    username: str,
-    email: str,
-    role: str,
-    is_active: bool,
-    is_verified: bool,
     locale: Optional[str],
+    plan_name: str,
+    plan_type: str,
+    status: str,
+    free_requests_limit: int = 0,
+    free_requests_remaining: int = 0,
+    subscription_limit: Optional[int] = None,
+    subscription_remaining: Optional[int] = None,
+    onetime_total: Optional[int] = None,
+    onetime_remaining: Optional[int] = None,
+    next_billing_date: Optional[str] = None,
 ) -> str:
-    header = i18n.t("profile.header", locale)
-    lines = [
-        header,
-        i18n.t("profile.name", locale, name=name or "Not set"),
-        i18n.t("profile.username", locale, username=username),
-        i18n.t("profile.email", locale, email=email),
-        i18n.t("profile.role", locale, role=role),
-        i18n.t("profile.status_active", locale) if is_active else i18n.t("profile.status_inactive", locale),
-        i18n.t("profile.verified_yes", locale) if is_verified else i18n.t("profile.verified_no", locale),
-    ]
+    lines = [i18n.t("profile.header", locale, name=name or "User")]
+    lines.append(i18n.t("profile.current_plan", locale))
+    lines.append(i18n.t("profile.plan_name", locale, plan_name=plan_name))
+    lines.append(i18n.t("profile.plan_type", locale, plan_type=plan_type))
+    lines.append(i18n.t("profile.plan_status", locale, status=status))
+    
+    # Free requests
+    if free_requests_limit > 0:
+        lines.append(i18n.t("profile.free_requests", locale, 
+                          remaining=free_requests_remaining, 
+                          limit=free_requests_limit))
+    
+    # Subscription requests
+    if subscription_limit is not None and subscription_limit > 0:
+        lines.append(i18n.t("profile.subscription_requests", locale,
+                          remaining=subscription_remaining or 0,
+                          limit=subscription_limit))
+    elif subscription_limit == 0:
+        lines.append(i18n.t("profile.unlimited", locale))
+    
+    # One-time credits
+    if onetime_total is not None and onetime_total > 0:
+        lines.append(i18n.t("profile.onetime_credits", locale,
+                          remaining=onetime_remaining or 0,
+                          total=onetime_total))
+    
+    # Next billing
+    if next_billing_date:
+        lines.append(i18n.t("profile.next_billing", locale, date=next_billing_date))
+    
+    # Upgrade prompt
+    lines.append(i18n.t("profile.upgrade_prompt", locale))
+    
     return "\n".join(lines)
 
 

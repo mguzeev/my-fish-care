@@ -298,20 +298,123 @@ class TelegramChannel(BaseChannel):
             )
             user = result.scalar_one_or_none()
             
-            if user:
-                text = profile_text(
-                    name=user.full_name,
-                    username=user.username,
-                    email=user.email,
-                    role=user.role,
-                    is_active=user.is_active,
-                    is_verified=user.is_verified,
-                    locale=user.locale,
-                )
-            else:
+            if not user:
                 text = profile_not_linked_text(user_id, None)
-        
-        await update.message.reply_text(text)
+                await update.message.reply_text(text)
+                return
+            
+            # Get organization and billing account
+            from app.models.organization import Organization
+            from app.models.billing import BillingAccount, SubscriptionPlan, PlanType
+            
+            org_result = await db.execute(
+                select(Organization).where(Organization.id == user.organization_id)
+            )
+            organization = org_result.scalar_one_or_none()
+            
+            if not organization:
+                text = profile_not_linked_text(user_id, user.locale)
+                await update.message.reply_text(text)
+                return
+            
+            # Get billing account
+            billing_result = await db.execute(
+                select(BillingAccount).where(BillingAccount.organization_id == organization.id)
+            )
+            billing = billing_result.scalar_one_or_none()
+            
+            # Get subscription plan if exists
+            plan_name = "Free"
+            plan_type = "Free Trial"
+            status = "TRIALING"
+            free_limit = 3
+            free_remaining = 3
+            sub_limit = None
+            sub_remaining = None
+            onetime_total = None
+            onetime_remaining = None
+            next_billing = None
+            
+            if billing:
+                status = billing.subscription_status.value.upper()
+                free_limit = settings.free_requests_limit
+                free_remaining = max(0, free_limit - billing.free_requests_used)
+                
+                if billing.subscription_plan_id:
+                    plan_result = await db.execute(
+                        select(SubscriptionPlan).where(SubscriptionPlan.id == billing.subscription_plan_id)
+                    )
+                    plan = plan_result.scalar_one_or_none()
+                    if plan:
+                        plan_name = plan.name
+                        plan_type = "Subscription" if plan.plan_type == PlanType.SUBSCRIPTION else "One-Time"
+                        
+                        if plan.plan_type == PlanType.SUBSCRIPTION:
+                            sub_limit = plan.max_requests_per_period if plan.max_requests_per_period else 0
+                            if sub_limit:
+                                sub_remaining = max(0, sub_limit - billing.requests_used_current_period)
+                        elif plan.plan_type == PlanType.ONE_TIME:
+                            onetime_total = billing.one_time_purchases_count
+                            onetime_remaining = max(0, onetime_total - billing.one_time_requests_used)
+                
+                if billing.next_billing_date:
+                    next_billing = billing.next_billing_date.strftime("%Y-%m-%d")
+            
+            text = profile_text(
+                name=user.full_name,
+                locale=user.locale,
+                plan_name=plan_name,
+                plan_type=plan_type,
+                status=status,
+                free_requests_limit=free_limit,
+                free_requests_remaining=free_remaining,
+                subscription_limit=sub_limit,
+                subscription_remaining=sub_remaining,
+                onetime_total=onetime_total,
+                onetime_remaining=onetime_remaining,
+                next_billing_date=next_billing,
+            )
+            
+            # Create inline keyboard with plan buttons
+            keyboard = []
+            
+            # Get available plans
+            plans_result = await db.execute(
+                select(SubscriptionPlan).where(SubscriptionPlan.is_active == True).order_by(SubscriptionPlan.price)
+            )
+            plans = plans_result.scalars().all()
+            
+            # Group plans by type
+            subscription_plans = [p for p in plans if p.plan_type == PlanType.SUBSCRIPTION]
+            onetime_plans = [p for p in plans if p.plan_type == PlanType.ONE_TIME]
+            
+            # Add subscription plan buttons
+            if subscription_plans:
+                for plan in subscription_plans[:2]:  # Show max 2 subscription plans
+                    price_str = f"${float(plan.price):.0f}/mo" if plan.interval == "monthly" else f"${float(plan.price):.0f}/yr"
+                    keyboard.append([InlineKeyboardButton(
+                        f"📊 {plan.name} - {price_str}",
+                        url=f"{settings.telegram_base_url}/billing/upgrade?lang={user.locale}"
+                    )])
+            
+            # Add one-time plan button
+            if onetime_plans:
+                plan = onetime_plans[0]  # Show first one-time plan
+                price_str = f"${float(plan.price):.2f}"
+                keyboard.append([InlineKeyboardButton(
+                    f"💳 {plan.name} - {price_str}",
+                    url=f"{settings.telegram_base_url}/billing/upgrade?lang={user.locale}"
+                )])
+            
+            # Add "View All Plans" button
+            keyboard.append([InlineKeyboardButton(
+                "💎 View All Plans",
+                url=f"{settings.telegram_base_url}/billing/upgrade?lang={user.locale}"
+            )])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
+            
+        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=reply_markup)
 
     async def handle_locale(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         """
