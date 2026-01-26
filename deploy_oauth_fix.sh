@@ -29,7 +29,7 @@ echo -e "${YELLOW}3. Copying updated application code...${NC}"
 echo -e "${GREEN}✓ Application code updated${NC}"
 echo ""
 echo -e "${YELLOW}4. Updating nginx configuration...${NC}"
-sudo cp ~/maks/my-fish-care/nginx-my-fish-care.conf /etc/nginx/sites-available/my-fish-care
+sudo cp ./nginx-my-fish-care.conf /etc/nginx/sites-available/my-fish-care
 echo "Testing nginx configuration..."
 if sudo nginx -t; then
     echo -e "${GREEN}✓ Nginx configuration is valid${NC}"
