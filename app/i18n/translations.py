@@ -2,7 +2,7 @@
 
 TRANSLATIONS = {
     "en": {
-        "site_name": "Bot Generic",
+        "site_name": "MyFishCare",
         "tagline": "Powerful AI Platform for Your Business",
         "nav_home": "Home",
         "nav_features": "Features",
@@ -55,7 +55,7 @@ TRANSLATIONS = {
         "already_member": "Already a member?",
     },
     "ru": {
-        "site_name": "Bot Generic",
+        "site_name": "MyFishCare",
         "tagline": "Мощная платформа искусственного интеллекта для вашего бизнеса",
         "nav_home": "Главная",
         "nav_features": "Возможности",
@@ -108,7 +108,7 @@ TRANSLATIONS = {
         "already_member": "Уже зарегистрированы?",
     },
     "uk": {
-        "site_name": "Bot Generic",
+        "site_name": "MyFishCare",
         "tagline": "Потужна платформа штучного інтелекту для вашого бізнесу",
         "nav_home": "Головна",
         "nav_features": "Можливості",
