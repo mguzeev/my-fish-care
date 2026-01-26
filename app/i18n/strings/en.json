@@ -1,52 +1,51 @@
 {
   "help": {
-    "text": "📚 *Available Commands:*\n\n/start - Start the bot\n/help - Show this help message\n/profile - Show your profile\n/register - Link your email\n/locale - Change language\n\n💬 *How to use:*\nJust send me any message and I'll respond using AI!"
+    "text": "� *MyFishCare - Informational Fish Analysis*\n\n📸 *How to use:*\nSend me a photo of your aquarium fish to receive informational insights about potential visual risk signals.\n\n📋 *Available Commands:*\n/start - Start the bot\n/help - Show this help\n/profile - Your profile\n/register - Link your email\n/locale - Change language (en/ru/uk)\n\n⚠️ *Important:*\nThis is an informational service only. Not veterinary advice or diagnosis. For actual health concerns, consult a qualified aquarium veterinarian."
   },
   "start": {
-    "welcome_existing": "Welcome back, {name}! 👋",
-    "welcome_new": "Hello! 👋\n\nI'm your AI assistant bot. To get started, please register and link Telegram.\n\nYour Telegram ID: {telegram_id}",
-    "auto_registered": "Welcome! 👋\n\nYou've been automatically registered!\n\nUsername: @{username}\n\nYou can now use the bot. To link your email, use /register command."
+    "welcome_existing": "Welcome back, {name}! 👋\n\n🐠 Send me a photo of your fish to get started.\n\n💡 Remember: This is informational analysis only, not veterinary diagnosis.",
+    "welcome_new": "Hello! 👋\n\n🐠 *MyFishCare* - Informational insights for aquarium fish\n\nSend a photo of your fish to receive:\n• General visual observations\n• Potential risk indicators\n• Common mistakes to avoid\n• When to seek professional consultation\n\n⚠️ This is NOT veterinary advice. All decisions remain your responsibility.\n\nYour Telegram ID: {telegram_id}",
+    "auto_registered": "Welcome! 👋\n\n🐠 You're registered! Username: @{username}\n\nSend me a fish photo to get informational insights.\n\n💡 Use /register to link your email for additional features."
   },
   "register": {
-    "already_linked": "Your account is already registered and active!\n\nEmail: {email}\nUsername: @{username}",
-    "prompt_email": "Please send me your email address to complete registration.",
-    "invalid_email": "Invalid email format. Please send a valid email address.",
-    "success": "✅ Email linked successfully!\n\nEmail: {email}\n\nYou can now use all features.",
-    "cancelled": "Registration cancelled. You can use /register anytime to link your email."
+    "already_linked": "✅ Account active!\n\nEmail: {email}\nUsername: @{username}\n\nYou can now use all informational analysis features.",
+    "prompt_email": "📧 Please send your email address to complete registration and access extended features.",
+    "invalid_email": "❌ Invalid email format. Please send a valid email address.",
+    "success": "✅ Email linked successfully!\n\nEmail: {email}\n\nYou now have access to:\n• Priority informational reports\n• Extended analysis history\n• Multiple reports per month",
+    "cancelled": "Registration cancelled. Use /register anytime to link your email."
   },
   "profile": {
     "header": "👤 *Your Profile*",
     "name": "Name: {name}",
     "username": "Username: @{username}",
     "email": "Email: {email}",
-    "role": "Role: {role}",
+    "role": "Plan: {role}",
     "status_active": "Status: ✅ Active",
     "status_inactive": "Status: ❌ Inactive",
     "verified_yes": "Verified: ✅ Yes",
     "verified_no": "Verified: ❌ No",
-    "not_linked": "You haven't linked your account yet.\n\nYour Telegram ID: {telegram_id}\n\nPlease register on our web app and link your Telegram."
+    "not_linked": "👤 Account not linked yet.\n\nTelegram ID: {telegram_id}\n\nRegister on our website or use /register to link your account and access:\n• More monthly reports\n• Priority processing\n• Extended history"
   },
   "echo": {
-    "response": "You said: {text}\n\n(AI processing will be implemented in the next step)"
+    "response": "📝 Text messages are not supported.\n\n🐠 Please send a *photo* of your aquarium fish to receive informational insights."
   },
   "errors": {
-    "please_start": "Please use /start to register first.",
-    "inactive": "Your account is inactive. Please contact support.",
-    "unsupported_locale": "Unsupported locale",
-    "usage_limit": "⚠️ You've reached your usage limit. Please upgrade your plan.",
-    "file_too_large": "⚠️ File is too large. Maximum size is 10 MB.",
-    "general": "❌ An error occurred. Please try again later.",
-    "text_not_supported": "📝 Sorry, this agent can only process images. Text messages are not supported.",
-    "vision_not_supported": "🖼️ Sorry, this agent can only process text. Image messages are not supported."
-  }
-  ,
+    "please_start": "Please use /start to begin.",
+    "inactive": "❌ Your account is inactive. Please contact support.",
+    "unsupported_locale": "Unsupported language",
+    "usage_limit": "⚠️ *Monthly limit reached*\n\nYou've used all your free informational reports for this month.\n\n💎 Upgrade options:\n• One-time report: $2.99\n• Monthly subscription: $9.99 (30 reports)\n\nVisit our website or contact support to upgrade.",
+    "file_too_large": "⚠️ Image too large. Maximum size: 10 MB.\n\nPlease send a smaller photo.",
+    "general": "❌ Error occurred. Please try again or contact support.",
+    "text_not_supported": "📝 This service analyzes fish photos only.\n\n🐠 Please send an image of your aquarium fish for informational insights.",
+    "vision_not_supported": "⚠️ Image analysis temporarily unavailable. Please try again later or contact support."
+  },
   "locale": {
-    "usage": "Usage: /locale <code>\nAvailable: {locales}",
-    "success": "✅ Locale changed to: {code}",
-    "invalid": "Unsupported locale. Available: {locales}"
+    "usage": "🌍 Change language: /locale <code>\n\nAvailable: {locales}",
+    "success": "✅ Language changed to: {code}",
+    "invalid": "❌ Unsupported language. Available: {locales}"
   },
   "photo": {
-    "processing": "🖼️ Processing image...",
-    "no_vision_agent": "⚠️ No vision-capable AI model is available. Please contact support."
+    "processing": "🔍 Analyzing your fish photo...\n\n⏳ This may take 10-30 seconds.\n\n💡 Remember: This is informational analysis, not medical diagnosis.",
+    "no_vision_agent": "⚠️ *Image analysis unavailable*\n\nNo vision-capable AI model is currently available.\n\nPlease try again later or contact support."
   }
 }
