@@ -699,6 +699,43 @@
         </div>
     </div>
 
+    <!-- Edit Prompt Modal -->
+    <div id="editPromptModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Prompt Version</h2>
+                <button class="modal-close" onclick="closeModal('editPromptModal')">&times;</button>
+            </div>
+            <input type="hidden" id="editPromptId">
+            <div class="form-group">
+                <label>Prompt Name</label>
+                <input type="text" id="editPromptName" placeholder="e.g., Welcome Message">
+            </div>
+            <div class="form-group">
+                <label>Version</label>
+                <input type="text" id="editPromptVersion" placeholder="1.0.0">
+            </div>
+            <div class="form-group">
+                <label>System Prompt</label>
+                <textarea id="editPromptSystem" placeholder="You are a helpful assistant..."></textarea>
+                <small style="color: #666; margin-top: 4px; display: block;">💡 Tip: Use {locale} in system prompt to inject user's language (en/ru/uk)</small>
+            </div>
+            <div class="form-group">
+                <label>User Template</label>
+                <textarea id="editPromptTemplate" placeholder="Hello {name}, how can I help?"></textarea>
+            </div>
+            <div class="form-group">
+                <label class="form-checkbox">
+                    <input type="checkbox" id="editPromptActive"> Set as Active
+                </label>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="closeModal('editPromptModal')">Cancel</button>
+                <button class="btn-primary" onclick="updatePrompt()">Update Prompt</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Plan Modal -->
     <div id="createPlanModal" class="modal">
         <div class="modal-content">
@@ -2370,6 +2407,7 @@
                             <td>${new Date(prompt.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
+                                    <button class="btn-small btn-edit" onclick="editPrompt(${prompt.id})">Edit</button>
                                     ${!prompt.is_active ? `<button class="btn-small btn-view" onclick="activatePrompt(${prompt.id})">Activate</button>` : ''}
                                     <button class="btn-small btn-delete" onclick="deletePrompt(${prompt.id})">Delete</button>
                                 </div>
@@ -2458,6 +2496,65 @@
                 await loadAgentPrompts();
             } catch (error) {
                 showAlert('Failed to delete prompt: ' + error.message, 'error');
+            }
+        }
+
+        async function editPrompt(promptId) {
+            try {
+                const agentId = document.getElementById('agentSelect').value;
+                const prompts = await apiCall(`/admin/agents/${agentId}/prompts`);
+                const prompt = prompts.find(p => p.id === promptId);
+                
+                if (!prompt) {
+                    showAlert('Prompt not found', 'error');
+                    return;
+                }
+                
+                // Заполняем поля модального окна
+                document.getElementById('editPromptId').value = prompt.id;
+                document.getElementById('editPromptName').value = prompt.name;
+                document.getElementById('editPromptVersion').value = prompt.version;
+                document.getElementById('editPromptSystem').value = prompt.system_prompt;
+                document.getElementById('editPromptTemplate').value = prompt.user_template;
+                document.getElementById('editPromptActive').checked = prompt.is_active;
+                
+                openModal('editPromptModal');
+            } catch (error) {
+                showAlert('Failed to load prompt: ' + error.message, 'error');
+            }
+        }
+
+        async function updatePrompt() {
+            const promptId = document.getElementById('editPromptId').value;
+            const name = document.getElementById('editPromptName').value;
+            const version = document.getElementById('editPromptVersion').value;
+            const systemPrompt = document.getElementById('editPromptSystem').value;
+            const userTemplate = document.getElementById('editPromptTemplate').value;
+            const isActive = document.getElementById('editPromptActive').checked;
+            
+            if (!name || !systemPrompt || !userTemplate) {
+                showAlert('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            try {
+                await apiCall(`/admin/prompts/${promptId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name,
+                        version,
+                        system_prompt: systemPrompt,
+                        user_template: userTemplate,
+                        variables: [],
+                        is_active: isActive
+                    })
+                });
+                
+                showAlert('Prompt version updated successfully');
+                closeModal('editPromptModal');
+                await loadAgentPrompts();
+            } catch (error) {
+                showAlert('Failed to update prompt: ' + error.message, 'error');
             }
         }
         function viewOrg(id) {
