@@ -381,11 +381,11 @@ class TelegramChannel(BaseChannel):
             # Create inline keyboard with plan buttons
             keyboard = []
             
-            # Get available plans
+            # Get available plans (only valid ones with agents)
             plans_result = await db.execute(
-                select(SubscriptionPlan).where(SubscriptionPlan.is_active == True).order_by(SubscriptionPlan.price)
+                select(SubscriptionPlan).order_by(SubscriptionPlan.price)
             )
-            plans = plans_result.scalars().all()
+            plans = [p for p in plans_result.scalars().all() if p.is_valid]
             
             # Group plans by type
             subscription_plans = [p for p in plans if p.plan_type == PlanType.SUBSCRIPTION]
