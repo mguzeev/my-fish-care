@@ -82,6 +82,10 @@ class AgentRuntime:
 				],
 			)
 
+		# Replace {locale} placeholder in system prompt with actual locale
+		if "locale" in variables:
+			template.system = template.system.replace("{locale}", variables["locale"])
+
 		return template.render(variables)
 
 	def _load_variables(self, prompt_version: PromptVersion) -> List[PromptVariable]:

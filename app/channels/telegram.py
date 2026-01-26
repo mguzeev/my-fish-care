@@ -565,7 +565,7 @@ class TelegramChannel(BaseChannel):
                 prompt_version = await _get_active_prompt(agent.id, db)
                 
                 # Run agent
-                variables = {"input": message_text}
+                variables = {"input": message_text, "locale": user.locale}
                 output, usage_tokens = await agent_runtime.run(
                     agent, variables, prompt_version=prompt_version, stream=False
                 )
@@ -672,7 +672,8 @@ class TelegramChannel(BaseChannel):
                 relative_path = f"uploads/{filename}"
                 variables = {
                     "input": caption,
-                    "image_path": relative_path
+                    "image_path": relative_path,
+                    "locale": user.locale
                 }
                 
                 logger.info(f"Processing Telegram photo: {filename}, agent: {agent.name}, caption: {caption}")
