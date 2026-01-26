@@ -25,9 +25,7 @@ echo "GOOGLE_REDIRECT_URI=https://myfishcare.com/auth/google/callback${NC}"
 echo ""
 read -p "Press Enter after you've updated the .env file..."
 echo -e "${YELLOW}3. Copying updated application code...${NC}"
-sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' \
-    --exclude='.env*' --exclude='bot.db' --exclude='media/' \
-    ~/maks/my-fish-care/app/ "$PROD_DIR/app/"
+
 echo -e "${GREEN}✓ Application code updated${NC}"
 echo ""
 echo -e "${YELLOW}4. Updating nginx configuration...${NC}"
