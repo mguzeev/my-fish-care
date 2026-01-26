@@ -21,9 +21,9 @@
     "plan_type": "Type: {plan_type}",
     "plan_status": "Status: {status}",
     "free_requests": "🎁 Free reports: {remaining} of {limit} remaining",
-    "subscription_requests": "📊 Monthly reports: {remaining} of {limit} remaining",
+    "subscription_requests": "📊 Plan reports: {remaining} of {limit} remaining",
     "onetime_credits": "💳 Credits: {remaining} of {total}",
-    "unlimited": "Unlimited",
+    "unlimited": "📊 Plan reports: not counted",
     "next_billing": "Next billing: {date}",
     "upgrade_prompt": "\n💎 Upgrade to get more reports and priority processing",
     "not_linked": "👤 Account not linked yet.\n\nTelegram ID: {telegram_id}\n\nRegister on our website or use /register to link your account."
