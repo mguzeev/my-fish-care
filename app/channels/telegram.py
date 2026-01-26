@@ -349,12 +349,13 @@ class TelegramChannel(BaseChannel):
                         free_limit = plan.free_requests_limit or 0
                         
                         if plan.plan_type == PlanType.SUBSCRIPTION:
-                            sub_limit = plan.max_requests_per_period if plan.max_requests_per_period else 0
+                            sub_limit = plan.max_requests_per_interval if plan.max_requests_per_interval else 0
                             if sub_limit:
                                 sub_remaining = max(0, sub_limit - billing.requests_used_current_period)
                         elif plan.plan_type == PlanType.ONE_TIME:
-                            onetime_total = billing.one_time_purchases_count
-                            onetime_remaining = max(0, onetime_total - billing.one_time_requests_used)
+                            # For one-time plans, use the plan's limit
+                            onetime_total = plan.one_time_limit or billing.one_time_purchases_count
+                            onetime_remaining = max(0, onetime_total - billing.one_time_requests_used) if onetime_total else 0
                 
                 # Calculate free remaining
                 free_remaining = max(0, free_limit - billing.free_requests_used)
