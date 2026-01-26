@@ -327,7 +327,7 @@ class TelegramChannel(BaseChannel):
             plan_name = "Free"
             plan_type = "Free Trial"
             status = "TRIALING"
-            free_limit = 3
+            free_limit = 0  # No plan - no agents - no credits
             free_remaining = 3
             sub_limit = None
             sub_remaining = None
@@ -337,8 +337,6 @@ class TelegramChannel(BaseChannel):
             
             if billing:
                 status = billing.subscription_status.value.upper()
-                free_limit = settings.free_requests_limit
-                free_remaining = max(0, free_limit - billing.free_requests_used)
                 
                 if billing.subscription_plan_id:
                     plan_result = await db.execute(
@@ -348,6 +346,7 @@ class TelegramChannel(BaseChannel):
                     if plan:
                         plan_name = plan.name
                         plan_type = "Subscription" if plan.plan_type == PlanType.SUBSCRIPTION else "One-Time"
+                        free_limit = plan.free_requests_limit or 0
                         
                         if plan.plan_type == PlanType.SUBSCRIPTION:
                             sub_limit = plan.max_requests_per_period if plan.max_requests_per_period else 0
@@ -356,6 +355,9 @@ class TelegramChannel(BaseChannel):
                         elif plan.plan_type == PlanType.ONE_TIME:
                             onetime_total = billing.one_time_purchases_count
                             onetime_remaining = max(0, onetime_total - billing.one_time_requests_used)
+                
+                # Calculate free remaining
+                free_remaining = max(0, free_limit - billing.free_requests_used)
                 
                 if billing.next_billing_date:
                     next_billing = billing.next_billing_date.strftime("%Y-%m-%d")
