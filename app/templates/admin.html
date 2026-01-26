@@ -455,6 +455,18 @@
                     <option value="pending">Pending</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Free Requests Used</label>
+                <input type="number" id="editSubsFreeRequestsUsed" min="0">
+            </div>
+            <div class="form-group">
+                <label>One-Time Credits Purchased</label>
+                <input type="number" id="editSubsOneTimePurchased" min="0">
+            </div>
+            <div class="form-group">
+                <label>One-Time Credits Used</label>
+                <input type="number" id="editSubsOneTimeUsed" min="0">
+            </div>
             <div class="modal-footer">
                 <button class="btn-cancel" onclick="closeModal('editSubscriptionModal')">Cancel</button>
                 <button class="btn-primary" onclick="saveSubscriptionChanges()">Save</button>
@@ -1423,6 +1435,7 @@
                             <td>${new Date(sub.created_at).toLocaleDateString()}</td>
                             <td>
                                 <div class="action-buttons">
+                                    <button class="btn-small btn-primary" onclick="viewBillingAccountDetails(${sub.id})">👁️ Details</button>
                                     <button class="btn-small btn-edit" onclick="editSubscription(${sub.id})">Edit</button>
                                     <button class="btn-small btn-delete" onclick="deleteSubscription(${sub.id})">Delete</button>
                                 </div>
@@ -1700,6 +1713,12 @@
                 document.getElementById('editSubsOrg').value = sub.organization_name;
                 document.getElementById('editSubsStatus').value = sub.status;
                 
+                // Load full billing details to get credit info
+                const details = await apiCall(`/admin/subscriptions/${subId}/details`);
+                document.getElementById('editSubsFreeRequestsUsed').value = details.free_requests_used || 0;
+                document.getElementById('editSubsOneTimePurchased').value = details.one_time_purchases_count || 0;
+                document.getElementById('editSubsOneTimeUsed').value = details.one_time_requests_used || 0;
+                
                 openModal('editSubscriptionModal');
             } catch (error) {
                 showAlert('Failed to load subscription details: ' + error.message, 'error');
@@ -1710,9 +1729,15 @@
             try {
                 const planId = parseInt(document.getElementById('editSubsPlan').value);
                 const status = document.getElementById('editSubsStatus').value;
+                const freeRequestsUsed = parseInt(document.getElementById('editSubsFreeRequestsUsed').value) || 0;
+                const oneTimePurchased = parseInt(document.getElementById('editSubsOneTimePurchased').value) || 0;
+                const oneTimeUsed = parseInt(document.getElementById('editSubsOneTimeUsed').value) || 0;
                 
                 const updateData = {
-                    subscription_status: status
+                    subscription_status: status,
+                    free_requests_used: freeRequestsUsed,
+                    one_time_purchases_count: oneTimePurchased,
+                    one_time_requests_used: oneTimeUsed
                 };
                 
                 if (planId) {
@@ -3400,6 +3425,9 @@
                                 <tr><td><strong>Total Spent:</strong></td><td>$${data.total_spent}</td></tr>
                                 <tr><td><strong>Free Requests Used:</strong></td><td>${data.free_requests_used}</td></tr>
                                 <tr><td><strong>Requests This Period:</strong></td><td>${data.requests_used_current_period}</td></tr>
+                                <tr><td><strong>One-Time Credits Purchased:</strong></td><td>${data.one_time_purchases_count}</td></tr>
+                                <tr><td><strong>One-Time Credits Used:</strong></td><td>${data.one_time_requests_used}</td></tr>
+                                <tr><td><strong>One-Time Credits Remaining:</strong></td><td><span style="font-weight: bold; color: #28a745;">${data.one_time_purchases_count - data.one_time_requests_used}</span></td></tr>
                             </table>
                         </div>
                         <div class="modal-footer">

@@ -3203,6 +3203,9 @@ async def delete_user(
 class UpdateSubscriptionRequest(BaseModel):
     subscription_status: Optional[str] = None
     subscription_plan_id: Optional[int] = None
+    free_requests_used: Optional[int] = None
+    one_time_purchases_count: Optional[int] = None
+    one_time_requests_used: Optional[int] = None
 
 
 @router.get("/subscriptions/{subscription_id}", response_model=SubscriptionResponse)
@@ -3264,6 +3267,16 @@ async def update_subscription(
     # Update status if provided
     if request.subscription_status:
         billing.subscription_status = SubscriptionStatus(request.subscription_status)
+    
+    # Update credit fields if provided
+    if request.free_requests_used is not None:
+        billing.free_requests_used = request.free_requests_used
+    
+    if request.one_time_purchases_count is not None:
+        billing.one_time_purchases_count = request.one_time_purchases_count
+    
+    if request.one_time_requests_used is not None:
+        billing.one_time_requests_used = request.one_time_requests_used
     
     # Update plan if provided
     if request.subscription_plan_id:
