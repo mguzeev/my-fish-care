@@ -466,6 +466,7 @@ async def telegram_login_callback(
     photo_url: str = Query(None),
     auth_date: int = Query(...),
     hash: str = Query(...),
+    redirect_uri: str = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -625,15 +626,20 @@ async def telegram_login_callback(
     # Generate tokens
     access_token = create_access_token(data={"sub": user.id})
     refresh_token = create_refresh_token(data={"sub": user.id})
-    
-    # Redirect to dashboard with tokens in query parameters
-    dashboard_url = f"{settings.telegram_base_url}/dashboard"
+
     params = {
         "access_token": access_token,
         "refresh_token": refresh_token,
     }
-    redirect_url = f"{dashboard_url}?{urlencode(params)}"
-    
+
+    if redirect_uri:
+        # Редиректим на указанный redirect_uri (deeplink)
+        redirect_url = f"{redirect_uri}?{urlencode(params)}"
+    else:
+        # Редиректим на dashboard
+        dashboard_url = f"{settings.telegram_base_url}/dashboard"
+        redirect_url = f"{dashboard_url}?{urlencode(params)}"
+
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
