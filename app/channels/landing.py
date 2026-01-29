@@ -1,6 +1,6 @@
 """Landing page and static page routes."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader
@@ -8,6 +8,10 @@ import os
 
 from app.i18n.translations import get_translations, translate
 from app.core.config import settings
+from app.models import SubscriptionPlan
+from sqlalchemy.future import select
+from app.core.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(tags=["landing"])
 
@@ -32,20 +36,24 @@ def _render_template(template_name: str, language: str = "en", **context):
     )
 
 
+
 @router.get("/", response_class=HTMLResponse)
-async def landing_page(request: Request):
-    """Serve the landing page with language support."""
+async def landing_page(request: Request, db: AsyncSession = Depends(get_db)):
+    """Serve the landing page with language support and plans from DB."""
     language = request.query_params.get("lang", "en")
-    
-    # Validate language
     if language not in ["en", "ru", "uk"]:
         language = "en"
-    
+
+    # Load all active plans from DB
+    result = await db.execute(select(SubscriptionPlan))
+    plans = result.scalars().all()
+
     html = _render_template(
-        "landing.html", 
+        "landing.html",
         language=language,
         bot_username=settings.telegram_bot_username or "bot",
-        telegram_base_url=settings.telegram_base_url
+        telegram_base_url=settings.telegram_base_url,
+        plans=plans
     )
     response = HTMLResponse(html)
     response.headers["Cache-Control"] = "public, max-age=300"

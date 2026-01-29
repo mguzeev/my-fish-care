@@ -119,60 +119,48 @@
             <p class="section-subtitle">{{ t('pricing_subtitle') }}</p>
             
             <div class="pricing-grid">
-                <!-- Free Plan -->
-                <div class="pricing-card">
-                    <h3 class="pricing-name">{{ t('plan_free') }}</h3>
-                    <div class="pricing-price">{{ t('price_free') }}</div>
-                    <p class="pricing-description">{{ t('plan_description_free') }}</p>
-                    
+                {% for plan in plans %}
+                <div class="pricing-card{% if plan.is_default %} featured{% endif %}">
+                    {% if plan.is_default %}<div class="pricing-badge">Popular</div>{% endif %}
+                    <h3 class="pricing-name">{{ plan.name }}</h3>
+                    <div class="pricing-price">
+                        {% if plan.price == 0 %}{{ t('price_free') }}{% else %}{{ plan.price }} {{ plan.currency or 'USD' }}{% endif %}
+                    </div>
+                    <p class="pricing-description">
+                        {% if plan.plan_type == 'subscription' %}
+                            {{ t('plan_description_subscription') }}
+                        {% elif plan.plan_type == 'one_time' %}
+                            {{ t('plan_description_onetime') }}
+                        {% else %}
+                            {{ t('plan_description_free') }}
+                        {% endif %}
+                    </p>
                     <ul class="pricing-features">
-                        <li>{{ t('plan_feature_reports') }}: <strong>{{ t('plan_free_reports') }}</strong></li>
-                        <li>{{ t('plan_feature_priority') }}: <strong>No</strong></li>
-                        <li>{{ t('plan_feature_history') }}: <strong>7 days</strong></li>
-                        <li>{{ t('plan_feature_support') }}: <strong>Community</strong></li>
+                        <li>{{ t('plan_feature_reports') }}: <strong>
+                            {% if plan.plan_type == 'subscription' %}{{ t('plan_subscription_reports') }}
+                            {% elif plan.plan_type == 'one_time' %}{{ t('plan_onetime_reports') }}
+                            {% else %}{{ t('plan_free_reports') }}
+                            {% endif %}
+                        </strong></li>
+                        <li>{{ t('plan_feature_priority') }}: <strong>{% if plan.has_priority_support %}Yes{% else %}No{% endif %}</strong></li>
+                        <li>{{ t('plan_feature_history') }}: <strong>
+                            {% if plan.plan_type == 'subscription' %}Unlimited
+                            {% elif plan.plan_type == 'one_time' %}30 days
+                            {% else %}7 days
+                            {% endif %}
+                        </strong></li>
+                        <li>{{ t('plan_feature_support') }}: <strong>
+                            {% if plan.has_priority_support %}Priority
+                            {% elif plan.plan_type == 'one_time' %}Email
+                            {% else %}Community
+                            {% endif %}
+                        </strong></li>
                     </ul>
-                    
                     <div class="pricing-cta">
-                        <a href="/register" class="btn btn-secondary btn-block">{{ t('plan_get_started') }}</a>
+                        <a href="/register" class="btn {% if plan.is_default %}btn-primary btn-block btn-lg{% else %}btn-secondary btn-block{% endif %}">{{ t('plan_get_started') }}</a>
                     </div>
                 </div>
-
-                <!-- One-Time Plan -->
-                <div class="pricing-card">
-                    <h3 class="pricing-name">{{ t('plan_onetime') }}</h3>
-                    <div class="pricing-price">{{ t('price_onetime') }}</div>
-                    <p class="pricing-description">{{ t('plan_description_onetime') }}</p>
-                    
-                    <ul class="pricing-features">
-                        <li>{{ t('plan_feature_reports') }}: <strong>{{ t('plan_onetime_reports') }}</strong></li>
-                        <li>{{ t('plan_feature_priority') }}: <strong>Yes</strong></li>
-                        <li>{{ t('plan_feature_history') }}: <strong>30 days</strong></li>
-                        <li>{{ t('plan_feature_support') }}: <strong>Email</strong></li>
-                    </ul>
-                    
-                    <div class="pricing-cta">
-                        <a href="/register" class="btn btn-secondary btn-block">{{ t('plan_get_started') }}</a>
-                    </div>
-                </div>
-
-                <!-- Subscription Plan -->
-                <div class="pricing-card featured">
-                    <div class="pricing-badge">Popular</div>
-                    <h3 class="pricing-name">{{ t('plan_subscription') }}</h3>
-                    <div class="pricing-price">{{ t('price_subscription') }}</div>
-                    <p class="pricing-description">{{ t('plan_description_subscription') }}</p>
-                    
-                    <ul class="pricing-features">
-                        <li>{{ t('plan_feature_reports') }}: <strong>{{ t('plan_subscription_reports') }}</strong></li>
-                        <li>{{ t('plan_feature_priority') }}: <strong>Yes</strong></li>
-                        <li>{{ t('plan_feature_history') }}: <strong>Unlimited</strong></li>
-                        <li>{{ t('plan_feature_support') }}: <strong>Priority</strong></li>
-                    </ul>
-                    
-                    <div class="pricing-cta">
-                        <a href="/register" class="btn btn-primary btn-block btn-lg">{{ t('plan_get_started') }}</a>
-                    </div>
-                </div>
+                {% endfor %}
             </div>
             
             <p class="muted" style="text-align: center; margin-top: 32px; font-size: 14px;">
