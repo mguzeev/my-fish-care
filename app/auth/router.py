@@ -472,6 +472,7 @@ def _verify_telegram_auth_data(data: dict) -> bool:
 
 @router.api_route("/telegram/callback", methods=["GET", "POST"])
 async def telegram_login_callback(
+    request: Request,
     id: int = Query(...),
     first_name: str = Query(...),
     last_name: str = Query(None),
