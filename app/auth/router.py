@@ -2,7 +2,8 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import hmac
@@ -49,6 +50,9 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# Initialize templates
+templates = Jinja2Templates(directory="app/templates")
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -407,22 +411,31 @@ async def change_password(
 
 
 # Telegram OAuth endpoints
-@router.get("/telegram")
-async def telegram_login_redirect():
+@router.get("/telegram", response_class=HTMLResponse)
+async def telegram_login_page(
+    request: Request,
+    redirect_uri: str = Query(None)
+):
     """
-    Redirect to Telegram login.
-    
+    Show Telegram login page with widget.
+
+    Args:
+        request: FastAPI request object
+        redirect_uri: Optional redirect URI for mobile apps
+
     Returns:
-        Redirect response to Telegram bot
+        HTML page with Telegram login widget
     """
     telegram_bot_username = settings.telegram_bot_username or "bot"
     
-    # Return HTML with Telegram login widget
-    return {
-        "message": "Use Telegram login widget",
-        "bot_username": telegram_bot_username,
-        "callback_url": f"{settings.telegram_base_url}/auth/telegram/callback",
-    }
+    return templates.TemplateResponse(
+        "telegram_login.html",
+        {
+            "request": request,
+            "bot_username": telegram_bot_username,
+            "redirect_uri": redirect_uri
+        }
+    )
 
 
 def _verify_telegram_auth_data(data: dict) -> bool:

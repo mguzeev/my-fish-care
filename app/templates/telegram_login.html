@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Login - My Fish Care</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 400px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        .telegram-widget {
+            margin: 20px auto;
+            display: flex;
+            justify-content: center;
+        }
+        .loading {
+            color: #666;
+            margin-top: 20px;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 20px;
+            padding: 10px;
+            background: #ffe6e6;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐠 My Fish Care</h1>
+        <p>Sign in with your Telegram account</p>
+
+        <div class="telegram-widget" id="telegram-widget">
+            <!-- Telegram Login Widget will be inserted here -->
+        </div>
+
+        <div class="loading" id="loading">Loading Telegram widget...</div>
+        <div class="error" id="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        // Get redirect_uri from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUri = urlParams.get('redirect_uri');
+        const botUsername = '{{ bot_username }}'; // Will be replaced by server
+
+        if (!redirectUri) {
+            document.getElementById('error').innerText = 'Error: No redirect URI provided';
+            document.getElementById('error').style.display = 'block';
+            document.getElementById('loading').style.display = 'none';
+        } else {
+            // Create Telegram Login Widget
+            const script = document.createElement('script');
+            script.async = true;
+            script.src = 'https://telegram.org/js/telegram-widget.js?22';
+            script.setAttribute('data-telegram-login', botUsername);
+            script.setAttribute('data-size', 'large');
+            script.setAttribute('data-radius', '10');
+            script.setAttribute('data-request-access', 'write');
+            script.setAttribute('data-userpic', 'true');
+            // Include redirect_uri in callback URL
+            const callbackUrl = window.location.origin + '/auth/telegram/callback?redirect_uri=' + encodeURIComponent(redirectUri);
+            script.setAttribute('data-auth-url', callbackUrl);
+            script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+
+            document.getElementById('telegram-widget').appendChild(script);
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // This function is called by Telegram widget after successful auth
+        function onTelegramAuth(user) {
+            console.log('Telegram auth successful:', user);
+            // Widget will redirect to data-auth-url automatically with auth params
+        }
+    </script>
+</body>
+</html>
+
