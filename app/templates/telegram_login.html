@@ -83,9 +83,7 @@
             script.setAttribute('data-radius', '10');
             script.setAttribute('data-request-access', 'write');
             script.setAttribute('data-userpic', 'true');
-            // Include redirect_uri in callback URL
-            const callbackUrl = window.location.origin + '/auth/telegram/callback?redirect_uri=' + encodeURIComponent(redirectUri);
-            script.setAttribute('data-auth-url', callbackUrl);
+            // Use JavaScript callback instead of data-auth-url
             script.setAttribute('data-onauth', 'onTelegramAuth(user)');
 
             document.getElementById('telegram-widget').appendChild(script);
@@ -95,7 +93,25 @@
         // This function is called by Telegram widget after successful auth
         function onTelegramAuth(user) {
             console.log('Telegram auth successful:', user);
-            // Widget will redirect to data-auth-url automatically with auth params
+
+            // Build callback URL with all Telegram params + redirect_uri
+            const params = new URLSearchParams({
+                id: user.id,
+                first_name: user.first_name,
+                auth_date: user.auth_date,
+                hash: user.hash,
+                redirect_uri: redirectUri
+            });
+
+            // Add optional fields if present
+            if (user.last_name) params.append('last_name', user.last_name);
+            if (user.username) params.append('username', user.username);
+            if (user.photo_url) params.append('photo_url', user.photo_url);
+
+            // Redirect to our callback endpoint
+            const callbackUrl = window.location.origin + '/auth/telegram/callback?' + params.toString();
+            console.log('Redirecting to:', callbackUrl);
+            window.location.href = callbackUrl;
         }
     </script>
 </body>
