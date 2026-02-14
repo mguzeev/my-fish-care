@@ -640,20 +640,30 @@ async def telegram_login_callback(
     access_token = create_access_token(data={"sub": user.id})
     refresh_token = create_refresh_token(data={"sub": user.id})
 
-    params = {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-    }
-
-    if redirect_uri:
-        # Редиректим на указанный redirect_uri (deeplink)
-        redirect_url = f"{redirect_uri}?{urlencode(params)}"
+    if redirect_uri and redirect_uri.startswith("myfishcare://"):
+        # For mobile deep links, use intermediate HTML page to avoid permission dialog
+        # This page will automatically redirect via JavaScript
+        return templates.TemplateResponse(
+            "telegram_redirect.html",
+            {
+                "request": request,
+                "access_token": access_token,
+                "refresh_token": refresh_token
+            }
+        )
     else:
-        # Редиректим на dashboard
-        dashboard_url = f"{settings.telegram_base_url}/dashboard"
-        redirect_url = f"{dashboard_url}?{urlencode(params)}"
+        # For web redirects, use direct redirect
+        params = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+        }
+        if redirect_uri:
+            redirect_url = f"{redirect_uri}?{urlencode(params)}"
+        else:
+            dashboard_url = f"{settings.telegram_base_url}/dashboard"
+            redirect_url = f"{dashboard_url}?{urlencode(params)}"
 
-    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/telegram/link")
